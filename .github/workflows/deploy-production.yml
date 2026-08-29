@@ -6,6 +6,7 @@ on:
 jobs:
   DeployV2:
     runs-on: ubuntu-latest
+    environment: prod
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
