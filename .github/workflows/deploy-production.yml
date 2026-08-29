@@ -32,4 +32,4 @@ jobs:
           mkdir deploy
           echo "${{ secrets.SSH_KEY_WC_INFO_API }}" > deploy/deploy-key
           chmod 600 deploy/deploy-key
-          ssh -i deploy/deploy-key -o StrictHostKeyChecking=no ${{ vars.SSH_HOST_WC_INFO_API }} "cd ${{ vars.SSH_PATH_WC_INFO_API }} && /usr/local/php84/bin/php -f composer.phar install --no-dev --optimize-autoloader"
+          ssh -i deploy/deploy-key -o StrictHostKeyChecking=no ${{ vars.SSH_HOST_WC_INFO_API }} "cd ${{ vars.SSH_PATH_WC_INFO_API }} && /usr/local/php84/bin/php -f /composer/composer.phar install --no-dev --optimize-autoloader"
