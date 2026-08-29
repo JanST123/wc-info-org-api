@@ -1,0 +1,5 @@
+.DS_Store
+data/
+import/*
+!import/README.md
+!import/.gitignore

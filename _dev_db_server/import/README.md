@@ -1,0 +1,1 @@
+Put a .sql or .sql.gz file here to import when `data` dir is not present anymore

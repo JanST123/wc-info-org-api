@@ -1,0 +1,34 @@
+# OS metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+.fleet/
+.nova/
+.zed/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.backup
+.env.production
+.env.local
+.env.*.local
+!.env.example
+
+# Logs and databases
+*.log
+*.sqlite
+*.dump
+
+# Deployment artifacts
+deploy/

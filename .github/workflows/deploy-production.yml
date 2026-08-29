@@ -1,0 +1,34 @@
+name: Deploy API to production
+on:
+  push:
+    branches:
+      - main
+jobs:
+  DeployV2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: 📂 Sync v2 files
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ vars.FTP_USER_WCINFO_HOST }}
+          log-level: standard
+          username: ${{ secrets.FTP_USER_WCINFO_API }}
+          password: ${{ secrets.FTP_PASS_WCINFO_API }}
+          local-dir: ./src/
+          server-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/vendor/**
+            **/node_modules/**
+            **/.env
+            **/.env.*
+            **/.phpunit*
+      - name: install composer dependencies 
+        run: |
+          mkdir deploy
+          echo ${{ secrets.SSH_KEY_WC_INFO_API }} > deploy/deploy-key
+          chmod 600 deploy/deploy-key
+          ssh -i deploy/deploy-key -o StrictHostKeyChecking=no ${{ vars.SSH_HOST_WC_INFO_API }} "cd ${{ vars.SSH_PATH_WC_INFO_API }} && /usr/local/php84/bin/php -f composer.phar install --no-dev --optimize-autoloader"
