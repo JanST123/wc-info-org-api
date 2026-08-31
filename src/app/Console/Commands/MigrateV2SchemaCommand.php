@@ -28,6 +28,7 @@ class MigrateV2SchemaCommand extends Command
 
             if (! $this->option('skip-backup-check') && ! $this->confirm('Did you create a backup?')) {
                 $this->error('Aborted. Please create a backup first.');
+
                 return self::FAILURE;
             }
         }
@@ -37,6 +38,7 @@ class MigrateV2SchemaCommand extends Command
 
             if ($this->dryRun) {
                 $this->info('Dry run preview completed. No changes were made.');
+
                 return self::SUCCESS;
             }
 
@@ -45,8 +47,9 @@ class MigrateV2SchemaCommand extends Command
 
             return self::SUCCESS;
         } catch (\Throwable $e) {
-            $this->error('Migration failed: ' . $e->getMessage());
+            $this->error('Migration failed: '.$e->getMessage());
             Log::error('MigrateV2Schema failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return self::FAILURE;
         }
     }
@@ -82,10 +85,18 @@ class MigrateV2SchemaCommand extends Command
                 $status = $row->type === 'none' || $row->type === '' || $row->type === null ? 'hidden' : 'active';
 
                 $type = (string) $row->type;
-                if ($type === 'forall' || str_contains($type, 'u')) $flagCount++;
-                if (str_contains($type, 'mw')) $flagCount++;
-                if (str_contains($type, 'd')) $flagCount++;
-                if (str_contains($type, 'b')) $flagCount++;
+                if ($type === 'forall' || str_contains($type, 'u')) {
+                    $flagCount++;
+                }
+                if (str_contains($type, 'mw')) {
+                    $flagCount++;
+                }
+                if (str_contains($type, 'd')) {
+                    $flagCount++;
+                }
+                if (str_contains($type, 'b')) {
+                    $flagCount++;
+                }
             } else {
                 $status = $row->status;
             }
@@ -112,7 +123,9 @@ class MigrateV2SchemaCommand extends Command
         $toiletsWithPlace = DB::table('toilets')->whereNotNull('place_id')->pluck('place_id');
         foreach ($toiletsWithPlace as $placeId) {
             $place = DB::table($placesTable)->where('place_id', $placeId)->first();
-            if (! $place) continue;
+            if (! $place) {
+                continue;
+            }
             $data = json_decode($place->data, true);
             $periods = $data['opening_hours']['periods'] ?? $data['result']['opening_hours']['periods'] ?? null;
             if (is_array($periods) && count($periods) > 0) {
@@ -234,6 +247,7 @@ class MigrateV2SchemaCommand extends Command
 
         if (! $this->columnExists('toilets', 'type')) {
             $this->info('Legacy type column already dropped, skipping toilet data migration.');
+
             return;
         }
 
@@ -292,6 +306,7 @@ class MigrateV2SchemaCommand extends Command
 
         if (! $this->columnExists('toilets', 'type')) {
             $this->info('Legacy type column already dropped, skipping flag migration.');
+
             return;
         }
 
@@ -452,7 +467,7 @@ class MigrateV2SchemaCommand extends Command
                 MODIFY COLUMN lon DECIMAL(11, 8) NOT NULL COMMENT "WGS84 longitude"
             ');
 
-            $this->info('Migrated ' . $count . ' unknown_places coordinates.');
+            $this->info('Migrated '.$count.' unknown_places coordinates.');
         } else {
             $this->info('unknown_places coordinates already decimal, skipping.');
         }
@@ -470,7 +485,7 @@ class MigrateV2SchemaCommand extends Command
 
     private function columnType(string $table, string $column): string
     {
-        $result = DB::select('SHOW COLUMNS FROM `' . $table . '` WHERE Field = ?', [$column]);
+        $result = DB::select('SHOW COLUMNS FROM `'.$table.'` WHERE Field = ?', [$column]);
 
         return ! empty($result) ? strtolower($result[0]->Type) : '';
     }
@@ -491,6 +506,7 @@ class MigrateV2SchemaCommand extends Command
     private function indexExists(string $table, string $index): bool
     {
         $result = DB::select("SHOW INDEX FROM `{$table}` WHERE Key_name = ?", [$index]);
+
         return ! empty($result);
     }
 

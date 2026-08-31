@@ -37,6 +37,7 @@ class RepairToiletCoordinatesCommand extends Command
 
             if (! $location || ! isset($location['lat'], $location['lng'])) {
                 $skipped++;
+
                 continue;
             }
 
@@ -46,6 +47,7 @@ class RepairToiletCoordinatesCommand extends Command
             if ($dryRun) {
                 $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> lat={$lat} lon={$lon}");
                 $updated++;
+
                 continue;
             }
 

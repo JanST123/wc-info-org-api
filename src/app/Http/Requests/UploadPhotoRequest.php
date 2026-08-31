@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 
 class UploadPhotoRequest extends FormRequest
 {
@@ -37,7 +38,7 @@ class UploadPhotoRequest extends FormRequest
             if (! $file || ! $file->isValid()) {
                 $errorCode = $file ? $file->getError() : ($_FILES['file']['error'] ?? 'no file in $_FILES');
                 $errorMsg = $file ? $file->getErrorMessage() : 'No file uploaded';
-                \Illuminate\Support\Facades\Log::warning('Upload file failure diagnostics', [
+                Log::warning('Upload file failure diagnostics', [
                     'error_code' => $errorCode,
                     'error_message' => $errorMsg,
                     'upload_max_filesize' => ini_get('upload_max_filesize'),

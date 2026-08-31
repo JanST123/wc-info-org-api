@@ -23,8 +23,7 @@ class UploadController extends Controller
         private S3PhotoStorageService $s3,
         private GooglePlacesService $placesService,
         private MailService $mail,
-    ) {
-    }
+    ) {}
 
     /**
      * Upload a photo for a toilet.
@@ -77,8 +76,8 @@ class UploadController extends Controller
         }
 
         $extension = $isHeic ? 'jpg' : $originalExtension;
-        $filename = uniqid() . '.' . $extension;
-        $filenameThumb = uniqid() . '.thumb.' . $extension;
+        $filename = uniqid().'.'.$extension;
+        $filenameThumb = uniqid().'.thumb.'.$extension;
 
         $exifData = $this->extractExif($request, $fileTemp);
 
@@ -106,7 +105,7 @@ class UploadController extends Controller
             'success' => true,
             'hasGeo' => $hasGeo,
             'placeId' => $placeId,
-            'imageUrl' => config('wcinfo.s3.public_url') . S3PhotoStorageService::pathForId($toiletId) . '/' . $filename,
+            'imageUrl' => config('wcinfo.s3.public_url').S3PhotoStorageService::pathForId($toiletId).'/'.$filename,
             'filename' => $filename,
             'toiletId' => $toiletId,
         ]);
@@ -124,8 +123,8 @@ class UploadController extends Controller
 
         $this->mail->send(
             'hallo@wc-info.de',
-            'Toilette mit Fotos hinzugefügt - ID: ' . $toiletId,
-            'https://wc-info.de/Toilets/Place---' . $toilet->place_id . '/Toilette---' . $toiletId
+            'Toilette mit Fotos hinzugefügt - ID: '.$toiletId,
+            'https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toiletId
         );
 
         return response()->json(['success' => true]);
@@ -143,7 +142,7 @@ class UploadController extends Controller
         $photo = ToiletPhoto::where('fk_toiletId', $toiletId)
             ->where(function ($query) use ($filename) {
                 $query->where('filename', $filename)
-                    ->orWhere('filename', '_DELETED_' . $filename);
+                    ->orWhere('filename', '_DELETED_'.$filename);
             })
             ->first();
 
@@ -155,7 +154,7 @@ class UploadController extends Controller
 
         if ($soft) {
             $baseFilename = str_starts_with($photo->filename, '_DELETED_') ? substr($photo->filename, 9) : $photo->filename;
-            $newFilename = '_DELETED_' . $baseFilename;
+            $newFilename = '_DELETED_'.$baseFilename;
 
             if ($this->s3->exists($toiletId, $photo->filename) && $photo->filename !== $newFilename) {
                 $this->s3->rename($toiletId, $photo->filename, $newFilename);
@@ -164,7 +163,7 @@ class UploadController extends Controller
             $newThumb = null;
             if (! empty($photo->filename_thumb)) {
                 $baseThumb = str_starts_with($photo->filename_thumb, '_DELETED_') ? substr($photo->filename_thumb, 9) : $photo->filename_thumb;
-                $newThumb = '_DELETED_' . $baseThumb;
+                $newThumb = '_DELETED_'.$baseThumb;
 
                 if ($this->s3->exists($toiletId, $photo->filename_thumb) && $photo->filename_thumb !== $newThumb) {
                     $this->s3->rename($toiletId, $photo->filename_thumb, $newThumb);
@@ -214,8 +213,8 @@ class UploadController extends Controller
         try {
             $this->mail->send(
                 'hallo@wc-info.de',
-                'Fotos zu existierender Toilette hinzugefügt - ID: ' . $toilet->id,
-                'https://wc-info.de/Toilets/Place---' . $toilet->place_id . '/Toilette---' . $toilet->id
+                'Fotos zu existierender Toilette hinzugefügt - ID: '.$toilet->id,
+                'https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id
             );
         } catch (\Throwable $e) {
             Log::warning('Failed to send upload notification email', ['toilet_id' => $toilet->id, 'error' => $e->getMessage()]);

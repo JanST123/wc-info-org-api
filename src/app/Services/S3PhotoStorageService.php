@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
-use Aws\S3\S3Client;
 use Aws\S3\Exception\S3Exception;
-use RuntimeException;
+use Aws\S3\S3Client;
 
 class S3PhotoStorageService
 {
@@ -45,7 +44,7 @@ class S3PhotoStorageService
             return null;
         }
 
-        return config('wcinfo.s3.public_url') . $this->key($toiletId, $filename);
+        return config('wcinfo.s3.public_url').$this->key($toiletId, $filename);
     }
 
     public function put(int $toiletId, string $filename, string $content, string $contentType = 'image/jpeg'): void
@@ -80,7 +79,7 @@ class S3PhotoStorageService
             $this->client->copyObject([
                 'Bucket' => $this->bucket(),
                 'Key' => $this->key($toiletId, $targetFilename),
-                'CopySource' => $this->bucket() . '/' . $this->key($toiletId, $sourceFilename),
+                'CopySource' => $this->bucket().'/'.$this->key($toiletId, $sourceFilename),
             ]);
 
             return true;
@@ -93,6 +92,7 @@ class S3PhotoStorageService
     {
         if ($this->copy($toiletId, $oldFilename, $newFilename)) {
             $this->delete($toiletId, $oldFilename);
+
             return true;
         }
 
@@ -106,7 +106,7 @@ class S3PhotoStorageService
 
     private function key(int $toiletId, string $filename): string
     {
-        return self::pathForId($toiletId) . '/' . $filename;
+        return self::pathForId($toiletId).'/'.$filename;
     }
 
     private function bucket(): string

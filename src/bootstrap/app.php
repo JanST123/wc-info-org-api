@@ -1,5 +1,8 @@
 <?php
 
+use App\Exceptions\Handler;
+use App\Http\Middleware\CorsMiddleware;
+use App\Http\Middleware\RequestLogMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,9 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->append(\App\Http\Middleware\CorsMiddleware::class);
-        $middleware->append(\App\Http\Middleware\RequestLogMiddleware::class);
+        $middleware->append(CorsMiddleware::class);
+        $middleware->append(RequestLogMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        \App\Exceptions\Handler::configure($exceptions);
+        Handler::configure($exceptions);
     })->create();

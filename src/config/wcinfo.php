@@ -6,7 +6,7 @@ return [
         'key' => env('S3_KEY'),
         'secret' => env('S3_SECRET'),
         'bucket' => env('S3_BUCKET', 'wcinfo'),
-        'public_url' => rtrim(env('S3_PUBLIC_URL', 'https://wcinfo.eu-central-1.gos3.io/'), '/') . '/',
+        'public_url' => rtrim(env('S3_PUBLIC_URL', 'https://wcinfo.eu-central-1.gos3.io/'), '/').'/',
         'region' => env('S3_REGION', 'eu'),
         'use_path_style_endpoint' => true,
     ],

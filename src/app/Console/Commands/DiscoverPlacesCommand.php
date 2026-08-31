@@ -21,14 +21,23 @@ class DiscoverPlacesCommand extends Command
     protected $description = 'Update places for toilets that have been requested by API clients';
 
     private bool $dryRun;
+
     private int $limit;
+
     private int $radius;
+
     private int $processed = 0;
+
     private int $insertedPlaces = 0;
+
     private int $updatedPlaces = 0;
+
     private int $insertedToilets = 0;
+
     private int $updatedToilets = 0;
+
     private int $skippedCached = 0;
+
     private int $errors = 0;
 
     public function handle(GooglePlacesService $placesService, PlaceToiletService $placeToiletService): int
@@ -53,10 +62,11 @@ class DiscoverPlacesCommand extends Command
                 $this->processRequestedToilets($placesService, $placeToiletService);
             }
         } catch (\Throwable $e) {
-            $this->error('Discovery failed: ' . $e->getMessage());
+            $this->error('Discovery failed: '.$e->getMessage());
             Log::error('DiscoverPlaces failed', ['error' => $e->getMessage()]);
             $this->errors++;
             $this->logSummary();
+
             return self::FAILURE;
         }
 
@@ -69,7 +79,7 @@ class DiscoverPlacesCommand extends Command
     {
         if ($this->dryRun) {
             $results = $placesService->nearbySearchRaw($lat, $lon, $this->radius / 1000);
-            $this->info('Google returned ' . count($results) . ' raw results.');
+            $this->info('Google returned '.count($results).' raw results.');
 
             foreach (array_slice($results, 0, $this->limit) as $result) {
                 $placeId = $result['place_id'] ?? null;
@@ -83,7 +93,7 @@ class DiscoverPlacesCommand extends Command
 
         $activeToilets = $placesService->discoverToiletsNearby($lat, $lon, $this->radius / 1000, $this->limit);
 
-        $this->info('Discovery returned ' . $activeToilets->count() . ' active toilets.');
+        $this->info('Discovery returned '.$activeToilets->count().' active toilets.');
         $this->insertedToilets += $activeToilets->count();
     }
 
@@ -111,6 +121,7 @@ class DiscoverPlacesCommand extends Command
             if (empty($toilet->place_id)) {
                 $this->errors++;
                 $this->error("Skipping toilet {$toilet->id}: missing place_id");
+
                 continue;
             }
 
@@ -118,7 +129,7 @@ class DiscoverPlacesCommand extends Command
                 $this->processToilet($placesService, $placeToiletService, $toilet);
             } catch (\Throwable $e) {
                 $this->errors++;
-                $message = "Failed to process toilet {$toilet->id} (place_id={$toilet->place_id}): " . $e->getMessage();
+                $message = "Failed to process toilet {$toilet->id} (place_id={$toilet->place_id}): ".$e->getMessage();
                 $this->error($message);
                 Log::warning('DiscoverPlaces failed for toilet', [
                     'toilet_id' => $toilet->id,
@@ -148,6 +159,7 @@ class DiscoverPlacesCommand extends Command
         if (! $details) {
             $this->errors++;
             $this->error("Google Place Details returned no result for toilet {$toilet->id} (place_id={$toilet->place_id})");
+
             return;
         }
 

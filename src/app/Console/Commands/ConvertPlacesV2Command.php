@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Services\PlaceToiletService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class ConvertPlacesV2Command extends Command
 {
@@ -78,6 +77,7 @@ class ConvertPlacesV2Command extends Command
 
         if (! DB::getSchemaBuilder()->hasTable('places')) {
             $this->warn('  places table does not exist, skipping.');
+
             return;
         }
 

@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
+use PHPMailer\PHPMailer\PHPMailer;
 use RuntimeException;
 
 class MailService
@@ -32,7 +32,7 @@ class MailService
 
             $mail->send();
         } catch (PHPMailerException $e) {
-            throw new RuntimeException('Failed to send mail: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('Failed to send mail: '.$e->getMessage(), 0, $e);
         }
     }
 

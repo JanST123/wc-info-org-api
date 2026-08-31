@@ -13,8 +13,7 @@ class PlaceToiletService
 {
     public function __construct(
         private GooglePlacesService $placesService,
-    ) {
-    }
+    ) {}
 
     /**
      * Create or update a toilet for the given place data.
@@ -50,16 +49,16 @@ class PlaceToiletService
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
-        //Log::debug('Place has a website');
+        // Log::debug('Place has a website');
 
         $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
 
         if ($crawlResult === null) {
-            //Log::debug('Crawl returned without result');
+            // Log::debug('Crawl returned without result');
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
-        //Log::debug('Crawl had a result: ' . print_r($crawlResult, 1));
+        // Log::debug('Crawl had a result: ' . print_r($crawlResult, 1));
 
         $toiletType = $crawlResult['toiletType'] ?? 'none';
         $contactEmail = $crawlResult['contactEmail'] ?? '';
@@ -86,7 +85,7 @@ class PlaceToiletService
         ]);
 
         if ($toiletType !== 'none') {
-            $toilet->update(['name' => 'WC #' . $toilet->id]);
+            $toilet->update(['name' => 'WC #'.$toilet->id]);
 
             $this->applyTypeFlags($toilet->id, $toiletType);
             $this->insertProperty($toilet->id, 'website', $details['website']);
@@ -166,7 +165,7 @@ class PlaceToiletService
 
             // When the cron (re-)activates a toilet, give it the default active name.
             if ($newStatus === 'active' && ! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
-                $newName = 'WC #' . $toilet->id;
+                $newName = 'WC #'.$toilet->id;
                 $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
                 $toilet->name = $newName;
             }
@@ -432,6 +431,7 @@ class PlaceToiletService
                     ->where('type', $type)
                     ->delete();
             }
+
             return;
         }
 

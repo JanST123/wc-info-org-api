@@ -17,6 +17,7 @@ class DeletePhotoTest extends TestCase
             ->method('rename')
             ->willReturnCallback(function ($toiletId, $oldName, $newName) {
                 $this->assertStringStartsWith('_DELETED_', $newName);
+
                 return true;
             });
 

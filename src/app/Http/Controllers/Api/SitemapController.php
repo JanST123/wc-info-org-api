@@ -35,7 +35,7 @@ class SitemapController extends Controller
             $placeName = $toilet->place?->data['name'] ?? $toilet->owner;
 
             $urls[] = [
-                'loc' => '/Toilets/' . $this->slug($placeName) . '---' . $toilet->place_id . '/' . $this->slug($toilet->owner . '-' . $toilet->name) . '-' . $toilet->id,
+                'loc' => '/Toilets/'.$this->slug($placeName).'---'.$toilet->place_id.'/'.$this->slug($toilet->owner.'-'.$toilet->name).'-'.$toilet->id,
                 'lastmod' => date('Y-m-d', strtotime($toilet->updated)),
                 'changefreq' => 'daily',
                 'priority' => time() - strtotime($toilet->updated) < (60 * 60 * 24 * 4) ? '0.9' : '0.8',
@@ -52,7 +52,7 @@ class SitemapController extends Controller
             $urlEl = $xml->addChild('url');
             foreach ($url as $key => $val) {
                 if ($key === 'loc') {
-                    $val = 'https://wc-info.de' . $val;
+                    $val = 'https://wc-info.de'.$val;
                 }
                 $urlEl->addChild($key, (string) $val);
             }

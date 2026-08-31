@@ -37,6 +37,7 @@ class GooglePlacesService
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
+
             return null;
         }
 
@@ -48,12 +49,13 @@ class GooglePlacesService
     public function placesForCoordinates(float $lat, float $lon): array
     {
         $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json', [
-            'latlng' => $lat . ',' . $lon,
+            'latlng' => $lat.','.$lon,
             'key' => $this->apiKey,
         ]);
 
         if ($response->failed()) {
             Log::warning('Google Geocoding request failed', ['lat' => $lat, 'lon' => $lon]);
+
             return [];
         }
 
@@ -68,7 +70,7 @@ class GooglePlacesService
 
         if (! preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/', $url, $matches)) {
             Log::warning('Website crawl rejected: unsupported URL pattern', ['url' => $url]);
-            throw new RuntimeException('Unsupported url pattern: ' . $url);
+            throw new RuntimeException('Unsupported url pattern: '.$url);
         }
 
         $tld = $matches[1];
@@ -215,6 +217,7 @@ class GooglePlacesService
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
+
             return [];
         }
 
@@ -239,7 +242,7 @@ class GooglePlacesService
             $results = array_slice($results, 0, max(1, $limit));
         }
 
-        $created = new Collection();
+        $created = new Collection;
         $placeToiletService = app(PlaceToiletService::class);
 
         foreach ($results as $result) {
@@ -273,7 +276,7 @@ class GooglePlacesService
             'net' => '773f01d092fb8effc',
             'org' => 'd2a4949d5717ae294',
             'info' => '51f2145633ba244cd',
-            default => throw new RuntimeException('No search engine configured for .' . $tld),
+            default => throw new RuntimeException('No search engine configured for .'.$tld),
         };
     }
 }

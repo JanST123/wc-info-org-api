@@ -7,8 +7,6 @@ use App\Http\Requests\StorePlaceCacheRequest;
 use App\Http\Resources\PlaceResource;
 use App\Models\Place;
 use App\Models\Toilet;
-use App\Models\Type;
-use App\Models\TypeXPlace;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use Illuminate\Http\JsonResponse;
@@ -19,8 +17,7 @@ class PlaceController extends Controller
     public function __construct(
         private GooglePlacesService $placesService,
         private PlaceToiletService $placeToiletService,
-    ) {
-    }
+    ) {}
 
     /**
      * Store authoritative Google Places data for a place.

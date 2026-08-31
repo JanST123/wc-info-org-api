@@ -5,6 +5,7 @@ namespace App\Services;
 class AdminLinkService
 {
     private string $secret1;
+
     private string $secret2;
 
     public function __construct(?string $secret1 = null, ?string $secret2 = null)
@@ -15,7 +16,7 @@ class AdminLinkService
 
     public function hash(int $toiletId, string $placeId): string
     {
-        return md5($this->secret1 . $toiletId . $placeId . $this->secret2);
+        return md5($this->secret1.$toiletId.$placeId.$this->secret2);
     }
 
     public function verify(int $toiletId, string $placeId, string $hash): bool

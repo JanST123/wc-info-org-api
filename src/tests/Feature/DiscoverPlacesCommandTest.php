@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Place;
 use App\Models\Toilet;
+use App\Services\GooglePlacesService;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class DiscoverPlacesCommandTest extends TestCase
@@ -60,11 +63,11 @@ class DiscoverPlacesCommandTest extends TestCase
 
     public function test_logs_debug_details_when_existing_toilet_is_updated(): void
     {
-        \Illuminate\Support\Facades\Log::spy();
+        Log::spy();
 
-        $placeId = 'place_log_test_' . uniqid();
+        $placeId = 'place_log_test_'.uniqid();
 
-        $placesService = $this->createMock(\App\Services\GooglePlacesService::class);
+        $placesService = $this->createMock(GooglePlacesService::class);
         $placesService->method('fetchPlaceDetails')
             ->willReturn([
                 'id' => $placeId,
@@ -73,7 +76,7 @@ class DiscoverPlacesCommandTest extends TestCase
                 'formattedAddress' => 'Updated Address 123',
             ]);
 
-        $this->app->instance(\App\Services\GooglePlacesService::class, $placesService);
+        $this->app->instance(GooglePlacesService::class, $placesService);
 
         $toilet = Toilet::create([
             'name' => 'WC Existing',
@@ -88,9 +91,9 @@ class DiscoverPlacesCommandTest extends TestCase
 
         $status = Artisan::call('app:discover-places', ['--limit' => 1]);
 
-        \Illuminate\Support\Facades\Log::shouldHaveReceived('debug')
+        Log::shouldHaveReceived('debug')
             ->with(
-                \Mockery::pattern('/Updated toilet ' . $toilet->id . '/'),
+                \Mockery::pattern('/Updated toilet '.$toilet->id.'/'),
                 \Mockery::on(function ($context) use ($toilet, $placeId) {
                     return $context['toilet_id'] === $toilet->id
                         && $context['place_id'] === $placeId
@@ -101,8 +104,8 @@ class DiscoverPlacesCommandTest extends TestCase
             );
 
         $toilet->delete();
-        \App\Models\Place::where('place_id', $placeId)->delete();
+        Place::where('place_id', $placeId)->delete();
         Toilet::where('place_id', 'place_log_test')->delete();
-        \App\Models\Place::where('place_id', 'place_log_test')->delete();
+        Place::where('place_id', 'place_log_test')->delete();
     }
 }

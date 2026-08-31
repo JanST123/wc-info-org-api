@@ -9,7 +9,7 @@ class ToiletModelTest extends TestCase
 {
     public function test_flag_helpers_return_false_without_properties(): void
     {
-        $toilet = new Toilet();
+        $toilet = new Toilet;
 
         $this->assertFalse($toilet->isFlagSet('is_unisex'));
         $this->assertFalse($toilet->isFlagSet('has_wheelchair_access'));
@@ -18,7 +18,7 @@ class ToiletModelTest extends TestCase
 
     public function test_flag_helper_returns_true_when_property_value_is_one(): void
     {
-        $toilet = new Toilet();
+        $toilet = new Toilet;
         $toilet->setRelation('properties', collect([
             (object) ['type' => 'is_unisex', 'value' => '1'],
             (object) ['type' => 'has_changing_table', 'value' => '1'],
@@ -31,7 +31,7 @@ class ToiletModelTest extends TestCase
 
     public function test_property_value_returns_first_match(): void
     {
-        $toilet = new Toilet();
+        $toilet = new Toilet;
         $toilet->setRelation('properties', collect([
             (object) ['type' => 'address', 'value' => 'Main St 1'],
             (object) ['type' => 'website', 'value' => 'https://example.com'],
