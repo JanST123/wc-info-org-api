@@ -18,6 +18,7 @@ use App\Services\PlaceToiletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ToiletController extends Controller
@@ -25,8 +26,7 @@ class ToiletController extends Controller
     public function __construct(
         private AdminLinkService $adminLink,
         private GooglePlacesService $placesService,
-    ) {
-    }
+    ) {}
 
     /**
      * List all visible toilets for a given place.
@@ -44,38 +44,55 @@ class ToiletController extends Controller
     }
 
     /**
-     * List visible toilets within a geographic bounding box.
+     * List visible toilets within a geographic bounding box expanded by a distance buffer.
      *
      * If no toilets are found in the database, the API performs a synchronous
      * Google Places Nearby Search for the bounding box area and returns any newly discovered toilets.
      */
     public function forBounds(Request $request, float $south, float $west, float $north, float $east): JsonResponse
     {
-        $filter = $this->parseFilter($request->query('filter'));
+        $validated = $request->validate([
+            'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:200'],
+            'filter' => ['sometimes', 'string'],
+        ]);
+
+        $distance = (float) ($validated['distance'] ?? 40);
+        $filter = $this->parseFilter($validated['filter'] ?? null);
 
         $minLon = min($west, $east);
         $maxLon = max($west, $east);
         $minLat = min($south, $north);
         $maxLat = max($south, $north);
 
+        $earthRadius = 6371.0;
+        $dLat = rad2deg($distance / $earthRadius);
+        $expandedMinLat = max(-90.0, $minLat - $dLat);
+        $expandedMaxLat = min(90.0, $maxLat + $dLat);
+
+        $maxAbsLat = max(abs($expandedMinLat), abs($expandedMaxLat));
+        $cosLat = cos(deg2rad($maxAbsLat));
+        $dLon = $cosLat > 0.0001 ? rad2deg($distance / ($earthRadius * $cosLat)) : 180.0;
+        $expandedMinLon = max(-180.0, $minLon - $dLon);
+        $expandedMaxLon = min(180.0, $maxLon + $dLon);
+
         $toilets = Toilet::visible()
-            ->whereBetween('lon', [$minLon, $maxLon])
-            ->whereBetween('lat', [$minLat, $maxLat])
+            ->whereBetween('lon', [$expandedMinLon, $expandedMaxLon])
+            ->whereBetween('lat', [$expandedMinLat, $expandedMaxLat])
             ->with(['properties', 'photos'])
             ->get();
 
         if ($toilets->isEmpty()) {
             $centerLat = ($minLat + $maxLat) / 2;
             $centerLon = ($minLon + $maxLon) / 2;
-            $distance = $this->haversineDistance($centerLat, $centerLon, $maxLat, $maxLon);
-            $distance = max(0.1, min($distance, 50.0));
+            $searchDistance = $this->haversineDistance($centerLat, $centerLon, $expandedMaxLat, $expandedMaxLon);
+            $searchDistance = max(0.1, min($searchDistance, 50.0));
 
-            $discovered = $this->placesService->discoverToiletsNearby($centerLat, $centerLon, $distance);
+            $discovered = $this->placesService->discoverToiletsNearby($centerLat, $centerLon, $searchDistance);
 
-            $discovered = $discovered->filter(function (Toilet $toilet) use ($minLat, $maxLat, $minLon, $maxLon) {
+            $discovered = $discovered->filter(function (Toilet $toilet) use ($expandedMinLat, $expandedMaxLat, $expandedMinLon, $expandedMaxLon) {
                 return $toilet->lat !== null && $toilet->lon !== null
-                    && $toilet->lat >= $minLat && $toilet->lat <= $maxLat
-                    && $toilet->lon >= $minLon && $toilet->lon <= $maxLon;
+                    && $toilet->lat >= $expandedMinLat && $toilet->lat <= $expandedMaxLat
+                    && $toilet->lon >= $expandedMinLon && $toilet->lon <= $expandedMaxLon;
             })->values();
 
             $discovered = $this->applyFilters($discovered, $filter);
@@ -137,7 +154,7 @@ class ToiletController extends Controller
         return response()->json(ToiletListResource::collection($toilets));
     }
 
-    private function markIncluded(\Illuminate\Support\Collection $toilets): void
+    private function markIncluded(Collection $toilets): void
     {
         $ids = $toilets->pluck('id')->filter()->unique()->all();
 
@@ -197,10 +214,10 @@ class ToiletController extends Controller
     }
 
     /**
-     * @param \Illuminate\Support\Collection<int, Toilet> $toilets
-     * @return \Illuminate\Support\Collection<int, Toilet>
+     * @param  Collection<int, Toilet>  $toilets
+     * @return Collection<int, Toilet>
      */
-    private function applyFilters(\Illuminate\Support\Collection $toilets, array $filters): \Illuminate\Support\Collection
+    private function applyFilters(Collection $toilets, array $filters): Collection
     {
         if (empty($filters)) {
             return $toilets;
@@ -232,6 +249,7 @@ class ToiletController extends Controller
                     if ($isFalsy && $matchesOpen) {
                         return false;
                     }
+
                     continue;
                 }
 
@@ -246,6 +264,7 @@ class ToiletController extends Controller
                     if ($actualValue !== $targetValue) {
                         return false;
                     }
+
                     continue;
                 }
 
@@ -254,6 +273,7 @@ class ToiletController extends Controller
                     if ($actualValue !== $rawVal) {
                         return false;
                     }
+
                     continue;
                 }
 
@@ -400,7 +420,7 @@ class ToiletController extends Controller
         ]);
 
         if (($input['name'] ?? 'Toilette') === 'Toilette') {
-            $toilet->update(['name' => 'WC #' . $toilet->id]);
+            $toilet->update(['name' => 'WC #'.$toilet->id]);
         } else {
             $userOverriddenFields[] = 'name';
         }
@@ -503,7 +523,7 @@ class ToiletController extends Controller
             $toilet->update(['is_qualified' => 1]);
 
             return response()->json(
-                'Successfully qualified Toilet ' . $toilet->id . '<a href="https://wc-info.de/Toilets/xyz---' . $toilet->place_id . '/xyz-' . $toilet->id . '">To the toilet</a>'
+                'Successfully qualified Toilet '.$toilet->id.'<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">To the toilet</a>'
             );
         }, 'qualify');
     }
@@ -517,7 +537,7 @@ class ToiletController extends Controller
             $toilet->update(['status' => 'deleted']);
 
             return response()->json(
-                'Successfully deleted Toilet ' . $toilet->id . '<a href="https://wc-info.de/Toilets/xyz---' . $toilet->place_id . '/xyz-' . $toilet->id . '">To the toilet</a>'
+                'Successfully deleted Toilet '.$toilet->id.'<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">To the toilet</a>'
             );
         }, 'delete');
     }
@@ -535,7 +555,7 @@ class ToiletController extends Controller
 
         if ($confirmed !== '1') {
             return response(
-                'Really <strong>' . $verb . '</strong> Toilet ' . $toilet->id . ' / ' . $toilet->name . ' / ' . $toilet->owner . '? <a href="' . $request->fullUrl() . '&confirmed=1">YES</a>'
+                'Really <strong>'.$verb.'</strong> Toilet '.$toilet->id.' / '.$toilet->name.' / '.$toilet->owner.'? <a href="'.$request->fullUrl().'&confirmed=1">YES</a>'
             );
         }
 
@@ -577,6 +597,7 @@ class ToiletController extends Controller
                 ['fk_toiletId' => $toiletId, 'type' => $type],
                 ['value' => '', 'user_overridden' => 1]
             );
+
             return;
         }
 
