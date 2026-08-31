@@ -1,6 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
+
+use DateTime;
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
 
 class OpeningHoursService
 {
@@ -14,10 +21,16 @@ class OpeningHoursService
     /**
      * Determine the current open/close timestamps from Google Places periods data.
      *
-     * @param string|null $periodsJson JSON encoded Google Places opening_hours.periods array
+     * If the location is currently open, `open_timestamp` is when the current open
+     * period began and `close_timestamp` is when it will close next.
+     * If the location is currently closed, `open_timestamp` is when it will next open
+     * from now and `close_timestamp` is when that upcoming period ends.
+     *
+     * @param  string|null  $periodsJson  JSON encoded Google Places opening_hours.periods array
+     * @param  DateTimeInterface|null  $now  Optional reference time (defaults to current time)
      * @return array{open_timestamp: string|null, close_timestamp: string|null, is_open: bool}
      */
-    public function getOpenState(?string $periodsJson): array
+    public function getOpenState(?string $periodsJson, ?DateTimeInterface $now = null): array
     {
         $result = [
             'open_timestamp' => null,
@@ -36,49 +49,55 @@ class OpeningHoursService
                 return $result;
             }
 
-            $now = new \DateTime('now', new \DateTimeZone($this->timezone));
-            $currentDay = (int) $now->format('w'); // 0 = Sunday ... 6 = Saturday
-            $currentMinutes = (int) $now->format('H') * 60 + (int) $now->format('i');
+            $refTime = $this->normalizeDateTime($now);
 
-            foreach ($periods as $period) {
-                if (! isset($period['open']) || ! is_array($period['open']) || ! isset($period['open']['day'])) {
-                    continue;
+            // Handle 24/7 opening hours (single period with open day 0 and no close, or no close at all)
+            if (count($periods) === 1 && ! isset($periods[0]['close'])) {
+                return [
+                    'open_timestamp' => null,
+                    'close_timestamp' => null,
+                    'is_open' => true,
+                ];
+            }
+
+            $intervals = $this->buildIntervals($periods, $refTime);
+
+            if (empty($intervals)) {
+                return $result;
+            }
+
+            $merged = $this->mergeIntervals($intervals);
+
+            // 1. Check if currently open
+            foreach ($merged as $interval) {
+                if ($refTime >= $interval['open'] && $refTime < $interval['close']) {
+                    // Check if open 24/7 (continuous throughout window)
+                    $windowStart = (clone $refTime)->modify('-6 days');
+                    $windowEnd = (clone $refTime)->modify('+6 days');
+                    if ($interval['open'] <= $windowStart && $interval['close'] >= $windowEnd) {
+                        return [
+                            'open_timestamp' => null,
+                            'close_timestamp' => null,
+                            'is_open' => true,
+                        ];
+                    }
+
+                    return [
+                        'open_timestamp' => $interval['open']->format('c'),
+                        'close_timestamp' => $interval['close']->format('c'),
+                        'is_open' => true,
+                    ];
                 }
+            }
 
-                $openDay = (int) $period['open']['day'];
-                $openMinutes = $this->extractMinutes($period['open']);
-
-                if ($openMinutes === null) {
-                    continue;
-                }
-
-                $closeDay = isset($period['close']['day']) ? (int) $period['close']['day'] : $openDay;
-                $closeMinutes = isset($period['close']) && is_array($period['close'])
-                    ? $this->extractMinutes($period['close'])
-                    : null;
-
-                // Normalize days to the same weekly cycle relative to today.
-                $openCandidate = $this->normalizeDay($openDay, $currentDay);
-                $closeCandidate = $this->normalizeDay($closeDay, $currentDay);
-
-                // If close is before open, the period spans to the next day.
-                if ($closeCandidate < $openCandidate) {
-                    $closeCandidate += 7;
-                }
-
-                // Convert to absolute minute-of-week for comparison.
-                $openAbsolute = $openCandidate * 24 * 60 + $openMinutes;
-                $closeAbsolute = $closeMinutes !== null
-                    ? $closeCandidate * 24 * 60 + $closeMinutes
-                    : $openAbsolute + 24 * 60; // open 24h if no close
-
-                $currentAbsolute = $currentDay * 24 * 60 + $currentMinutes;
-
-                if ($currentAbsolute >= $openAbsolute && $currentAbsolute < $closeAbsolute) {
-                    $result['open_timestamp'] = $this->formatTimestamp($openAbsolute);
-                    $result['close_timestamp'] = $this->formatTimestamp($closeAbsolute);
-                    $result['is_open'] = true;
-                    break;
+            // 2. Currently closed: find next upcoming open interval
+            foreach ($merged as $interval) {
+                if ($interval['open'] > $refTime) {
+                    return [
+                        'open_timestamp' => $interval['open']->format('c'),
+                        'close_timestamp' => $interval['close']->format('c'),
+                        'is_open' => false,
+                    ];
                 }
             }
         } catch (\Throwable $e) {
@@ -88,66 +107,142 @@ class OpeningHoursService
         return $result;
     }
 
-    private function extractMinutes(array $point): ?int
+    /**
+     * @param  array<int, mixed>  $periods
+     * @return array<int, array{open: DateTime, close: DateTime}>
+     */
+    private function buildIntervals(array $periods, DateTime $refTime): array
     {
-        if (isset($point['hour'])) {
-            $hour = (int) $point['hour'];
-            $minute = (int) ($point['minute'] ?? 0);
-            return $hour * 60 + $minute;
+        $todayMidnight = (clone $refTime)->setTime(0, 0, 0);
+        $intervals = [];
+
+        for ($offset = -7; $offset <= 7; $offset++) {
+            $dayBase = (clone $todayMidnight)->modify(($offset >= 0 ? "+{$offset}" : "{$offset}").' days');
+            $dayOfWeek = (int) $dayBase->format('w'); // 0=Sun ... 6=Sat
+
+            foreach ($periods as $period) {
+                if (! is_array($period) || ! isset($period['open']) || ! is_array($period['open']) || ! isset($period['open']['day'])) {
+                    continue;
+                }
+
+                $openDay = (int) $period['open']['day'];
+                if ($openDay !== $dayOfWeek) {
+                    continue;
+                }
+
+                $openTime = $this->extractTime($period['open']);
+                if ($openTime === null) {
+                    continue;
+                }
+
+                $openDateTime = (clone $dayBase)->setTime($openTime['hour'], $openTime['minute'], 0);
+
+                if (! isset($period['close']) || ! is_array($period['close']) || ! isset($period['close']['day'])) {
+                    $closeDateTime = (clone $openDateTime)->modify('+24 hours');
+                } else {
+                    $closeDay = (int) $period['close']['day'];
+                    $closeTime = $this->extractTime($period['close']);
+
+                    if ($closeTime === null) {
+                        $closeDateTime = (clone $openDateTime)->modify('+24 hours');
+                    } else {
+                        $dayDiff = ($closeDay - $openDay + 7) % 7;
+                        if ($dayDiff === 0 && ($closeTime['hour'] * 60 + $closeTime['minute'] <= $openTime['hour'] * 60 + $openTime['minute'])) {
+                            $dayDiff = 1;
+                        }
+
+                        $closeDateTime = (clone $dayBase)->modify("+{$dayDiff} days")->setTime($closeTime['hour'], $closeTime['minute'], 0);
+                    }
+                }
+
+                $intervals[] = [
+                    'open' => $openDateTime,
+                    'close' => $closeDateTime,
+                ];
+            }
         }
 
-        if (isset($point['hours'])) {
-            $hour = (int) $point['hours'];
-            $minute = (int) ($point['minutes'] ?? 0);
-            return $hour * 60 + $minute;
-        }
+        usort($intervals, fn (array $a, array $b) => $a['open'] <=> $b['open']);
 
-        if (isset($point['time']) && is_string($point['time']) && strlen($point['time']) >= 4) {
-            return $this->parseTime($point['time']);
-        }
-
-        return null;
-    }
-
-    private function parseTime(string $time): int
-    {
-        $hour = (int) substr($time, 0, 2);
-        $minute = (int) substr($time, 2, 2);
-
-        return $hour * 60 + $minute;
+        return $intervals;
     }
 
     /**
-     * Normalize a Google Places day number (0=Sun) to a day number relative to the current day.
+     * @param  array<int, array{open: DateTime, close: DateTime}>  $intervals
+     * @return array<int, array{open: DateTime, close: DateTime}>
      */
-    private function normalizeDay(int $day, int $currentDay): int
+    private function mergeIntervals(array $intervals): array
     {
-        // Google uses Sunday=0; PHP uses Sunday=0, so no conversion needed.
-        $diff = $day - $currentDay;
+        $merged = [];
 
-        if ($diff < -3) {
-            $diff += 7;
-        } elseif ($diff > 3) {
-            $diff -= 7;
+        foreach ($intervals as $interval) {
+            if (empty($merged)) {
+                $merged[] = $interval;
+
+                continue;
+            }
+
+            $lastIdx = count($merged) - 1;
+            if ($interval['open'] <= $merged[$lastIdx]['close']) {
+                if ($interval['close'] > $merged[$lastIdx]['close']) {
+                    $merged[$lastIdx]['close'] = $interval['close'];
+                }
+            } else {
+                $merged[] = $interval;
+            }
         }
 
-        return $currentDay + $diff;
+        return $merged;
     }
 
-    private function formatTimestamp(int $absoluteMinutes): string
+    private function normalizeDateTime(?DateTimeInterface $dateTime): DateTime
     {
-        $dayOffset = intdiv($absoluteMinutes, 24 * 60);
-        $minutesOfDay = $absoluteMinutes % (24 * 60);
-        $hour = intdiv($minutesOfDay, 60);
-        $minute = $minutesOfDay % 60;
+        $tz = new DateTimeZone($this->timezone);
 
-        $date = new \DateTime('now', new \DateTimeZone($this->timezone));
-        $date->setTime($hour, $minute, 0);
+        if ($dateTime instanceof DateTime) {
+            $dt = clone $dateTime;
+            $dt->setTimezone($tz);
 
-        if ($dayOffset !== 0) {
-            $date->modify(($dayOffset > 0 ? '+' : '') . $dayOffset . ' days');
+            return $dt;
         }
 
-        return $date->format('c');
+        if ($dateTime instanceof DateTimeImmutable) {
+            $dt = DateTime::createFromImmutable($dateTime);
+            $dt->setTimezone($tz);
+
+            return $dt;
+        }
+
+        return new DateTime('now', $tz);
+    }
+
+    /**
+     * @param  array<string, mixed>  $point
+     * @return array{hour: int, minute: int}|null
+     */
+    private function extractTime(array $point): ?array
+    {
+        if (isset($point['hour'])) {
+            return [
+                'hour' => (int) $point['hour'],
+                'minute' => (int) ($point['minute'] ?? 0),
+            ];
+        }
+
+        if (isset($point['hours'])) {
+            return [
+                'hour' => (int) $point['hours'],
+                'minute' => (int) ($point['minutes'] ?? 0),
+            ];
+        }
+
+        if (isset($point['time']) && is_string($point['time']) && strlen($point['time']) >= 4) {
+            return [
+                'hour' => (int) substr($point['time'], 0, 2),
+                'minute' => (int) substr($point['time'], 2, 2),
+            ];
+        }
+
+        return null;
     }
 }
