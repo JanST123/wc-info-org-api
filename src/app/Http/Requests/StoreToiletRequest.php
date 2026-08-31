@@ -10,6 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * @property string|null $owner Owner or organization running the toilet
  * @property float|null $lat Latitude coordinate (-90 to 90)
  * @property float|null $lon Longitude coordinate (-180 to 180)
+ * @property string|null $source Source origin identifier of the toilet record
  * @property string|null $place_id Google Places place_id
  * @property bool|null $is_unisex Whether the toilet is unisex (mutually exclusive with is_gender_separated)
  * @property bool|null $is_gender_separated Whether the toilet is gender-separated (mutually exclusive with is_unisex)
@@ -37,6 +38,7 @@ class StoreToiletRequest extends FormRequest
             'status' => ['nullable', 'string', 'in:active,hidden,deleted'],
             'name' => ['nullable', 'string', 'max:200'],
             'owner' => ['nullable', 'string', 'max:200'],
+            'source' => ['nullable', 'string', 'max:45'],
             'lat' => ['required_without:place_id', 'nullable', 'numeric', 'between:-90,90'],
             'lon' => ['required_without:place_id', 'nullable', 'numeric', 'between:-180,180'],
             'place_id' => ['required_without_all:lat,lon', 'nullable', 'string'],

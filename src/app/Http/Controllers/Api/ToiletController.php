@@ -423,6 +423,7 @@ class ToiletController extends Controller
             'lon' => $input['lon'] ?? null,
             'place_id' => $input['place_id'] ?? null,
             'status' => $input['status'] ?? 'active',
+            'source' => $input['source'] ?? null,
         ]);
 
         if (($input['name'] ?? 'Toilette') === 'Toilette') {
@@ -433,6 +434,10 @@ class ToiletController extends Controller
 
         if (! empty($input['owner'])) {
             $userOverriddenFields[] = 'owner';
+        }
+
+        if (isset($input['source']) && $input['source'] !== null) {
+            $userOverriddenFields[] = 'source';
         }
 
         if (isset($input['lat']) && $input['lat'] !== null) {

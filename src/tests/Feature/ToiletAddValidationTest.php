@@ -202,4 +202,43 @@ class ToiletAddValidationTest extends TestCase
         $this->assertEquals('Updated comment', $updatedDetail['properties']['comment']);
         $this->assertEquals('https://example.com/new-wc', $updatedDetail['properties']['website']);
     }
+
+    public function test_add_toilet_source_parameter(): void
+    {
+        // 1. Explicit source
+        $res1 = $this->postJson('/toilet/add', [
+            'name' => 'Toilet with Source',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'source' => 'custom_import',
+        ]);
+        $res1->assertStatus(200);
+        $id1 = $res1->json('id');
+        $this->createdToiletIds[] = $id1;
+
+        $toilet1 = Toilet::find($id1);
+        $this->assertSame('custom_import', $toilet1->source);
+
+        // 2. Default source is null
+        $res2 = $this->postJson('/toilet/add', [
+            'name' => 'Toilet without Source',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+        ]);
+        $res2->assertStatus(200);
+        $id2 = $res2->json('id');
+        $this->createdToiletIds[] = $id2;
+
+        $toilet2 = Toilet::find($id2);
+        $this->assertNull($toilet2->source);
+
+        // 3. Source exceeding 45 chars fails validation
+        $res3 = $this->postJson('/toilet/add', [
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'source' => str_repeat('a', 46),
+        ]);
+        $res3->assertStatus(400);
+        $this->assertArrayHasKey('source', $res3->json('errors'));
+    }
 }
