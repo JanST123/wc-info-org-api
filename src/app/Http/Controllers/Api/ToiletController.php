@@ -48,6 +48,9 @@ class ToiletController extends Controller
      *
      * If no toilets are found in the database, the API performs a synchronous
      * Google Places Nearby Search for the bounding box area and returns any newly discovered toilets.
+     *
+     * @queryParam distance float Distance buffer around the bounding box in kilometers (default: 40, min: 0.1, max: 200). Example: 40
+     * @queryParam filter string Comma-separated key:value attribute filters (e.g. is_open:true,euro_key:yes). Example: is_open:true
      */
     public function forBounds(Request $request, float $south, float $west, float $north, float $east): JsonResponse
     {
@@ -114,6 +117,9 @@ class ToiletController extends Controller
      *
      * If no toilets are found in the database, the API performs a synchronous
      * Google Places Nearby Search and returns any newly discovered toilets.
+     *
+     * @queryParam distance float Search radius in kilometers (default: 40, min: 0.1, max: 200). Example: 40
+     * @queryParam filter string Comma-separated key:value attribute filters (e.g. is_open:true,euro_key:yes). Example: is_open:true
      */
     public function nearby(Request $request, float $lat, float $lon): JsonResponse
     {
