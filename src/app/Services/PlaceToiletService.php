@@ -98,7 +98,11 @@ class PlaceToiletService
                 $this->insertProperty($toilet->id, 'address', $details['formattedAddress']);
             }
 
-            $this->checkAndUpdatePlaceType($placeId);
+            $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
+
+            if (self::isPublicAccessibleType($placeTypes)) {
+                $this->insertProperty($toilet->id, 'public_accessible', '1');
+            }
         }
 
         return $toilet;
@@ -190,7 +194,11 @@ class PlaceToiletService
         }
 
         if ($toiletType !== 'none') {
-            $this->checkAndUpdatePlaceType($placeId);
+            $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
+
+            if (! $toilet->isUserOverridden('public_accessible') && self::isPublicAccessibleType($placeTypes)) {
+                $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
+            }
         }
 
         return $updated || $crawlResult !== null || count($changes) > 0;
@@ -214,6 +222,11 @@ class PlaceToiletService
                 $openingHours = ['periods' => self::normalizePeriodPoints($rawOpening['periods'])];
             }
 
+            $types = $data['types'] ?? null;
+            if (! is_array($types)) {
+                $types = null;
+            }
+
             return [
                 'place_id' => $placeId,
                 'name' => $name,
@@ -221,6 +234,7 @@ class PlaceToiletService
                 'location' => $location,
                 'openingHours' => $openingHours,
                 'formattedAddress' => $address,
+                'types' => $types,
             ];
         };
 
@@ -233,6 +247,7 @@ class PlaceToiletService
             $details['location'] = $fetched['location'] ?? $details['location'];
             $details['openingHours'] = $fetched['openingHours'] ?? $details['openingHours'];
             $details['formattedAddress'] = $fetched['formattedAddress'] ?? $details['formattedAddress'];
+            $details['types'] = $fetched['types'] ?? $details['types'];
         } elseif (empty($details['website']) || empty($details['name']) || empty($details['location'])) {
             $placeId = $details['place_id'] ?? $placeData['place_id'] ?? $placeData['id'] ?? null;
             if ($placeId) {
@@ -244,6 +259,7 @@ class PlaceToiletService
                     $details['location'] = $fetched['location'] ?? $details['location'];
                     $details['openingHours'] = $fetched['openingHours'] ?? $details['openingHours'];
                     $details['formattedAddress'] = $fetched['formattedAddress'] ?? $details['formattedAddress'];
+                    $details['types'] = $fetched['types'] ?? $details['types'];
                 }
             }
         }
@@ -454,21 +470,42 @@ class PlaceToiletService
         ]);
     }
 
-    private function checkAndUpdatePlaceType(string $placeId): void
+    /**
+     * @param  array<int, string>  $types
+     */
+    public static function isPublicAccessibleType(array $types): bool
     {
-        $existingTypes = TypeXPlace::where('place_id', $placeId)->exists();
+        $publicTypes = (array) config('wcinfo.public_accessible_types', []);
 
-        if ($existingTypes) {
-            return;
+        return count(array_intersect($types, $publicTypes)) > 0;
+    }
+
+    /**
+     * @param  array<int, string>|null  $types
+     * @return array<int, string>
+     */
+    private function checkAndUpdatePlaceType(string $placeId, ?array $types = null): array
+    {
+        if (empty($types)) {
+            $existing = DB::table('type_x_place')
+                ->join('types', 'type_x_place.type_id', '=', 'types.id')
+                ->where('type_x_place.place_id', $placeId)
+                ->pluck('types.type')
+                ->all();
+
+            if (! empty($existing)) {
+                return $existing;
+            }
+
+            $details = $this->placesService->fetchPlaceDetails($placeId);
+            $types = $details['types'] ?? [];
         }
 
-        $details = $this->placesService->fetchPlaceDetails($placeId);
-
-        if (empty($details['types']) || ! is_array($details['types'])) {
-            return;
+        if (empty($types) || ! is_array($types)) {
+            return [];
         }
 
-        foreach ($details['types'] as $typeName) {
+        foreach ($types as $typeName) {
             $type = Type::firstOrCreate(['type' => $typeName]);
 
             TypeXPlace::insertOrIgnore([
@@ -476,5 +513,7 @@ class PlaceToiletService
                 'place_id' => $placeId,
             ]);
         }
+
+        return $types;
     }
 }

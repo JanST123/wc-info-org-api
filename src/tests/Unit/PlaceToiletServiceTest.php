@@ -129,4 +129,71 @@ class PlaceToiletServiceTest extends TestCase
 
         $toilet->delete();
     }
+
+    public function test_create_toilet_from_place_sets_public_accessible_for_matching_types(): void
+    {
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->method('crawlWebsite')
+            ->willReturn([
+                'toiletType' => 'forall',
+                'contactEmail' => '',
+                'resultCount' => 1,
+            ]);
+
+        $service = new PlaceToiletService($placesService);
+
+        $toilet = $service->createToiletFromPlace([
+            'id' => 'place_train_station_test',
+            'displayName' => ['text' => 'Main Station'],
+            'websiteUri' => 'https://station.example.com',
+            'location' => ['latitude' => 52.52, 'longitude' => 13.40],
+            'types' => ['train_station', 'transit_station', 'point_of_interest'],
+        ]);
+
+        $this->assertNotNull($toilet);
+        $property = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'public_accessible')
+            ->first();
+
+        $this->assertNotNull($property);
+        $this->assertSame('1', $property->value);
+
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->delete();
+        DB::table('type_x_place')->where('place_id', 'place_train_station_test')->delete();
+        $toilet->delete();
+    }
+
+    public function test_create_toilet_from_place_does_not_set_public_accessible_for_non_public_types(): void
+    {
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->method('crawlWebsite')
+            ->willReturn([
+                'toiletType' => 'forall',
+                'contactEmail' => '',
+                'resultCount' => 1,
+            ]);
+
+        $service = new PlaceToiletService($placesService);
+
+        $toilet = $service->createToiletFromPlace([
+            'id' => 'place_restaurant_test',
+            'displayName' => ['text' => 'Sample Restaurant'],
+            'websiteUri' => 'https://restaurant.example.com',
+            'location' => ['latitude' => 52.52, 'longitude' => 13.40],
+            'types' => ['restaurant', 'food', 'point_of_interest'],
+        ]);
+
+        $this->assertNotNull($toilet);
+        $property = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'public_accessible')
+            ->first();
+
+        $this->assertNull($property);
+
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->delete();
+        DB::table('type_x_place')->where('place_id', 'place_restaurant_test')->delete();
+        $toilet->delete();
+    }
 }
