@@ -151,6 +151,31 @@ class PlaceToiletService
 
         if (! empty($details['website'])) {
             $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
+
+            $toiletType = $crawlResult['toiletType'] ?? 'none';
+            $newStatus = $toiletType === 'none' ? 'hidden' : 'active';
+
+            // Only change status if the user has not manually set it.
+            if (! $toilet->isUserOverridden('status') && $toilet->status !== $newStatus) {
+                $changes['status'] = ['old' => $toilet->status, 'new' => $newStatus];
+                $toilet->status = $newStatus;
+                $updated = true;
+
+                // When the cron (re-)activates a toilet, give it the default active name.
+                if ($newStatus === 'active' && ! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
+                    $newName = 'WC #'.$toilet->id;
+                    $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
+                    $toilet->name = $newName;
+                }
+            }
+
+            if ($toilet->isDirty()) {
+                $toilet->save();
+                $updated = true;
+            }
+
+            // Update boolean flags unless the user set them manually.
+            $this->applyTypeFlagsWithOverrideCheck($toilet->id, $toiletType, $changes);
         } else {
             Log::info('Place has no website during update', [
                 'toilet_id' => $toilet->id,
@@ -158,30 +183,7 @@ class PlaceToiletService
             ]);
         }
 
-        $toiletType = $crawlResult['toiletType'] ?? 'none';
-        $newStatus = $toiletType === 'none' ? 'hidden' : 'active';
 
-        // Only change status if the user has not manually set it.
-        if (! $toilet->isUserOverridden('status') && $toilet->status !== $newStatus) {
-            $changes['status'] = ['old' => $toilet->status, 'new' => $newStatus];
-            $toilet->status = $newStatus;
-            $updated = true;
-
-            // When the cron (re-)activates a toilet, give it the default active name.
-            if ($newStatus === 'active' && ! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
-                $newName = 'WC #'.$toilet->id;
-                $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
-                $toilet->name = $newName;
-            }
-        }
-
-        if ($toilet->isDirty()) {
-            $toilet->save();
-            $updated = true;
-        }
-
-        // Update boolean flags unless the user set them manually.
-        $this->applyTypeFlagsWithOverrideCheck($toilet->id, $toiletType, $changes);
 
         // Update website/address/opening_hours properties unless the user set them manually.
         $this->setPropertyWithOverrideCheck($toilet->id, 'website', $details['website'] ?? null, $changes);
