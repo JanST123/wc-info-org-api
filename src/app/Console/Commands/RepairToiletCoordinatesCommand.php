@@ -34,7 +34,7 @@ class RepairToiletCoordinatesCommand extends Command
         foreach ($rows as $row) {
             if (!empty($row->user_overridden)) {
                 $userOverridden = json_decode($row->user_overridden, true);
-                if (isset($userOverridden['lat']) || isset($userOverridden['lon'])) {
+                if (in_array('lat', $userOverridden) || in_array('lon', $userOverridden)) {
                     if ($dryRun) {
                         $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> skipped due to user_overridden lat/lon");
                     }
