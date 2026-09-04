@@ -25,19 +25,28 @@ class RepairToiletCoordinatesCommand extends Command
             ->whereNotNull('toilets.place_id')
             ->whereNotNull('places.place_id')
             ->join('places', 'places.place_id', '=', 'toilets.place_id')
-            ->select(['toilets.id', 'toilets.place_id', 'places.data'])
+            ->select(['toilets.id', 'toilets.place_id', 'toilets.user_overridden', 'places.data'])
             ->get();
 
         $updated = 0;
         $skipped = 0;
 
         foreach ($rows as $row) {
+            if (!empty($row->user_overridden)) {
+                $userOverridden = json_decode($row->user_overridden, true);
+                if (isset($userOverridden['lat']) || isset($userOverridden['lon'])) {
+                    if ($dryRun) {
+                        $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> skipped due to user_overridden lat/lon");
+                    }
+                    $skipped++;
+                    continue;
+                }
+            }
             $data = json_decode($row->data, true);
             $location = $data['geometry']['location'] ?? $data['result']['geometry']['location'] ?? null;
 
             if (! $location || ! isset($location['lat'], $location['lng'])) {
                 $skipped++;
-
                 continue;
             }
 
