@@ -43,15 +43,15 @@ class RepairToiletCoordinatesCommand extends Command
                 }
             }
             $data = json_decode($row->data, true);
-            $location = $data['geometry']['location'] ?? $data['result']['geometry']['location'] ?? null;
+            $location = $data['location'] ?? $data['result']['location'] ?? null;
 
-            if (! $location || ! isset($location['lat'], $location['lng'])) {
+            if (! $location || ! isset($location['latitude'], $location['longitude'])) {
                 $skipped++;
                 continue;
             }
 
-            $lat = (float) $location['lat'];
-            $lon = (float) $location['lng'];
+            $lat = (float) $location['latitude'];
+            $lon = (float) $location['longitude'];
 
             if ($dryRun) {
                 $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> lat={$lat} lon={$lon}");
