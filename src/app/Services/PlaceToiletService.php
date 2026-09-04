@@ -195,13 +195,12 @@ class PlaceToiletService
             $this->setPropertyWithOverrideCheck($toilet->id, 'place_opening_hours', null, $changes);
         }
 
-        if ($toiletType !== 'none') {
-            $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
+        $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
 
-            if (! $toilet->isUserOverridden('public_accessible') && self::isPublicAccessibleType($placeTypes)) {
-                $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
-            }
+        if (! $toilet->isUserOverridden('public_accessible') && self::isPublicAccessibleType($placeTypes)) {
+            $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
         }
+        
 
         return $updated || $crawlResult !== null || count($changes) > 0;
     }
