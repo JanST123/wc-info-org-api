@@ -60,9 +60,8 @@ class NotifyUpdatedToiletsCommand extends Command
                 $body .= '<strong>Status:</strong> '.e($toilet->status).'<br>';
                 $body .= '<strong>Diff:</strong><pre> '.nl2br(e(json_encode($diff, JSON_PRETTY_PRINT))).'</pre></p>';
                 $body .= '<p>';
-                $body .= '<a href="https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id.'">Open</a> | ';
-                $body .= '<a href="https://api.wc-info.de/toilet/'.$toilet->id.'/admin-qualify?hash='.$hash.'">Qualify</a> | ';
-                $body .= '<a href="https://api.wc-info.de/toilet/'.$toilet->id.'/admin-delete?hash='.$hash.'">Delete</a>';
+                $body .= '<a href="https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id.'">Open Public</a> | ';
+                $body .= '<a href="https://api.wc-info.de/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
                 $body .= '</p>';
             }
         }
@@ -79,8 +78,8 @@ class NotifyUpdatedToiletsCommand extends Command
                     $hash = $adminLink->hash($toilet->id, $toilet->place_id ?? '');
                     $body .= '<strong>Toilet:</strong> #'.$toilet->id.' - '.e($toilet->name).' ('.e($toilet->owner).')<br>';
                     $body .= '<p>';
-                    $body .= '<a href="https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id.'">Open Toilet</a> | ';
-                    $body .= '<a href="https://api.wc-info.de/toilet/'.$toilet->id.'/admin-delete?hash='.$hash.'">Delete Toilet</a>';
+                    $body .= '<a href="https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id.'">Open Public</a> | ';
+                    $body .= '<a href="https://api.wc-info.de/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
                     $body .= '</p>';
                 }
                 $body .= '</p>';

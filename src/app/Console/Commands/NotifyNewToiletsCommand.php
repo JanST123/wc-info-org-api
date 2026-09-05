@@ -42,9 +42,8 @@ class NotifyNewToiletsCommand extends Command
             $body .= '<strong>Type:</strong> '.e($toilet->type).'<br>';
             $body .= '<strong>Properties:</strong> '.nl2br(e(json_encode($properties, JSON_PRETTY_PRINT))).'</p>';
             $body .= '<p>';
-            $body .= '<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">Open</a> | ';
-            $body .= '<a href="https://api.wc-info.de/toilet/'.$toilet->id.'/admin-qualify?hash='.$hash.'">Qualify</a> | ';
-            $body .= '<a href="https://api.wc-info.de/toilet/'.$toilet->id.'/admin-delete?hash='.$hash.'">Delete</a>';
+            $body .= '<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">Open Public</a> | ';
+            $body .= '<a href="https://api.wc-info.de/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
             $body .= '</p>';
         }
 

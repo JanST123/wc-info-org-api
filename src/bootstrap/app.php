@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\Handler;
+use App\Http\Middleware\AdminAuthMiddleware;
 use App\Http\Middleware\CorsMiddleware;
 use App\Http\Middleware\RequestLogMiddleware;
 use Illuminate\Foundation\Application;
@@ -16,6 +17,19 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->append(CorsMiddleware::class);
         $middleware->append(RequestLogMiddleware::class);
+
+        $middleware->alias([
+            'admin.auth' => AdminAuthMiddleware::class,
+        ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'toilet/*',
+            'toilets/*',
+            'places/*',
+            'upload',
+            'uploadSubmit/*',
+            'deletePhoto/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         Handler::configure($exceptions);

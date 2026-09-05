@@ -11,20 +11,17 @@ use App\Http\Resources\ToiletListResource;
 use App\Models\Toilet;
 use App\Models\Type;
 use App\Models\TypeXPlace;
-use App\Services\AdminLinkService;
 use App\Services\GooglePlacesService;
 use App\Services\OpeningHoursService;
 use App\Services\PlaceToiletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ToiletController extends Controller
 {
     public function __construct(
-        private AdminLinkService $adminLink,
         private GooglePlacesService $placesService,
     ) {}
 
@@ -525,53 +522,7 @@ class ToiletController extends Controller
         ]);
     }
 
-    /**
-     * Admin action: mark a toilet as qualified.
-     */
-    public function adminQualify(int $id, Request $request): Response
-    {
-        return $this->adminAction($id, $request, function (Toilet $toilet) {
-            $toilet->update(['is_qualified' => 1]);
 
-            return response()->json(
-                'Successfully qualified Toilet '.$toilet->id.'<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">To the toilet</a>'
-            );
-        }, 'qualify');
-    }
-
-    /**
-     * Admin action: delete a toilet.
-     */
-    public function adminDelete(int $id, Request $request): Response
-    {
-        return $this->adminAction($id, $request, function (Toilet $toilet) {
-            $toilet->update(['status' => 'deleted']);
-
-            return response()->json(
-                'Successfully deleted Toilet '.$toilet->id.'<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">To the toilet</a>'
-            );
-        }, 'delete');
-    }
-
-    private function adminAction(int $id, Request $request, callable $action, string $verb)
-    {
-        $hash = $request->input('hash');
-        $confirmed = $request->input('confirmed', '0');
-
-        $toilet = Toilet::findOrFail($id);
-
-        if (! $this->adminLink->verify($toilet->id, $toilet->place_id, $hash)) {
-            abort(403, 'invalid hash');
-        }
-
-        if ($confirmed !== '1') {
-            return response(
-                'Really <strong>'.$verb.'</strong> Toilet '.$toilet->id.' / '.$toilet->name.' / '.$toilet->owner.'? <a href="'.$request->fullUrl().'&confirmed=1">YES</a>'
-            );
-        }
-
-        return $action($toilet);
-    }
 
     private function setFlag(int $toiletId, string $flag, bool $value, array &$diff): void
     {

@@ -25,6 +25,11 @@ return [
 
     'sender_mail' => env('SENDER_MAIL', 'noreply@wc-info.de'),
 
+    'admin' => [
+        'user' => env('ADMIN_USER', 'admin'),
+        'password' => env('ADMIN_PASSWORD', 'secret'),
+    ],
+
     'admin_hash_secret' => env('ADMIN_HASH_SECRET', ''), // prefix salt used for qualify/delete links
     'admin_hash_secret2' => env('ADMIN_HASH_SECRET2', ''), // suffix salt
 

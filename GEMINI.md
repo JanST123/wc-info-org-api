@@ -97,10 +97,16 @@ All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
 | `POST` | `/upload` | Upload toilet photo |
 | `POST` | `/uploadSubmit/{toiletId}` | Finalize photo uploads & activate toilet |
 | `DELETE` | `/deletePhoto/{toiletId}/{filename}` | Soft (`soft=true`) or hard delete photo |
-| `GET` | `/toilet/{id}/admin-qualify` | Admin verification link |
-| `GET` | `/toilet/{id}/admin-delete` | Admin delete link |
 | `GET` | `/sitemap` | XML sitemap |
 | `GET` | `/health` | Service health check |
+| `GET` | `/admin/login` | Admin login page |
+| `POST` | `/admin/login` | Admin authentication |
+| `POST` | `/admin/logout` | Admin logout |
+| `GET` | `/admin` | Admin dashboard (lists toilets added in last 24h & search) |
+| `GET` | `/admin/toilets/{id}` | Admin toilet view/edit panel |
+| `POST` | `/admin/toilets/{id}` | Admin toilet update |
+| `POST` | `/admin/toilets/{id}/reschedule-discovery` | Reschedule discovery job (sets last_included to NOW()) |
+| `POST` | `/admin/toilets/{id}/photos/{filename}/delete` | Delete photo (soft or hard) |
 
 ---
 
