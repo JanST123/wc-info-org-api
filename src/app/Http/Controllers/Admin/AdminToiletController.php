@@ -414,7 +414,7 @@ class AdminToiletController extends Controller
         // 2. If lat/lon are set, query Google Places around 40m (0.04 km)
         if ($toilet->lat !== null && $toilet->lon !== null) {
             try {
-                $rawPlaces = $this->placesService->nearbySearchRaw($toilet->lat, $toilet->lon, 0.04);
+                $rawPlaces = $this->placesService->nearbySearchRaw($toilet->lat, $toilet->lon, 0.1);
 
                 foreach ($rawPlaces as $item) {
                     $pid = $item['id'] ?? $item['place_id'] ?? null;
