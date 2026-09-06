@@ -12,10 +12,13 @@ use RuntimeException;
 class GooglePlacesService
 {
     private string $apiKey;
+    private GoogleCostService $costService;
 
-    public function __construct()
-    {
-        $this->apiKey = config('wcinfo.google.api_key');
+    public function __construct(
+        ?GoogleCostService $costService = null,
+    ) {
+        $this->apiKey = (string) config('wcinfo.google.api_key');
+        $this->costService = $costService ?? app(GoogleCostService::class);
 
         if (empty($this->apiKey)) {
             throw new RuntimeException('Google API key is not configured.');
@@ -24,12 +27,31 @@ class GooglePlacesService
 
     public function fetchPlaceDetails(string $placeId): ?array
     {
+        if (! $this->costService->hasBudget()) {
+            Log::warning('Google API call blocked: Monthly budget exceeded', [
+                'service' => GoogleCostService::SERVICE_PLACES_DETAILS,
+                'place_id' => $placeId,
+            ]);
+            $this->costService->checkBudgetAndNotify();
+
+            return null;
+        }
+
+        $endpoint = "https://places.googleapis.com/v1/places/{$placeId}";
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
             'X-Goog-FieldMask' => 'id,displayName,location,regularOpeningHours,websiteUri,formattedAddress,types',
-        ])->get("https://places.googleapis.com/v1/places/{$placeId}", [
+        ])->get($endpoint, [
             'languageCode' => 'de',
         ]);
+
+        $this->costService->logApiCall(
+            GoogleCostService::SERVICE_PLACES_DETAILS,
+            $endpoint,
+            GoogleCostService::COST_PLACES_DETAILS_USD,
+            $response->status(),
+            ['place_id' => $placeId]
+        );
 
         if ($response->failed()) {
             Log::warning('Google Places Details request failed', [
@@ -48,10 +70,30 @@ class GooglePlacesService
 
     public function placesForCoordinates(float $lat, float $lon): array
     {
-        $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json', [
+        if (! $this->costService->hasBudget()) {
+            Log::warning('Google API call blocked: Monthly budget exceeded', [
+                'service' => GoogleCostService::SERVICE_GEOCODING,
+                'lat' => $lat,
+                'lon' => $lon,
+            ]);
+            $this->costService->checkBudgetAndNotify();
+
+            return [];
+        }
+
+        $endpoint = 'https://maps.googleapis.com/maps/api/geocode/json';
+        $response = Http::get($endpoint, [
             'latlng' => $lat.','.$lon,
             'key' => $this->apiKey,
         ]);
+
+        $this->costService->logApiCall(
+            GoogleCostService::SERVICE_GEOCODING,
+            $endpoint,
+            GoogleCostService::COST_GEOCODING_USD,
+            $response->status(),
+            ['lat' => $lat, 'lon' => $lon]
+        );
 
         if ($response->failed()) {
             Log::warning('Google Geocoding request failed', ['lat' => $lat, 'lon' => $lon]);
@@ -66,6 +108,20 @@ class GooglePlacesService
 
     public function crawlWebsite(string $url, string $term): array
     {
+        if (! $this->costService->hasBudget()) {
+            Log::warning('Google API call blocked: Monthly budget exceeded', [
+                'service' => GoogleCostService::SERVICE_CUSTOM_SEARCH,
+                'url' => $url,
+            ]);
+            $this->costService->checkBudgetAndNotify();
+
+            return [
+                'toiletType' => 'none',
+                'contactEmail' => '',
+                'resultCount' => 0,
+            ];
+        }
+
         Log::info('Starting website crawl', ['url' => $url, 'term' => $term]);
 
         if (! preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/', $url, $matches)) {
@@ -83,12 +139,21 @@ class GooglePlacesService
             'search_engine_id' => $cx,
         ]);
 
-        $response = Http::get('https://customsearch.googleapis.com/customsearch/v1', [
+        $endpoint = 'https://customsearch.googleapis.com/customsearch/v1';
+        $response = Http::get($endpoint, [
             'cx' => $cx,
             'exactTerms' => $term,
             'siteSearch' => $url,
             'key' => $this->apiKey,
         ]);
+
+        $this->costService->logApiCall(
+            GoogleCostService::SERVICE_CUSTOM_SEARCH,
+            $endpoint,
+            GoogleCostService::COST_CUSTOM_SEARCH_USD,
+            $response->status(),
+            ['url' => $url, 'term' => $term]
+        );
 
         if ($response->failed()) {
             Log::warning('Google Custom Search request failed', [
@@ -190,12 +255,24 @@ class GooglePlacesService
      */
     public function nearbySearchRaw(float $lat, float $lon, float $distanceKm): array
     {
+        if (! $this->costService->hasBudget()) {
+            Log::warning('Google API call blocked: Monthly budget exceeded', [
+                'service' => GoogleCostService::SERVICE_PLACES_NEARBY,
+                'lat' => $lat,
+                'lon' => $lon,
+            ]);
+            $this->costService->checkBudgetAndNotify();
+
+            return [];
+        }
+
         $radius = (float) min(round($distanceKm * 1000, 1), 50000);
+        $endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
 
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
             'X-Goog-FieldMask' => 'places.id,places.displayName,places.location,places.regularOpeningHours,places.websiteUri,places.formattedAddress,places.types',
-        ])->post('https://places.googleapis.com/v1/places:searchNearby', [
+        ])->post($endpoint, [
             'languageCode' => 'de',
             'locationRestriction' => [
                 'circle' => [
@@ -208,6 +285,14 @@ class GooglePlacesService
             ],
             'maxResultCount' => 20,
         ]);
+
+        $this->costService->logApiCall(
+            GoogleCostService::SERVICE_PLACES_NEARBY,
+            $endpoint,
+            GoogleCostService::COST_PLACES_NEARBY_USD,
+            $response->status(),
+            ['lat' => $lat, 'lon' => $lon, 'distance_km' => $distanceKm]
+        );
 
         if ($response->failed()) {
             Log::warning('Google Nearby Search request failed', [

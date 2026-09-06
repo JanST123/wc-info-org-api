@@ -148,6 +148,10 @@ class DiscoverPlacesCommand extends Command
                 $query->whereNull('last_discovered')
                     ->orWhereColumn('last_included', '>', 'last_discovered');
             })
+            ->where(function ($query) {
+                $query->whereNull('last_places_fetch')
+                    ->orWhere('last_places_fetch', '<=', now()->subMonth());
+            })
             ->whereNotNull('place_id')
             ->orderBy('last_included', 'desc');
     }
@@ -200,7 +204,10 @@ class DiscoverPlacesCommand extends Command
             }
         }
 
-        $toilet->update(['last_discovered' => now()]);
+        $toilet->update([
+            'last_discovered' => now(),
+            'last_places_fetch' => now(),
+        ]);
     }
 
     private function logSummary(): void

@@ -33,6 +33,8 @@ class Toilet extends Model
         'created_at',
         'last_included',
         'last_discovered',
+        'last_places_fetch',
+        'last_crawled',
         'user_overridden',
         'email_sent',
         'last_diff',
@@ -47,6 +49,8 @@ class Toilet extends Model
         'updated' => 'datetime',
         'last_included' => 'datetime',
         'last_discovered' => 'datetime',
+        'last_places_fetch' => 'datetime',
+        'last_crawled' => 'datetime',
         'user_overridden' => 'array',
     ];
 

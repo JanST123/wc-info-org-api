@@ -524,6 +524,10 @@
             </form>
 
             <div class="navbar-actions">
+                <a href="{{ route('admin.costs') }}" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 0.35rem;">
+                    <span>📊</span>
+                    <span>Costs & Budget</span>
+                </a>
                 <a href="{{ route('admin.index') }}" class="btn btn-secondary btn-sm">Dashboard</a>
                 <form action="{{ route('admin.logout') }}" method="POST" style="display: inline;">
                     @csrf

@@ -40,6 +40,8 @@ Route::post('admin/logout', [AdminAuthController::class, 'logout'])->name('admin
 // Protected Admin Panel routes
 Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminToiletController::class, 'index'])->name('index');
+    Route::get('costs', [AdminToiletController::class, 'costs'])->name('costs');
+    Route::post('costs/budget', [AdminToiletController::class, 'updateBudget'])->name('costs.budget');
     Route::get('toilets', [AdminToiletController::class, 'index'])->name('toilets.index');
     Route::post('toilets/find', [AdminToiletController::class, 'find'])->name('toilets.find');
     Route::get('toilets/{id}', [AdminToiletController::class, 'show'])->name('toilets.show');

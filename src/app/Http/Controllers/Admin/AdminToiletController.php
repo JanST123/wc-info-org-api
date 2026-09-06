@@ -9,6 +9,7 @@ use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\ToiletPhoto;
 use App\Models\ToiletProperty;
+use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use App\Services\S3PhotoStorageService;
@@ -24,10 +25,11 @@ class AdminToiletController extends Controller
     public function __construct(
         private GooglePlacesService $placesService,
         private S3PhotoStorageService $s3,
+        private GoogleCostService $costService,
     ) {}
 
     /**
-     * Dashboard: List toilets added in the last 24 hours and quick stats.
+     * Dashboard: List toilets added in the last 24 hours, cost summary and quick stats.
      */
     public function index(Request $request): View
     {
@@ -51,9 +53,38 @@ class AdminToiletController extends Controller
             'deleted' => Toilet::where('status', 'deleted')->count(),
             'qualified' => Toilet::where('is_qualified', 1)->count(),
             'recent_count' => $recentToilets->count(),
+            'current_month_cost' => $this->costService->getCurrentMonthCost(),
+            'monthly_budget' => $this->costService->getMonthlyBudget(),
+            'is_budget_exceeded' => ! $this->costService->hasBudget(),
         ];
 
         return view('admin.index', compact('recentToilets', 'stats', 'since'));
+    }
+
+    /**
+     * Google API Cost Control & Monitoring Dashboard.
+     */
+    public function costs(): View
+    {
+        $monthlyStats = $this->costService->getMonthlyStats();
+        $recentLogs = $this->costService->getRecentLogs(100);
+
+        return view('admin.costs', compact('monthlyStats', 'recentLogs'));
+    }
+
+    /**
+     * Update monthly Google API budget.
+     */
+    public function updateBudget(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'budget' => ['required', 'numeric', 'min:0', 'max:10000'],
+        ]);
+
+        $this->costService->setMonthlyBudget((float) $validated['budget']);
+
+        return redirect()->route('admin.costs')
+            ->with('success', 'Monthly Google API budget updated to $'.number_format((float) $validated['budget'], 2).' USD.');
     }
 
     /**

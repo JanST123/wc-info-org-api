@@ -49,6 +49,33 @@
         </div>
     </div>
 
+    <!-- Google Cost Summary Banner -->
+    <div class="card" style="padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background-color: {{ $stats['is_budget_exceeded'] ? 'var(--danger-light)' : '#ffffff' }}; border-color: {{ $stats['is_budget_exceeded'] ? '#fca5a5' : 'var(--gray-200)' }};">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="font-size: 1.5rem;">📊</div>
+            <div>
+                <div style="font-weight: 600; font-size: 0.9375rem; color: {{ $stats['is_budget_exceeded'] ? 'var(--danger)' : 'var(--gray-900)' }};">
+                    Google Cloud API Budget ({{ date('F Y') }}):
+                    <span style="font-family: monospace;">${{ number_format($stats['current_month_cost'], 2) }}</span> /
+                    <span style="font-family: monospace;">${{ number_format($stats['monthly_budget'], 2) }} USD</span>
+                    @if ($stats['is_budget_exceeded'])
+                        <span class="badge badge-deleted" style="margin-left: 0.5rem;">⚠️ Limit Exceeded</span>
+                    @else
+                        <span class="badge badge-active" style="margin-left: 0.5rem;">✓ Active</span>
+                    @endif
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--gray-500); margin-top: 0.125rem;">
+                    Calls to Places Nearby, Place Details, and Custom Search are tracked and throttled to prevent runaway costs.
+                </div>
+            </div>
+        </div>
+        <div>
+            <a href="{{ route('admin.costs') }}" class="btn btn-secondary btn-sm" style="font-weight: 600;">
+                Manage Budget & Logs →
+            </a>
+        </div>
+    </div>
+
     <!-- Main Card: Toilets Added in the Last 24 Hours -->
     <div class="card">
         <div class="card-header">

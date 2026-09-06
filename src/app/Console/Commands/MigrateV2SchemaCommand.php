@@ -158,6 +158,7 @@ class MigrateV2SchemaCommand extends Command
         $this->cleanupToiletsTable();
         $this->cleanupPropertiesTable();
         $this->cleanupUnknownPlaces();
+        $this->createCostTrackingTables();
     }
 
     private function renameTables(): void
@@ -223,8 +224,20 @@ class MigrateV2SchemaCommand extends Command
             $this->info('Column last_discovered already exists, skipping.');
         }
 
+        if (! $this->columnExists('toilets', 'last_places_fetch')) {
+            $this->runStatement('ALTER TABLE toilets ADD COLUMN last_places_fetch DATETIME DEFAULT NULL AFTER last_discovered');
+        } else {
+            $this->info('Column last_places_fetch already exists, skipping.');
+        }
+
+        if (! $this->columnExists('toilets', 'last_crawled')) {
+            $this->runStatement('ALTER TABLE toilets ADD COLUMN last_crawled DATETIME DEFAULT NULL AFTER last_places_fetch');
+        } else {
+            $this->info('Column last_crawled already exists, skipping.');
+        }
+
         if (! $this->columnExists('toilets', 'user_overridden')) {
-            $this->runStatement('ALTER TABLE toilets ADD COLUMN user_overridden JSON NULL DEFAULT NULL COMMENT "Fields the user has manually overridden" AFTER last_discovered');
+            $this->runStatement('ALTER TABLE toilets ADD COLUMN user_overridden JSON NULL DEFAULT NULL COMMENT "Fields the user has manually overridden" AFTER last_crawled');
         } else {
             $this->info('Column user_overridden already exists, skipping.');
         }
@@ -476,6 +489,41 @@ class MigrateV2SchemaCommand extends Command
             $this->info('Migrated '.$count.' unknown_places coordinates.');
         } else {
             $this->info('unknown_places coordinates already decimal, skipping.');
+        }
+    }
+
+    private function createCostTrackingTables(): void
+    {
+        $this->info('Creating cost tracking and settings tables...');
+
+        if (! $this->tableExists('google_api_logs')) {
+            $this->runStatement("
+                CREATE TABLE google_api_logs (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    service ENUM('places_nearby', 'places_details', 'custom_search', 'geocoding') NOT NULL,
+                    endpoint VARCHAR(255) NOT NULL,
+                    cost_usd DECIMAL(8, 4) NOT NULL DEFAULT 0.0000,
+                    status_code SMALLINT UNSIGNED NOT NULL DEFAULT 200,
+                    context JSON NULL DEFAULT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_service_created (service, created_at),
+                    INDEX idx_created (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            $this->info('Table google_api_logs already exists, skipping.');
+        }
+
+        if (! $this->tableExists('app_settings')) {
+            $this->runStatement("
+                CREATE TABLE app_settings (
+                    `key` VARCHAR(100) PRIMARY KEY,
+                    `value` LONGTEXT NULL DEFAULT NULL,
+                    `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            $this->info('Table app_settings already exists, skipping.');
         }
     }
 

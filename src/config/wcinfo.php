@@ -13,7 +13,10 @@ return [
 
     'google' => [
         'api_key' => env('GOOGLE_API_KEY'),
+        'monthly_budget' => (float) env('GOOGLE_MONTHLY_BUDGET', 20.0),
     ],
+
+    'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hallo@wc-info.de'),
 
     'smtp' => [
         'host' => env('SMTP_HOST', 'smtp.example.com'),

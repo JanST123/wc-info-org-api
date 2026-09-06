@@ -82,6 +82,8 @@ class PlaceToiletService
             'contact_email' => $contactEmail,
             'status' => $status,
             'source' => 'auto_crawl',
+            'last_places_fetch' => now(),
+            'last_crawled' => now(),
         ]);
 
         if ($toiletType !== 'none') {
@@ -125,6 +127,8 @@ class PlaceToiletService
         $details = $this->resolveDetails($placeData, $fetchedDetails);
         $updated = false;
 
+        $toilet->last_places_fetch = now();
+
         // Always update coordinates from Google unless the user moved the toilet manually.
         if (! empty($details['location'])) {
             if (! $toilet->isUserOverridden('lat') && (float) $toilet->lat != (float) ($details['location']['lat'] ?? null)) {
@@ -148,34 +152,44 @@ class PlaceToiletService
         }
 
         $crawlResult = null;
+        $needsCrawl = empty($toilet->last_crawled) || $toilet->last_crawled->lte(now()->subMonths(3));
 
         if (! empty($details['website'])) {
-            $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
+            if ($needsCrawl) {
+                $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
+                $toilet->last_crawled = now();
 
-            $toiletType = $crawlResult['toiletType'] ?? 'none';
-            $newStatus = $toiletType === 'none' ? 'hidden' : 'active';
+                $toiletType = $crawlResult['toiletType'] ?? 'none';
+                $newStatus = $toiletType === 'none' ? 'hidden' : 'active';
 
-            // Only change status if the user has not manually set it.
-            if (! $toilet->isUserOverridden('status') && $toilet->status !== $newStatus) {
-                $changes['status'] = ['old' => $toilet->status, 'new' => $newStatus];
-                $toilet->status = $newStatus;
-                $updated = true;
+                // Only change status if the user has not manually set it.
+                if (! $toilet->isUserOverridden('status') && $toilet->status !== $newStatus) {
+                    $changes['status'] = ['old' => $toilet->status, 'new' => $newStatus];
+                    $toilet->status = $newStatus;
+                    $updated = true;
 
-                // When the cron (re-)activates a toilet, give it the default active name.
-                if ($newStatus === 'active' && ! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
-                    $newName = 'WC #'.$toilet->id;
-                    $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
-                    $toilet->name = $newName;
+                    // When the cron (re-)activates a toilet, give it the default active name.
+                    if ($newStatus === 'active' && ! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
+                        $newName = 'WC #'.$toilet->id;
+                        $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
+                        $toilet->name = $newName;
+                    }
                 }
-            }
 
-            if ($toilet->isDirty()) {
-                $toilet->save();
-                $updated = true;
-            }
+                if ($toilet->isDirty()) {
+                    $toilet->save();
+                    $updated = true;
+                }
 
-            // Update boolean flags unless the user set them manually.
-            $this->applyTypeFlagsWithOverrideCheck($toilet->id, $toiletType, $changes);
+                // Update boolean flags unless the user set them manually.
+                $this->applyTypeFlagsWithOverrideCheck($toilet->id, $toiletType, $changes);
+            } else {
+                Log::info('Skipping website crawl for toilet: crawled recently (<3 months)', [
+                    'toilet_id' => $toilet->id,
+                    'place_id' => $placeId,
+                    'last_crawled' => $toilet->last_crawled->toIso8601String(),
+                ]);
+            }
         } else {
             Log::info('Place has no website during update', [
                 'toilet_id' => $toilet->id,
