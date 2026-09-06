@@ -26,7 +26,7 @@ return [
         'encryption' => env('SMTP_ENCRYPTION', 'ssl'),
     ],
 
-    'sender_mail' => env('SENDER_MAIL', 'noreply@wc-info.org'),
+    'sender_mail' => env('SENDER_MAIL', 'hallo@wc-info.de'),
 
     'admin' => [
         'user' => env('ADMIN_USER', 'admin'),

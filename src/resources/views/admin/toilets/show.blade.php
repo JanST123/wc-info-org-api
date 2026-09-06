@@ -199,6 +199,7 @@
                             class="form-control"
                             value="{{ old('lat', $toilet->lat) }}"
                             placeholder="e.g. 52.520008"
+                            oninput="updateGoogleMapsLink()"
                         >
                     </div>
 
@@ -212,6 +213,7 @@
                             class="form-control"
                             value="{{ old('lon', $toilet->lon) }}"
                             placeholder="e.g. 13.404954"
+                            oninput="updateGoogleMapsLink()"
                         >
                     </div>
 
@@ -228,6 +230,20 @@
                         </label>
                         <div class="form-hint">Qualified toilets are verified by admins/users.</div>
                     </div>
+                </div>
+
+                <div id="google-maps-container" style="margin-top: -0.5rem; margin-bottom: 1.25rem; {{ ($toilet->lat === null || $toilet->lon === null) ? 'display: none;' : '' }}">
+                    <a
+                        id="google-maps-link"
+                        href="{{ ($toilet->lat !== null && $toilet->lon !== null) ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon : '#' }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-secondary btn-sm"
+                        style="display: inline-flex; align-items: center; gap: 0.35rem;"
+                    >
+                        <span>📍</span>
+                        <span>Open in Google Maps ↗</span>
+                    </a>
                 </div>
 
                 <div class="grid-2">
@@ -591,6 +607,29 @@
             <input type="text" name="custom_property_value[]" class="form-control" placeholder="Property value">
         `;
         container.appendChild(row);
+    }
+
+    function updateGoogleMapsLink() {
+        const latInput = document.getElementById('lat');
+        const lonInput = document.getElementById('lon');
+        const link = document.getElementById('google-maps-link');
+        const container = document.getElementById('google-maps-container');
+
+        const lat = latInput ? latInput.value.trim() : '';
+        const lon = lonInput ? lonInput.value.trim() : '';
+
+        if (lat !== '' && lon !== '' && !isNaN(Number(lat)) && !isNaN(Number(lon))) {
+            if (link) {
+                link.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat)},${encodeURIComponent(lon)}`;
+            }
+            if (container) {
+                container.style.display = 'block';
+            }
+        } else {
+            if (container) {
+                container.style.display = 'none';
+            }
+        }
     }
 </script>
 @endpush

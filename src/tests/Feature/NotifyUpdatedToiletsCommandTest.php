@@ -16,7 +16,7 @@ class NotifyUpdatedToiletsCommandTest extends TestCase
         $mail->expects($this->once())
             ->method('send')
             ->with(
-                'hallo@wc-info.de',
+                config('wcinfo.sender_mail'),
                 $this->stringContains('deleted photo(s)'),
                 $this->logicalAnd(
                     $this->stringContains('Deleted Photos'),
