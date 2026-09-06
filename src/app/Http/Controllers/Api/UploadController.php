@@ -120,11 +120,12 @@ class UploadController extends Controller
     {
         $toilet = Toilet::findOrFail($toiletId);
         $toilet->update(['status' => 'active']);
+        $from = config('wcinfo.sender_mail');
 
         $this->mail->send(
-            'hallo@wc-info.de',
+            $from,
             'Toilette mit Fotos hinzugefügt - ID: '.$toiletId,
-            'https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toiletId
+            'https://wc-info.org/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toiletId
         );
 
         return response()->json(['success' => true]);
@@ -212,9 +213,9 @@ class UploadController extends Controller
     {
         try {
             $this->mail->send(
-                'hallo@wc-info.de',
+                config('wcinfo.sender_mail'),
                 'Fotos zu existierender Toilette hinzugefügt - ID: '.$toilet->id,
-                'https://wc-info.de/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id
+                'https://wc-info.org/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toilet->id
             );
         } catch (\Throwable $e) {
             Log::warning('Failed to send upload notification email', ['toilet_id' => $toilet->id, 'error' => $e->getMessage()]);

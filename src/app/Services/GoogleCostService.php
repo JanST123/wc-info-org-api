@@ -127,7 +127,7 @@ class GoogleCostService
 
         $currentCost = $this->getCurrentMonthCost();
         $budget = $this->getMonthlyBudget();
-        $recipient = (string) config('wcinfo.admin_notification_email', 'hallo@wc-info.de');
+        $recipient = (string) config('wcinfo.admin_notification_email', 'hi@wc-info.org');
 
         $body = "<h2>🚨 Google API Monthly Budget Limit Exceeded</h2>\n";
         $body .= "<p>The configured monthly Google API budget for WC-Info has been reached or exceeded.</p>\n";

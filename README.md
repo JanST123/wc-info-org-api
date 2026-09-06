@@ -63,9 +63,9 @@ The API is now available at `http://localhost:8000`.
 
 Scramble automatically generates the OpenAPI spec from the code.
 
-- Stoplight Elements UI: `https://api.wc-info.de/docs/api`
-- Swagger UI: `https://api.wc-info.de/docs/api/swagger`
-- Spec: `https://api.wc-info.de/docs/api.json`
+- Stoplight Elements UI: `https://api.wc-info.org/docs/api`
+- Swagger UI: `https://api.wc-info.org/docs/api/swagger`
+- Spec: `https://api.wc-info.org/docs/api.json`
 
 ## Database / migrations
 

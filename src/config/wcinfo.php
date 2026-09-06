@@ -16,7 +16,7 @@ return [
         'monthly_budget' => (float) env('GOOGLE_MONTHLY_BUDGET', 20.0),
     ],
 
-    'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hallo@wc-info.de'),
+    'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hi@wc-info.org'),
 
     'smtp' => [
         'host' => env('SMTP_HOST', 'smtp.example.com'),
@@ -26,7 +26,7 @@ return [
         'encryption' => env('SMTP_ENCRYPTION', 'ssl'),
     ],
 
-    'sender_mail' => env('SENDER_MAIL', 'noreply@wc-info.de'),
+    'sender_mail' => env('SENDER_MAIL', 'noreply@wc-info.org'),
 
     'admin' => [
         'user' => env('ADMIN_USER', 'admin'),

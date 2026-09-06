@@ -3,7 +3,7 @@
 ## Overview
 
 **WC-Info API v2** is a modern Laravel 11 REST API replacing the legacy Lumen-based WC-Info backend.
-The Laravel application resides in `src/` and serves `https://api.wc-info.de` directly at the root (no `/api` route prefix).
+The Laravel application resides in `src/` and serves `https://api.wc-info.org` directly at the root (no `/api` route prefix).
 
 ---
 

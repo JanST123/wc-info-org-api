@@ -52,7 +52,7 @@ class SitemapController extends Controller
             $urlEl = $xml->addChild('url');
             foreach ($url as $key => $val) {
                 if ($key === 'loc') {
-                    $val = 'https://wc-info.de'.$val;
+                    $val = 'https://wc-info.org'.$val;
                 }
                 $urlEl->addChild($key, (string) $val);
             }

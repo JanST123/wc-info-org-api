@@ -16,6 +16,8 @@ class NotifyNewToiletsCommand extends Command
 
     public function handle(MailService $mail, AdminLinkService $adminLink): int
     {
+        $from = config('wcinfo.sender_mail');
+
         $toilets = Toilet::where('email_sent', 0)
             ->where('status', '=', 'active')
             ->get();
@@ -42,12 +44,12 @@ class NotifyNewToiletsCommand extends Command
             $body .= '<strong>Type:</strong> '.e($toilet->type).'<br>';
             $body .= '<strong>Properties:</strong> '.nl2br(e(json_encode($properties, JSON_PRETTY_PRINT))).'</p>';
             $body .= '<p>';
-            $body .= '<a href="https://wc-info.de/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">Open Public</a> | ';
-            $body .= '<a href="https://api.wc-info.de/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
+            $body .= '<a href="https://wc-info.org/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">Open Public</a> | ';
+            $body .= '<a href="https://api.wc-info.org/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
             $body .= '</p>';
         }
 
-        $mail->send('hallo@wc-info.de', $toilets->count().' new toilet(s)!', $body, true);
+        $mail->send($from, $toilets->count().' new toilet(s)!', $body, true);
 
         Toilet::whereIn('id', $toilets->pluck('id'))->update(['email_sent' => 1]);
 
