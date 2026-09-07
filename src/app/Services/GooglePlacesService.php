@@ -283,7 +283,7 @@ class GooglePlacesService
                     'radius' => $radius,
                 ],
             ],
-            'maxResultCount' => 20,
+            'maxResultCount' => 40,
         ]);
 
         $this->costService->logApiCall(
