@@ -144,6 +144,8 @@ class AdminToiletTest extends TestCase
         $response->assertSee('Show View Test Toilet');
         $response->assertSee('DB Station');
         $response->assertSee('ChIJtestplace123');
+        $response->assertSee('Alexanderplatz Station');
+        $response->assertDontSee('Current Place');
         $response->assertSee('Old Name');
         $response->assertSee('Wheelchair Accessible');
         $response->assertSee('Open in Google Maps');

@@ -387,18 +387,53 @@ class AdminToiletController extends Controller
 
         // 1. Include current place if assigned
         if (! empty($toilet->place_id)) {
-            $currentPlaceName = 'Current Place';
+            $currentPlaceName = null;
             $currentPlaceAddress = '';
 
-            if ($toilet->place && is_array($toilet->place->data)) {
-                $data = $toilet->place->data;
-                $currentPlaceName = $data['displayName']['text']
-                    ?? (is_string($data['displayName'] ?? null) ? $data['displayName'] : null)
-                    ?? $data['name']
-                    ?? 'Current Place';
-                $currentPlaceAddress = $data['formattedAddress']
-                    ?? $data['formatted_address']
-                    ?? '';
+            $placeModel = $toilet->place ?? Place::find($toilet->place_id);
+
+            if ($placeModel) {
+                $data = is_array($placeModel->data) ? $placeModel->data : json_decode((string) $placeModel->data, true);
+                if (is_array($data)) {
+                    $currentPlaceName = $data['displayName']['text']
+                        ?? (is_string($data['displayName'] ?? null) ? $data['displayName'] : null)
+                        ?? (! str_starts_with((string) ($data['name'] ?? ''), 'places/') ? ($data['name'] ?? null) : null);
+                    $currentPlaceAddress = $data['formattedAddress']
+                        ?? $data['formatted_address']
+                        ?? '';
+                }
+            }
+
+            // If place details not found locally or name missing, try fetching from Google Places API
+            if (empty($currentPlaceName)) {
+                try {
+                    $fetched = $this->placesService->fetchPlaceDetails($toilet->place_id);
+                    if ($fetched) {
+                        Place::updateOrCreate(
+                            ['place_id' => $toilet->place_id],
+                            ['data' => $fetched]
+                        );
+
+                        $currentPlaceName = $fetched['displayName']['text']
+                            ?? (is_string($fetched['displayName'] ?? null) ? $fetched['displayName'] : null)
+                            ?? (! str_starts_with((string) ($fetched['name'] ?? ''), 'places/') ? ($fetched['name'] ?? null) : null);
+                        $currentPlaceAddress = $fetched['formattedAddress']
+                            ?? $fetched['formatted_address']
+                            ?? '';
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to fetch place details for toilet current place', [
+                        'place_id' => $toilet->place_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Fallback if still empty: toilet owner / name or place ID
+            if (empty($currentPlaceName)) {
+                $currentPlaceName = ! empty($toilet->owner)
+                    ? $toilet->owner
+                    : (! empty($toilet->name) && $toilet->name !== 'Toilette' && ! str_starts_with($toilet->name, 'WC #') ? $toilet->name : $toilet->place_id);
             }
 
             $places[] = [
@@ -411,7 +446,7 @@ class AdminToiletController extends Controller
             $seenPlaceIds[$toilet->place_id] = true;
         }
 
-        // 2. If lat/lon are set, query Google Places around 40m (0.04 km)
+        // 2. If lat/lon are set, query Google Places around 100m (0.1 km)
         if ($toilet->lat !== null && $toilet->lon !== null) {
             try {
                 $rawPlaces = $this->placesService->nearbySearchRaw($toilet->lat, $toilet->lon, 0.1);
@@ -424,7 +459,7 @@ class AdminToiletController extends Controller
 
                     $name = $item['displayName']['text']
                         ?? (is_string($item['displayName'] ?? null) ? $item['displayName'] : null)
-                        ?? $item['name']
+                        ?? (! str_starts_with((string) ($item['name'] ?? ''), 'places/') ? ($item['name'] ?? null) : null)
                         ?? $pid;
                     $address = $item['formattedAddress']
                         ?? $item['formatted_address']
