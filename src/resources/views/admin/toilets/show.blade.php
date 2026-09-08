@@ -217,7 +217,39 @@
                         >
                     </div>
 
-                    <div class="form-group" style="display: flex; flex-direction: column; justify-content: center; padding-top: 0.5rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="coords_paste" style="color: var(--primary); font-weight: 600;">
+                            📋 Paste from Google Maps
+                        </label>
+                        <input
+                            type="text"
+                            id="coords_paste"
+                            class="form-control"
+                            placeholder="e.g. 51.761468, 11.436103"
+                            style="background-color: var(--primary-light); border-color: #bfdbfe;"
+                            oninput="parseCombinedCoordinates(this.value)"
+                            onpaste="setTimeout(() => parseCombinedCoordinates(this.value), 50)"
+                        >
+                        <div class="form-hint">Auto-splits "lat, lon" copied from Maps into fields.</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-top: -0.25rem; margin-bottom: 1.25rem;">
+                    <div id="google-maps-container" style="{{ ($toilet->lat === null || $toilet->lon === null) ? 'display: none;' : '' }}">
+                        <a
+                            id="google-maps-link"
+                            href="{{ ($toilet->lat !== null && $toilet->lon !== null) ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon : '#' }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="btn btn-secondary btn-sm"
+                            style="display: inline-flex; align-items: center; gap: 0.35rem;"
+                        >
+                            <span>📍</span>
+                            <span>Open in Google Maps ↗</span>
+                        </a>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label class="checkbox-label" for="is_qualified">
                             <input
                                 type="checkbox"
@@ -228,22 +260,7 @@
                             >
                             <span>Mark as <strong>Qualified (Verified)</strong></span>
                         </label>
-                        <div class="form-hint">Qualified toilets are verified by admins/users.</div>
                     </div>
-                </div>
-
-                <div id="google-maps-container" style="margin-top: -0.5rem; margin-bottom: 1.25rem; {{ ($toilet->lat === null || $toilet->lon === null) ? 'display: none;' : '' }}">
-                    <a
-                        id="google-maps-link"
-                        href="{{ ($toilet->lat !== null && $toilet->lon !== null) ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon : '#' }}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="btn btn-secondary btn-sm"
-                        style="display: inline-flex; align-items: center; gap: 0.35rem;"
-                    >
-                        <span>📍</span>
-                        <span>Open in Google Maps ↗</span>
-                    </a>
                 </div>
 
                 <div class="grid-2">
@@ -629,6 +646,42 @@
             if (container) {
                 container.style.display = 'none';
             }
+        }
+    }
+
+    function parseCombinedCoordinates(raw) {
+        if (!raw || typeof raw !== 'string') return;
+        const input = raw.trim();
+        if (!input) return;
+
+        // Check if it's a URL containing coordinates (e.g. @51.761468,11.436103 or q=51.761468,11.436103)
+        const urlMatch = input.match(/[@?&](?:q=)?(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
+        if (urlMatch) {
+            setLatLon(urlMatch[1], urlMatch[2]);
+            return;
+        }
+
+        // Standard decimal numbers separated by comma, semicolon, or whitespace (e.g. "51.76146829789323, 11.436103193794011")
+        const directMatch = input.match(/^(-?\d+(?:\.\d+)?)[,\s;]+(-?\d+(?:\.\d+)?)$/);
+        if (directMatch) {
+            setLatLon(directMatch[1], directMatch[2]);
+            return;
+        }
+
+        // Fallback: search for two numbers anywhere in the input
+        const numbers = input.match(/-?\d+(?:\.\d+)?/g);
+        if (numbers && numbers.length >= 2) {
+            setLatLon(numbers[0], numbers[1]);
+        }
+    }
+
+    function setLatLon(lat, lon) {
+        const latInput = document.getElementById('lat');
+        const lonInput = document.getElementById('lon');
+        if (latInput && lonInput) {
+            latInput.value = lat;
+            lonInput.value = lon;
+            updateGoogleMapsLink();
         }
     }
 </script>
