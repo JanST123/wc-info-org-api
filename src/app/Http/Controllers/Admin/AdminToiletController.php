@@ -161,6 +161,7 @@ class AdminToiletController extends Controller
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lon' => ['nullable', 'numeric', 'between:-180,180'],
             'place_id' => ['nullable', 'string', 'max:255'],
+            'use_place_coordinates' => ['nullable', 'boolean'],
             'status' => ['required', 'in:active,hidden,deleted'],
             'is_qualified' => ['nullable', 'boolean'],
             'contact_email' => ['nullable', 'email', 'max:200'],
@@ -203,22 +204,73 @@ class AdminToiletController extends Controller
             }
         }
 
-        // Check coordinates
-        if (array_key_exists('lat', $validated)) {
-            $latVal = $validated['lat'] !== null ? (float) $validated['lat'] : null;
-            if ($latVal !== $toilet->lat) {
-                $diff['lat'] = ['old' => $toilet->lat, 'new' => $latVal];
-                $toilet->lat = $latVal;
-                $overriddenFields[] = 'lat';
-            }
-        }
+        // Check coordinates or use place coordinates
+        $usePlaceCoordinates = $request->boolean('use_place_coordinates');
 
-        if (array_key_exists('lon', $validated)) {
-            $lonVal = $validated['lon'] !== null ? (float) $validated['lon'] : null;
-            if ($lonVal !== $toilet->lon) {
-                $diff['lon'] = ['old' => $toilet->lon, 'new' => $lonVal];
-                $toilet->lon = $lonVal;
-                $overriddenFields[] = 'lon';
+        if ($usePlaceCoordinates && ! empty($toilet->place_id)) {
+            $placeModel = Place::find($toilet->place_id);
+            $placeData = null;
+
+            if ($placeModel) {
+                $placeData = is_array($placeModel->data) ? $placeModel->data : json_decode((string) $placeModel->data, true);
+            }
+
+            if (empty($placeData['location']) && empty($placeData['geometry']['location'])) {
+                try {
+                    $fetched = $this->placesService->fetchPlaceDetails($toilet->place_id);
+                    if ($fetched) {
+                        Place::updateOrCreate(
+                            ['place_id' => $toilet->place_id],
+                            ['data' => $fetched]
+                        );
+                        $placeData = $fetched;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to fetch place details for use_place_coordinates', [
+                        'place_id' => $toilet->place_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if (is_array($placeData)) {
+                $placeLat = $placeData['location']['latitude'] ?? $placeData['location']['lat'] ?? $placeData['geometry']['location']['lat'] ?? null;
+                $placeLon = $placeData['location']['longitude'] ?? $placeData['location']['lng'] ?? $placeData['geometry']['location']['lng'] ?? null;
+
+                if ($placeLat !== null && $placeLon !== null) {
+                    $placeLat = (float) $placeLat;
+                    $placeLon = (float) $placeLon;
+
+                    if ($placeLat !== $toilet->lat) {
+                        $diff['lat'] = ['old' => $toilet->lat, 'new' => $placeLat];
+                        $toilet->lat = $placeLat;
+                    }
+
+                    if ($placeLon !== $toilet->lon) {
+                        $diff['lon'] = ['old' => $toilet->lon, 'new' => $placeLon];
+                        $toilet->lon = $placeLon;
+                    }
+
+                    $toilet->unmarkUserOverridden('lat', 'lon');
+                }
+            }
+        } else {
+            if (array_key_exists('lat', $validated)) {
+                $latVal = $validated['lat'] !== null ? (float) $validated['lat'] : null;
+                if ($latVal !== $toilet->lat) {
+                    $diff['lat'] = ['old' => $toilet->lat, 'new' => $latVal];
+                    $toilet->lat = $latVal;
+                    $overriddenFields[] = 'lat';
+                }
+            }
+
+            if (array_key_exists('lon', $validated)) {
+                $lonVal = $validated['lon'] !== null ? (float) $validated['lon'] : null;
+                if ($lonVal !== $toilet->lon) {
+                    $diff['lon'] = ['old' => $toilet->lon, 'new' => $lonVal];
+                    $toilet->lon = $lonVal;
+                    $overriddenFields[] = 'lon';
+                }
             }
         }
 
@@ -389,6 +441,8 @@ class AdminToiletController extends Controller
         if (! empty($toilet->place_id)) {
             $currentPlaceName = null;
             $currentPlaceAddress = '';
+            $currentPlaceLat = null;
+            $currentPlaceLon = null;
 
             $placeModel = $toilet->place ?? Place::find($toilet->place_id);
 
@@ -401,6 +455,8 @@ class AdminToiletController extends Controller
                     $currentPlaceAddress = $data['formattedAddress']
                         ?? $data['formatted_address']
                         ?? '';
+                    $currentPlaceLat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
+                    $currentPlaceLon = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
                 }
             }
 
@@ -420,6 +476,8 @@ class AdminToiletController extends Controller
                         $currentPlaceAddress = $fetched['formattedAddress']
                             ?? $fetched['formatted_address']
                             ?? '';
+                        $currentPlaceLat = $fetched['location']['latitude'] ?? $fetched['location']['lat'] ?? $fetched['geometry']['location']['lat'] ?? null;
+                        $currentPlaceLon = $fetched['location']['longitude'] ?? $fetched['location']['lng'] ?? $fetched['geometry']['location']['lng'] ?? null;
                     }
                 } catch (\Throwable $e) {
                     Log::warning('Failed to fetch place details for toilet current place', [
@@ -440,6 +498,8 @@ class AdminToiletController extends Controller
                 'place_id' => $toilet->place_id,
                 'name' => $currentPlaceName,
                 'address' => $currentPlaceAddress,
+                'lat' => $currentPlaceLat !== null ? (float) $currentPlaceLat : null,
+                'lon' => $currentPlaceLon !== null ? (float) $currentPlaceLon : null,
                 'distance_m' => 0.0,
                 'is_current' => true,
             ];
@@ -465,13 +525,16 @@ class AdminToiletController extends Controller
                         ?? $item['formatted_address']
                         ?? '';
 
+                    $pLat = $item['location']['latitude'] ?? $item['location']['lat'] ?? $item['geometry']['location']['lat'] ?? null;
+                    $pLon = $item['location']['longitude'] ?? $item['location']['lng'] ?? $item['geometry']['location']['lng'] ?? null;
+
                     $dist = null;
-                    if (isset($item['location']['latitude'], $item['location']['longitude'])) {
+                    if ($pLat !== null && $pLon !== null) {
                         $dist = $this->calculateDistanceMeters(
                             $toilet->lat,
                             $toilet->lon,
-                            (float) $item['location']['latitude'],
-                            (float) $item['location']['longitude']
+                            (float) $pLat,
+                            (float) $pLon
                         );
                     }
 
@@ -479,6 +542,8 @@ class AdminToiletController extends Controller
                         'place_id' => $pid,
                         'name' => $name,
                         'address' => $address,
+                        'lat' => $pLat !== null ? (float) $pLat : null,
+                        'lon' => $pLon !== null ? (float) $pLon : null,
                         'distance_m' => $dist,
                         'is_current' => false,
                     ];

@@ -125,7 +125,28 @@ class Toilet extends Model
         $merged = array_values(array_unique(array_merge($existing, $fields)));
 
         if ($merged !== $existing) {
-            $this->update(['user_overridden' => $merged]);
+            $this->user_overridden = $merged;
+            if ($this->exists) {
+                $this->update(['user_overridden' => $merged]);
+            }
+        }
+    }
+
+    public function unmarkUserOverridden(string ...$fields): void
+    {
+        $existing = $this->user_overridden ?? [];
+
+        if (! is_array($existing)) {
+            $existing = [];
+        }
+
+        $filtered = array_values(array_diff($existing, $fields));
+
+        if ($filtered !== $existing) {
+            $this->user_overridden = $filtered;
+            if ($this->exists) {
+                $this->update(['user_overridden' => $filtered]);
+            }
         }
     }
 }

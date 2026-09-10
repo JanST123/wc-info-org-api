@@ -295,12 +295,31 @@
                 </h3>
 
                 <div class="form-group">
-                    <label class="form-label" for="place_id_select">Select Nearby Google Place (within 40m)</label>
-                    <select id="place_id_select" class="form-control" onchange="document.getElementById('place_id').value = this.value;">
-                        <option value="" {{ empty($toilet->place_id) ? 'selected' : '' }}>-- No Google Place Assigned (Unlink) --</option>
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.375rem;">
+                        <label class="form-label" for="place_id_select" style="margin-bottom: 0;">Select Nearby Google Place (within 100m)</label>
+                        <label class="checkbox-label" for="use_place_coordinates" style="font-size: 0.8125rem; font-weight: 600; color: var(--primary);">
+                            <input
+                                type="checkbox"
+                                id="use_place_coordinates"
+                                name="use_place_coordinates"
+                                value="1"
+                                onchange="handleUsePlaceCoordinatesToggle(this)"
+                            >
+                            <span>📍 Use place coordinates</span>
+                        </label>
+                    </div>
+
+                    <select
+                        id="place_id_select"
+                        class="form-control"
+                        onchange="handlePlaceSelectionChange(this)"
+                    >
+                        <option value="" data-lat="" data-lon="" {{ empty($toilet->place_id) ? 'selected' : '' }}>-- No Google Place Assigned (Unlink) --</option>
                         @foreach ($nearbyPlaces as $p)
                             <option
                                 value="{{ $p['place_id'] }}"
+                                data-lat="{{ $p['lat'] ?? '' }}"
+                                data-lon="{{ $p['lon'] ?? '' }}"
                                 {{ old('place_id', $toilet->place_id) === $p['place_id'] ? 'selected' : '' }}
                             >
                                 {{ $p['name'] }} @if($p['address']) ({{ $p['address'] }}) @endif
@@ -311,7 +330,7 @@
                         @endforeach
                     </select>
                     <div class="form-hint">
-                        Populated automatically using Google Places API around coordinates ({{ $toilet->lat }}, {{ $toilet->lon }}).
+                        Checking "Use place coordinates" inserts the place's coordinates and removes lat/lon manual override protection.
                     </div>
                 </div>
 
@@ -682,6 +701,39 @@
             latInput.value = lat;
             lonInput.value = lon;
             updateGoogleMapsLink();
+        }
+    }
+
+    function handlePlaceSelectionChange(selectEl) {
+        const placeIdInput = document.getElementById('place_id');
+        if (placeIdInput) {
+            placeIdInput.value = selectEl.value;
+        }
+
+        const usePlaceCoordsCheckbox = document.getElementById('use_place_coordinates');
+        if (usePlaceCoordsCheckbox && usePlaceCoordsCheckbox.checked) {
+            applySelectedPlaceCoordinates(selectEl);
+        }
+    }
+
+    function handleUsePlaceCoordinatesToggle(checkboxEl) {
+        if (checkboxEl.checked) {
+            const selectEl = document.getElementById('place_id_select');
+            if (selectEl) {
+                applySelectedPlaceCoordinates(selectEl);
+            }
+        }
+    }
+
+    function applySelectedPlaceCoordinates(selectEl) {
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        if (!selectedOption) return;
+
+        const pLat = selectedOption.getAttribute('data-lat');
+        const pLon = selectedOption.getAttribute('data-lon');
+
+        if (pLat && pLon && !isNaN(Number(pLat)) && !isNaN(Number(pLon))) {
+            setLatLon(pLat, pLon);
         }
     }
 </script>

@@ -292,4 +292,54 @@ class AdminToiletTest extends TestCase
         $resHard->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $this->assertNull(ToiletPhoto::find($photo2->id));
     }
+
+    public function test_update_toilet_with_use_place_coordinates_sets_lat_lon_and_removes_override(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJplacecoords789',
+            'data' => [
+                'displayName' => ['text' => 'Coordinates Place'],
+                'formattedAddress' => 'Places Street 10, Berlin',
+                'location' => [
+                    'latitude' => 52.5412,
+                    'longitude' => 13.4412,
+                ],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Overridden Toilet',
+            'lat' => 52.5100,
+            'lon' => 13.4100,
+            'place_id' => 'ChIJplacecoords789',
+            'status' => 'active',
+            'user_overridden' => ['lat', 'lon', 'name'],
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $this->assertTrue($toilet->isUserOverridden('lat'));
+        $this->assertTrue($toilet->isUserOverridden('lon'));
+        $this->assertTrue($toilet->isUserOverridden('name'));
+
+        $updateData = [
+            'name' => 'Overridden Toilet',
+            'place_id' => 'ChIJplacecoords789',
+            'use_place_coordinates' => '1',
+            'status' => 'active',
+        ];
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->post('/admin/toilets/' . $toilet->id, $updateData);
+
+        $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
+        $response->assertSessionHas('success');
+
+        $toilet->refresh();
+        $this->assertEquals(52.5412, $toilet->lat);
+        $this->assertEquals(13.4412, $toilet->lon);
+        $this->assertFalse($toilet->isUserOverridden('lat'));
+        $this->assertFalse($toilet->isUserOverridden('lon'));
+        $this->assertTrue($toilet->isUserOverridden('name'));
+    }
 }
