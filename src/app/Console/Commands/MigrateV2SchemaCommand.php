@@ -206,6 +206,12 @@ class MigrateV2SchemaCommand extends Command
             $this->info('Column is_qualified already exists, skipping.');
         }
 
+        if (! $this->columnExists('toilets', 'flagged')) {
+            $this->runStatement('ALTER TABLE toilets ADD COLUMN flagged TINYINT(1) NOT NULL DEFAULT 0 AFTER is_qualified');
+        } else {
+            $this->info('Column flagged already exists, skipping.');
+        }
+
         if (! $this->columnExists('toilets', 'created_at')) {
             $this->runStatement('ALTER TABLE toilets ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER is_qualified');
         } else {

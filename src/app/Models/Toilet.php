@@ -28,6 +28,7 @@ class Toilet extends Model
         'place_id',
         'status',
         'is_qualified',
+        'flagged',
         'contact_email',
         'source',
         'created_at',
@@ -44,6 +45,7 @@ class Toilet extends Model
         'lat' => 'float',
         'lon' => 'float',
         'is_qualified' => 'boolean',
+        'flagged' => 'boolean',
         'email_sent' => 'integer',
         'created_at' => 'datetime',
         'updated' => 'datetime',
@@ -77,6 +79,11 @@ class Toilet extends Model
     public function scopeQualified($query)
     {
         return $query->where('is_qualified', 1);
+    }
+
+    public function scopeFlagged($query)
+    {
+        return $query->where('flagged', 1);
     }
 
     public function isFlagSet(string $flag): bool

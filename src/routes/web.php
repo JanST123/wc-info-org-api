@@ -46,6 +46,10 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
     Route::post('toilets/find', [AdminToiletController::class, 'find'])->name('toilets.find');
     Route::get('toilets/{id}', [AdminToiletController::class, 'show'])->name('toilets.show');
     Route::post('toilets/{id}', [AdminToiletController::class, 'update'])->name('toilets.update');
+    Route::get('toilets/{id}/nearby-places', [AdminToiletController::class, 'getNearbyPlaces'])->name('toilets.nearby-places');
+    Route::post('toilets/{id}/assign-place', [AdminToiletController::class, 'assignPlace'])->name('toilets.assign-place');
+    Route::post('toilets/{id}/unflag', [AdminToiletController::class, 'unflag'])->name('toilets.unflag');
+    Route::post('toilets/{id}/toggle-flag', [AdminToiletController::class, 'toggleFlag'])->name('toilets.toggle-flag');
     Route::post('toilets/{id}/reschedule-discovery', [AdminToiletController::class, 'rescheduleDiscovery'])->name('toilets.reschedule-discovery');
     Route::post('toilets/{id}/photos/{filename}/delete', [AdminToiletController::class, 'deletePhoto'])->name('toilets.photos.delete');
     Route::delete('toilets/{id}/photos/{filename}', [AdminToiletController::class, 'deletePhoto']);

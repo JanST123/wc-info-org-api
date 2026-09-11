@@ -27,4 +27,17 @@ class Place extends Model
     protected $casts = [
         'data' => 'array',
     ];
+
+    public function getName(): ?string
+    {
+        $data = $this->data;
+        if (! is_array($data)) {
+            return null;
+        }
+
+        return $data['displayName']['text']
+            ?? (is_string($data['displayName'] ?? null) ? $data['displayName'] : null)
+            ?? (! str_starts_with((string) ($data['name'] ?? ''), 'places/') ? ($data['name'] ?? null) : null)
+            ?? ($data['formattedAddress'] ?? $data['formatted_address'] ?? null);
+    }
 }

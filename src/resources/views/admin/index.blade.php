@@ -16,10 +16,10 @@
         </div>
 
         <div class="card" style="margin-bottom: 0; padding: 1.25rem;">
-            <div style="font-size: 0.8125rem; color: var(--gray-500); font-weight: 500; text-transform: uppercase;">Qualified Toilets</div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: #4338ca; margin-top: 0.25rem;">{{ number_format($stats['qualified']) }}</div>
+            <div style="font-size: 0.8125rem; color: var(--gray-500); font-weight: 500; text-transform: uppercase;">Flagged for Review</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: #d97706; margin-top: 0.25rem;">{{ number_format($stats['flagged_count']) }}</div>
             <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;">
-                Verified & qualified entries
+                <span class="badge" style="background: #fef3c7; color: #92400e;">🚩 Needs verification</span>
             </div>
         </div>
 
@@ -76,7 +76,125 @@
         </div>
     </div>
 
-    <!-- Main Card: Toilets Added in the Last 24 Hours -->
+    <!-- Section 1: Flagged Toilets for Review -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header" style="background: #fffdf5; border-bottom: 1px solid #fef3c7;">
+            <div class="card-title" style="color: #92400e;">
+                <span>🚩 Flagged Toilets for Review</span>
+                <span id="flagged-count-badge" class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.8125rem;">{{ $flaggedToilets->total() }}</span>
+            </div>
+            <div style="font-size: 0.8125rem; color: #b45309;">
+                Fast Place correction workflow • Places API queries only on dropdown open
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 70px;">ID</th>
+                        <th style="width: 180px;">Name & Owner</th>
+                        <th style="width: 180px;">Comment</th>
+                        <th style="width: 180px;">Address</th>
+                        <th style="width: 180px;">Current Place</th>
+                        <th style="min-width: 260px;">Assign Google Place (~40m)</th>
+                        <th style="width: 140px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="flagged-toilets-tbody">
+                    @forelse ($flaggedToilets as $toilet)
+                        <tr id="flagged-row-{{ $toilet->id }}">
+                            <td>
+                                <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 700; font-family: monospace;">
+                                    #{{ $toilet->id }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 600; color: var(--gray-900);">
+                                    {{ $toilet->name ?: 'Unnamed Toilet' }}
+                                </a>
+                                @if (!empty($toilet->owner))
+                                    <div style="font-size: 0.75rem; color: var(--gray-500);">
+                                        {{ $toilet->owner }}
+                                    </div>
+                                @endif
+                            </td>
+                            <td style="font-size: 0.8125rem; color: var(--gray-700); max-width: 200px; word-break: break-word;">
+                                {{ $toilet->propertyValue('comment') ?: '-' }}
+                            </td>
+                            <td style="font-size: 0.8125rem; color: var(--gray-700); max-width: 200px; word-break: break-word;">
+                                {{ $toilet->propertyValue('address') ?: '-' }}
+                            </td>
+                            <td style="font-size: 0.8125rem;">
+                                <div id="current-place-name-{{ $toilet->id }}" style="font-weight: 600; color: var(--gray-900);">
+                                    {{ $toilet->place?->getName() ?? ($toilet->place_id ?: '-') }}
+                                </div>
+                                @if (!empty($toilet->place_id))
+                                    <div style="font-family: monospace; font-size: 0.6875rem; color: var(--gray-400);">
+                                        {{ \Illuminate\Support\Str::limit($toilet->place_id, 16) }}
+                                    </div>
+                                @endif
+                            </td>
+                            <td>
+                                <select
+                                    class="form-control places-dropdown"
+                                    id="places-dropdown-{{ $toilet->id }}"
+                                    data-toilet-id="{{ $toilet->id }}"
+                                    data-loaded="false"
+                                    onfocus="loadNearbyPlaces(this)"
+                                    onchange="assignPlace(this)"
+                                    style="font-size: 0.8125rem; height: 34px; padding: 0.25rem 0.5rem;"
+                                >
+                                    <option value="{{ $toilet->place_id ?? '' }}">
+                                        {{ $toilet->place?->getName() ? 'Current: ' . $toilet->place->getName() : ($toilet->place_id ? 'Current ID: ' . $toilet->place_id : '-- Click to load places (~40m) --') }}
+                                    </option>
+                                </select>
+                                <div id="status-msg-{{ $toilet->id }}" style="font-size: 0.6875rem; color: var(--gray-500); margin-top: 0.125rem; display: none;"></div>
+                            </td>
+                            <td style="text-align: right;">
+                                <div style="display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end;">
+                                    <button
+                                        type="button"
+                                        class="btn btn-secondary btn-sm"
+                                        id="unflag-btn-{{ $toilet->id }}"
+                                        onclick="unflagToilet(this, {{ $toilet->id }})"
+                                        title="Remove flag and take out of review list"
+                                        style="white-space: nowrap;"
+                                    >
+                                        ✓ Unflag
+                                    </button>
+                                    <a href="{{ route('admin.toilets.show', $toilet->id) }}" class="btn btn-secondary btn-sm" title="Edit details">
+                                        Edit
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr id="flagged-empty-row">
+                            <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
+                                <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
+                                <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
+                                <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if ($flaggedToilets->hasPages())
+            <div class="pagination-container">
+                <div>
+                    Showing <strong>{{ $flaggedToilets->firstItem() }}</strong> to <strong>{{ $flaggedToilets->lastItem() }}</strong> of <strong>{{ $flaggedToilets->total() }}</strong> flagged toilets
+                </div>
+                <div>
+                    {{ $flaggedToilets->appends(request()->except('flagged_page'))->links() }}
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <!-- Section 2: Toilets Added in the Last 24 Hours -->
     <div class="card">
         <div class="card-header">
             <div class="card-title">
@@ -182,3 +300,208 @@
     </div>
 
 @endsection
+
+@push('scripts')
+<script>
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+
+    async function loadNearbyPlaces(selectElem) {
+        if (selectElem.dataset.loaded === 'true' || selectElem.dataset.loading === 'true') {
+            return;
+        }
+
+        const toiletId = selectElem.dataset.toiletId;
+        selectElem.dataset.loading = 'true';
+
+        const originalVal = selectElem.value;
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '⏳ Fetching places from Google Places API (~40m)...';
+            statusMsg.style.color = 'var(--primary)';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/nearby-places`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (response.status === 429) {
+                if (statusMsg) {
+                    statusMsg.textContent = '⚠️ Google API budget limit exceeded.';
+                    statusMsg.style.color = 'var(--danger)';
+                }
+                selectElem.dataset.loading = 'false';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+            const places = data.places || [];
+
+            // Clear current options
+            selectElem.innerHTML = '';
+
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- No Place Assigned --';
+            selectElem.appendChild(emptyOpt);
+
+            if (places.length === 0) {
+                const noOpt = document.createElement('option');
+                noOpt.disabled = true;
+                noOpt.textContent = 'No places found within ~40m';
+                selectElem.appendChild(noOpt);
+            } else {
+                places.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.place_id;
+                    const distStr = p.distance_m !== null ? ` (${p.distance_m}m)` : '';
+                    const addrStr = p.address ? ` - ${p.address}` : '';
+                    opt.textContent = `${p.name}${distStr}${addrStr}`;
+                    if (p.is_current || p.place_id === originalVal) {
+                        opt.selected = true;
+                    }
+                    selectElem.appendChild(opt);
+                });
+            }
+
+            selectElem.dataset.loaded = 'true';
+            selectElem.dataset.loading = 'false';
+
+            if (statusMsg) {
+                statusMsg.textContent = `✓ Loaded ${places.length} place(s)`;
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 2500);
+            }
+        } catch (err) {
+            console.error('Error fetching nearby places:', err);
+            selectElem.dataset.loading = 'false';
+            if (statusMsg) {
+                statusMsg.textContent = '❌ Failed to load places.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        }
+    }
+
+    async function assignPlace(selectElem) {
+        const toiletId = selectElem.dataset.toiletId;
+        const placeId = selectElem.value;
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '💾 Saving place assignment...';
+            statusMsg.style.color = 'var(--primary)';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/assign-place`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ place_id: placeId })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Update current place text in table
+            const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
+            if (currentPlaceElem) {
+                currentPlaceElem.textContent = data.place_name || '-';
+            }
+
+            // Visual feedback
+            selectElem.style.borderColor = 'var(--success)';
+            selectElem.style.backgroundColor = 'var(--success-light)';
+            setTimeout(() => {
+                selectElem.style.borderColor = '';
+                selectElem.style.backgroundColor = '';
+            }, 1500);
+
+            if (statusMsg) {
+                statusMsg.textContent = '✓ Place updated!';
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 2000);
+            }
+        } catch (err) {
+            console.error('Error assigning place:', err);
+            if (statusMsg) {
+                statusMsg.textContent = '❌ Failed to save place.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        }
+    }
+
+    async function unflagToilet(btnElem, toiletId) {
+        btnElem.disabled = true;
+        btnElem.textContent = '⏳...';
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/unflag`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const row = document.getElementById(`flagged-row-${toiletId}`);
+            if (row) {
+                row.style.transition = 'all 0.3s ease';
+                row.style.backgroundColor = '#dcfce7';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    // Update badge count
+                    const badge = document.getElementById('flagged-count-badge');
+                    if (badge) {
+                        const count = parseInt(badge.textContent, 10);
+                        if (!isNaN(count) && count > 0) {
+                            badge.textContent = (count - 1).toString();
+                        }
+                    }
+
+                    // If no rows left, show empty row
+                    const tbody = document.getElementById('flagged-toilets-tbody');
+                    if (tbody && tbody.children.length === 0) {
+                        tbody.innerHTML = `
+                            <tr id="flagged-empty-row">
+                                <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
+                                    <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
+                                    <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
+                                    <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                }, 300);
+            }
+        } catch (err) {
+            console.error('Error unflagging toilet:', err);
+            btnElem.disabled = false;
+            btnElem.textContent = '✓ Unflag';
+            alert('Failed to unflag toilet. Please try again.');
+        }
+    }
+</script>
+@endpush

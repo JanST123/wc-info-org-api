@@ -24,6 +24,10 @@
                 @else
                     <span class="badge badge-unqualified" style="font-size: 0.8125rem;">Unqualified</span>
                 @endif
+
+                @if ($toilet->flagged)
+                    <span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 0.8125rem;">🚩 Flagged for Review</span>
+                @endif
             </div>
             <div style="font-size: 0.875rem; color: var(--gray-500); margin-top: 0.25rem;">
                 {{ $toilet->name ?: 'Unnamed Toilet' }} @if($toilet->owner) • {{ $toilet->owner }} @endif
@@ -249,17 +253,32 @@
                         </a>
                     </div>
 
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="checkbox-label" for="is_qualified">
-                            <input
-                                type="checkbox"
-                                id="is_qualified"
-                                name="is_qualified"
-                                value="1"
-                                {{ old('is_qualified', $toilet->is_qualified) ? 'checked' : '' }}
-                            >
-                            <span>Mark as <strong>Qualified (Verified)</strong></span>
-                        </label>
+                    <div style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="checkbox-label" for="is_qualified">
+                                <input
+                                    type="checkbox"
+                                    id="is_qualified"
+                                    name="is_qualified"
+                                    value="1"
+                                    {{ old('is_qualified', $toilet->is_qualified) ? 'checked' : '' }}
+                                >
+                                <span>Mark as <strong>Qualified (Verified)</strong></span>
+                            </label>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="checkbox-label" for="flagged" style="color: #92400e;">
+                                <input
+                                    type="checkbox"
+                                    id="flagged"
+                                    name="flagged"
+                                    value="1"
+                                    {{ old('flagged', $toilet->flagged) ? 'checked' : '' }}
+                                >
+                                <span>🚩 <strong>Flagged for Review</strong> (Shows in dashboard queue)</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 

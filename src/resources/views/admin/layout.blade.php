@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Admin Panel') - WC-Info API</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -496,6 +497,24 @@
             font-size: 0.75rem;
             color: var(--gray-500);
             word-break: break-all;
+        }
+
+        /* Pagination */
+        .pagination-container {
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--gray-200);
+            background: #ffffff;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+        }
+        nav[role="navigation"] svg {
+            width: 1.25rem;
+            height: 1.25rem;
+            vertical-align: middle;
         }
     </style>
     @stack('styles')

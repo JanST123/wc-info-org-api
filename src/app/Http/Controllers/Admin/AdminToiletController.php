@@ -14,6 +14,7 @@ use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use App\Services\S3PhotoStorageService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +30,7 @@ class AdminToiletController extends Controller
     ) {}
 
     /**
-     * Dashboard: List toilets added in the last 24 hours, cost summary and quick stats.
+     * Dashboard: List toilets added in the last 24 hours, flagged toilets list, cost summary and quick stats.
      */
     public function index(Request $request): View
     {
@@ -46,19 +47,25 @@ class AdminToiletController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $flaggedToilets = Toilet::where('flagged', 1)
+            ->with(['properties', 'place'])
+            ->orderByDesc('id')
+            ->paginate(15, ['*'], 'flagged_page');
+
         $stats = [
             'total' => Toilet::count(),
             'active' => Toilet::where('status', 'active')->count(),
             'hidden' => Toilet::where('status', 'hidden')->count(),
             'deleted' => Toilet::where('status', 'deleted')->count(),
             'qualified' => Toilet::where('is_qualified', 1)->count(),
+            'flagged_count' => Toilet::where('flagged', 1)->count(),
             'recent_count' => $recentToilets->count(),
             'current_month_cost' => $this->costService->getCurrentMonthCost(),
             'monthly_budget' => $this->costService->getMonthlyBudget(),
             'is_budget_exceeded' => ! $this->costService->hasBudget(),
         ];
 
-        return view('admin.index', compact('recentToilets', 'stats', 'since'));
+        return view('admin.index', compact('recentToilets', 'flaggedToilets', 'stats', 'since'));
     }
 
     /**
@@ -164,6 +171,7 @@ class AdminToiletController extends Controller
             'use_place_coordinates' => ['nullable', 'boolean'],
             'status' => ['required', 'in:active,hidden,deleted'],
             'is_qualified' => ['nullable', 'boolean'],
+            'flagged' => ['nullable', 'boolean'],
             'contact_email' => ['nullable', 'email', 'max:200'],
             'source' => ['nullable', 'string', 'max:45'],
 
@@ -280,6 +288,13 @@ class AdminToiletController extends Controller
             $diff['is_qualified'] = ['old' => (bool) $toilet->is_qualified, 'new' => $isQualified];
             $toilet->is_qualified = $isQualified;
             $overriddenFields[] = 'is_qualified';
+        }
+
+        // flagged
+        $flagged = $request->boolean('flagged');
+        if ((bool) $toilet->flagged !== $flagged) {
+            $diff['flagged'] = ['old' => (bool) $toilet->flagged, 'new' => $flagged];
+            $toilet->flagged = $flagged;
         }
 
         if ($toilet->isDirty()) {
@@ -425,6 +440,192 @@ class AdminToiletController extends Controller
 
         return redirect()->route('admin.toilets.show', ['id' => $id])
             ->with('success', "Photo '{$filename}' was soft-deleted.");
+    }
+
+    /**
+     * Lazy-load nearby Google places for a toilet (~40m) on demand.
+     */
+    public function getNearbyPlaces(int $id, Request $request): JsonResponse
+    {
+        $toilet = Toilet::with('place')->find($id);
+        if (! $toilet) {
+            return response()->json(['error' => 'Toilet not found', 'places' => []], 404);
+        }
+
+        if ($toilet->lat === null || $toilet->lon === null) {
+            return response()->json(['places' => []]);
+        }
+
+        if (! $this->costService->hasBudget()) {
+            return response()->json([
+                'error' => 'Monthly Google Cloud API budget exceeded',
+                'places' => [],
+            ], 429);
+        }
+
+        $places = [];
+        $seenPlaceIds = [];
+
+        // 1. Include current place if assigned
+        if (! empty($toilet->place_id)) {
+            $currentPlaceName = $toilet->place?->getName();
+            $currentAddress = $toilet->place?->data['formattedAddress']
+                ?? $toilet->place?->data['formatted_address']
+                ?? '';
+
+            $places[] = [
+                'place_id' => $toilet->place_id,
+                'name' => $currentPlaceName ?: $toilet->place_id,
+                'address' => $currentAddress,
+                'distance_m' => 0.0,
+                'is_current' => true,
+            ];
+            $seenPlaceIds[$toilet->place_id] = true;
+        }
+
+        // 2. Fetch nearby places (~40m = 0.04km)
+        try {
+            $rawPlaces = $this->placesService->nearbySearchRaw($toilet->lat, $toilet->lon, 0.04);
+
+            foreach ($rawPlaces as $item) {
+                $pid = $item['id'] ?? $item['place_id'] ?? null;
+                if (! $pid) {
+                    continue;
+                }
+
+                // Cache in places table
+                Place::updateOrCreate(
+                    ['place_id' => $pid],
+                    ['data' => $item]
+                );
+
+                if (isset($seenPlaceIds[$pid])) {
+                    continue;
+                }
+
+                $name = $item['displayName']['text']
+                    ?? (is_string($item['displayName'] ?? null) ? $item['displayName'] : null)
+                    ?? (! str_starts_with((string) ($item['name'] ?? ''), 'places/') ? ($item['name'] ?? null) : null)
+                    ?? $pid;
+                $address = $item['formattedAddress']
+                    ?? $item['formatted_address']
+                    ?? '';
+
+                $pLat = $item['location']['latitude'] ?? $item['location']['lat'] ?? $item['geometry']['location']['lat'] ?? null;
+                $pLon = $item['location']['longitude'] ?? $item['location']['lng'] ?? $item['geometry']['location']['lng'] ?? null;
+
+                $dist = null;
+                if ($pLat !== null && $pLon !== null) {
+                    $dist = $this->calculateDistanceMeters(
+                        $toilet->lat,
+                        $toilet->lon,
+                        (float) $pLat,
+                        (float) $pLon
+                    );
+                }
+
+                $places[] = [
+                    'place_id' => $pid,
+                    'name' => $name,
+                    'address' => $address,
+                    'distance_m' => $dist,
+                    'is_current' => false,
+                ];
+                $seenPlaceIds[$pid] = true;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Admin getNearbyPlaces Google API call failed', [
+                'toilet_id' => $toilet->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return response()->json(['places' => $places]);
+    }
+
+    /**
+     * Directly assign a place_id to a toilet.
+     */
+    public function assignPlace(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $newPlaceId = $request->input('place_id') ? trim((string) $request->input('place_id')) : null;
+        if ($newPlaceId === '') {
+            $newPlaceId = null;
+        }
+
+        $oldPlaceId = $toilet->place_id;
+
+        if ($oldPlaceId !== $newPlaceId) {
+            $toilet->place_id = $newPlaceId;
+            $toilet->markUserOverridden('place_id');
+
+            $toilet->update([
+                'email_sent' => 2,
+                'last_diff' => json_encode(['place_id' => ['old' => $oldPlaceId, 'new' => $newPlaceId]]),
+            ]);
+        }
+
+        $placeName = null;
+        if (! empty($toilet->place_id)) {
+            $placeModel = Place::find($toilet->place_id);
+            $placeName = $placeModel?->getName() ?? $toilet->place_id;
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'place_id' => $toilet->place_id,
+                'place_name' => $placeName ?: ($toilet->place_id ?? '-'),
+                'message' => 'Place assigned successfully.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Place assigned for Toilet #{$toilet->id}.");
+    }
+
+    /**
+     * Unflag a toilet (set flagged = false).
+     */
+    public function unflag(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $toilet->flagged = false;
+        $toilet->save();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'flagged' => false,
+                'message' => "Toilet #{$toilet->id} unflagged.",
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} unflagged.");
+    }
+
+    /**
+     * Toggle or set the flagged status of a toilet.
+     */
+    public function toggleFlag(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $newFlagged = $request->has('flagged') ? $request->boolean('flagged') : ! (bool) $toilet->flagged;
+        $toilet->flagged = $newFlagged;
+        $toilet->save();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'flagged' => (bool) $toilet->flagged,
+                'message' => "Toilet #{$toilet->id} flag updated.",
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} flag updated.");
     }
 
     /**

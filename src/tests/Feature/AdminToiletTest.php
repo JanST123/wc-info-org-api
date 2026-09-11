@@ -342,4 +342,201 @@ class AdminToiletTest extends TestCase
         $this->assertFalse($toilet->isUserOverridden('lon'));
         $this->assertTrue($toilet->isUserOverridden('name'));
     }
+
+    public function test_flagged_toilets_are_displayed_in_dashboard_with_properties(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJflaggedplace123',
+            'data' => [
+                'displayName' => ['text' => 'Flagged Cafe Place'],
+                'formattedAddress' => 'Flagged Street 1, Berlin',
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Flagged Toilet Item',
+            'owner' => 'Flagged Owner',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'place_id' => 'ChIJflaggedplace123',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'comment',
+            'value' => 'Needs place re-verification',
+        ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'address',
+            'value' => 'Alexanderplatz 5, 10178 Berlin',
+        ]);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->get('/admin');
+
+        $response->assertStatus(200);
+        $response->assertSee('Flagged Toilet Item');
+        $response->assertSee('Needs place re-verification');
+        $response->assertSee('Alexanderplatz 5, 10178 Berlin');
+        $response->assertSee('Flagged Cafe Place');
+    }
+
+    public function test_get_nearby_places_returns_places_json(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Nearby Places Toilet',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // Mock GoogleCostService to ensure budget is available
+        $costMock = $this->createMock(\App\Services\GoogleCostService::class);
+        $costMock->method('hasBudget')->willReturn(true);
+        $this->app->instance(\App\Services\GoogleCostService::class, $costMock);
+
+        // Mock GooglePlacesService
+        $placesMock = $this->createMock(GooglePlacesService::class);
+        $placesMock->expects($this->once())
+            ->method('nearbySearchRaw')
+            ->with(52.5200, 13.4050, 0.04)
+            ->willReturn([
+                [
+                    'id' => 'ChIJnewplace456',
+                    'displayName' => ['text' => 'Nearby Bakery'],
+                    'formattedAddress' => 'Nearby Str. 2',
+                    'location' => ['latitude' => 52.5201, 'longitude' => 13.4051],
+                ],
+            ]);
+        $this->app->instance(GooglePlacesService::class, $placesMock);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$toilet->id}/nearby-places");
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['places' => [['place_id', 'name', 'address', 'distance_m']]]);
+        $response->assertJsonFragment([
+            'place_id' => 'ChIJnewplace456',
+            'name' => 'Nearby Bakery',
+        ]);
+
+        // Verify place was saved in places table
+        $this->assertNotNull(Place::find('ChIJnewplace456'));
+        $this->createdPlaceIds[] = 'ChIJnewplace456';
+    }
+
+    public function test_get_nearby_places_returns_429_when_budget_exceeded(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Nearby Places Toilet Budget Exceeded',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $costMock = $this->createMock(\App\Services\GoogleCostService::class);
+        $costMock->method('hasBudget')->willReturn(false);
+        $this->app->instance(\App\Services\GoogleCostService::class, $costMock);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$toilet->id}/nearby-places");
+
+        $response->assertStatus(429);
+        $response->assertJson([
+            'error' => 'Monthly Google Cloud API budget exceeded',
+            'places' => [],
+        ]);
+    }
+
+    public function test_assign_place_updates_toilet(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJassignedplace999',
+            'data' => [
+                'displayName' => ['text' => 'Assigned Place'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Assign Place Toilet',
+            'status' => 'active',
+            'place_id' => null,
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/assign-place", [
+                'place_id' => 'ChIJassignedplace999',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => 'ChIJassignedplace999',
+            'place_name' => 'Assigned Place',
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('ChIJassignedplace999', $toilet->place_id);
+        $this->assertTrue($toilet->isUserOverridden('place_id'));
+    }
+
+    public function test_unflag_sets_flagged_to_false(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toilet to Unflag',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/unflag");
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'flagged' => false,
+        ]);
+
+        $toilet->refresh();
+        $this->assertFalse((bool) $toilet->flagged);
+    }
+
+    public function test_toggle_flag(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toggle Flag Toilet',
+            'status' => 'active',
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/toggle-flag");
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'flagged' => true,
+        ]);
+
+        $toilet->refresh();
+        $this->assertTrue((bool) $toilet->flagged);
+    }
 }
+
