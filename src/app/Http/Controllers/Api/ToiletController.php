@@ -14,6 +14,7 @@ use App\Models\TypeXPlace;
 use App\Services\GooglePlacesService;
 use App\Services\OpeningHoursService;
 use App\Services\PlaceToiletService;
+use App\Services\ToiletRevisionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -23,6 +24,7 @@ class ToiletController extends Controller
 {
     public function __construct(
         private GooglePlacesService $placesService,
+        private ToiletRevisionService $revisionService,
     ) {}
 
     /**
@@ -395,6 +397,7 @@ class ToiletController extends Controller
                 'email_sent' => 2,
                 'last_diff' => json_encode($diff),
             ]);
+            $this->revisionService->recordRevision($toilet, 'api_patch', $diff);
         }
 
         return response()->json([
@@ -482,6 +485,8 @@ class ToiletController extends Controller
             $this->checkAndUpdatePlaceType($input['place_id']);
         }
 
+        $this->revisionService->recordRevision($toilet, 'api_add', null, 'Initial toilet creation');
+
         return response()->json([
             'success' => true,
             'id' => $toilet->id,
@@ -493,7 +498,7 @@ class ToiletController extends Controller
      */
     public function addProperties(int $toiletId, StoreToiletPropertiesRequest $request): JsonResponse
     {
-        Toilet::findOrFail($toiletId);
+        $toilet = Toilet::findOrFail($toiletId);
         $rows = $request->validated();
 
         foreach ($rows as $row) {
@@ -515,6 +520,8 @@ class ToiletController extends Controller
                 ['value' => $value, 'user_overridden' => 1]
             );
         }
+
+        $this->revisionService->recordRevision($toilet, 'add_properties', null, 'Added properties');
 
         return response()->json([
             'success' => true,

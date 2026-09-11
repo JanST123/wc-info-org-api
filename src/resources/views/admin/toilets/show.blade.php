@@ -28,6 +28,10 @@
                 @if ($toilet->flagged)
                     <span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 0.8125rem;">🚩 Flagged for Review</span>
                 @endif
+
+                <span class="badge" style="background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; font-size: 0.8125rem; font-family: monospace;">
+                    v{{ $toilet->version ?: 1 }}
+                </span>
             </div>
             <div style="font-size: 0.875rem; color: var(--gray-500); margin-top: 0.25rem;">
                 {{ $toilet->name ?: 'Unnamed Toilet' }} @if($toilet->owner) • {{ $toilet->owner }} @endif
@@ -645,6 +649,110 @@
                     @endforeach
                 </div>
             @endif
+        </div>
+    </div>
+
+    <!-- Section 4: Version History & Revisions (Audit Trail) -->
+    <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <div class="card-title">
+                <span>📜 Version History & Audit Trail</span>
+                <span class="badge" style="background: #ede9fe; color: #5b21b6; font-size: 0.8125rem;">{{ $revisions->count() }} revision(s)</span>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--gray-500);">
+                Track all historical changes, diffs, and restore previous states
+            </div>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">Version</th>
+                            <th style="width: 170px;">Date & Time</th>
+                            <th style="width: 140px;">Source</th>
+                            <th>Summary & Diffs</th>
+                            <th style="width: 150px; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($revisions as $rev)
+                            <tr style="{{ $rev->version === ($toilet->version ?: 1) ? 'background-color: #f8fafc;' : '' }}">
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <span class="badge" style="background: #ede9fe; color: #5b21b6; font-family: monospace; font-size: 0.8125rem; font-weight: 700;">
+                                            v{{ $rev->version }}
+                                        </span>
+                                        @if ($rev->version === ($toilet->version ?: 1))
+                                            <span class="badge badge-active" style="font-size: 0.6875rem;">Current</span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td style="font-size: 0.8125rem; color: var(--gray-600);">
+                                    <div>{{ $rev->created_at->format('Y-m-d H:i:s') }}</div>
+                                    <div style="font-size: 0.6875rem; color: var(--gray-400);">{{ $rev->created_at->diffForHumans() }}</div>
+                                </td>
+                                <td>
+                                    <span class="badge badge-unqualified" style="text-transform: uppercase; font-size: 0.6875rem; letter-spacing: 0.05em;">
+                                        {{ str_replace('_', ' ', $rev->source) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (!empty($rev->summary))
+                                        <div style="font-weight: 600; font-size: 0.8125rem; color: var(--gray-800); margin-bottom: 0.25rem;">
+                                            {{ $rev->summary }}
+                                        </div>
+                                    @endif
+
+                                    @if (!empty($rev->diff) && is_array($rev->diff))
+                                        <div class="diff-container" style="font-size: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 6px;">
+                                            @foreach ($rev->diff as $field => $change)
+                                                <div class="diff-row" style="padding: 0.15rem 0;">
+                                                    <span class="diff-field" style="min-width: 120px;">{{ $field }}:</span>
+                                                    <span class="diff-old">
+                                                        {{ is_array($change['old'] ?? null) ? json_encode($change['old']) : (string)($change['old'] ?? 'null') }}
+                                                    </span>
+                                                    <span style="color: var(--gray-400); margin: 0 0.25rem;">→</span>
+                                                    <span class="diff-new">
+                                                        {{ is_array($change['new'] ?? null) ? json_encode($change['new']) : (string)($change['new'] ?? 'null') }}
+                                                    </span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div style="font-size: 0.75rem; color: var(--gray-400); font-style: italic;">
+                                            Snapshot created
+                                        </div>
+                                    @endif
+                                </td>
+                                <td style="text-align: right;">
+                                    @if ($rev->version !== ($toilet->version ?: 1))
+                                        <form
+                                            action="{{ route('admin.toilets.restore-version', ['id' => $toilet->id, 'version' => $rev->version]) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('Restore Toilet #{{ $toilet->id }} to Version {{ $rev->version }}? This will create a new version with all data from v{{ $rev->version }}.');"
+                                            style="display: inline;"
+                                        >
+                                            @csrf
+                                            <button type="submit" class="btn btn-secondary btn-sm" style="color: var(--primary); font-weight: 600;">
+                                                ↩ Restore v{{ $rev->version }}
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span class="badge badge-active" style="font-size: 0.75rem;">✓ Active</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 2rem 1rem; color: var(--gray-500); font-size: 0.875rem;">
+                                    No historical revisions recorded yet for this toilet.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

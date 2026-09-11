@@ -4,6 +4,7 @@ use App\Exceptions\Handler;
 use App\Http\Middleware\AdminAuthMiddleware;
 use App\Http\Middleware\CorsMiddleware;
 use App\Http\Middleware\RequestLogMiddleware;
+use App\Http\Middleware\ValidateJsonBodyMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->append(CorsMiddleware::class);
+        $middleware->append(ValidateJsonBodyMiddleware::class);
         $middleware->append(RequestLogMiddleware::class);
 
         $middleware->alias([

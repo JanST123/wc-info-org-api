@@ -13,6 +13,7 @@ use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use App\Services\S3PhotoStorageService;
+use App\Services\ToiletRevisionService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +28,7 @@ class AdminToiletController extends Controller
         private GooglePlacesService $placesService,
         private S3PhotoStorageService $s3,
         private GoogleCostService $costService,
+        private ToiletRevisionService $revisionService,
     ) {}
 
     /**
@@ -146,12 +148,15 @@ class AdminToiletController extends Controller
             }
         }
 
+        $revisions = $toilet->revisions()->get();
+
         return view('admin.toilets.show', compact(
             'toilet',
             'lastDiff',
             'nearbyPlaces',
             'propertyValues',
-            'customProperties'
+            'customProperties',
+            'revisions'
         ));
     }
 
@@ -358,6 +363,7 @@ class AdminToiletController extends Controller
                 'email_sent' => 2,
                 'last_diff' => json_encode($diff),
             ]);
+            $this->revisionService->recordRevision($toilet, 'admin_edit', $diff, 'Admin updated toilet details');
         }
 
         return redirect()->route('admin.toilets.show', ['id' => $toilet->id])
@@ -564,6 +570,13 @@ class AdminToiletController extends Controller
                 'email_sent' => 2,
                 'last_diff' => json_encode(['place_id' => ['old' => $oldPlaceId, 'new' => $newPlaceId]]),
             ]);
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_place_assign',
+                ['place_id' => ['old' => $oldPlaceId, 'new' => $newPlaceId]],
+                'Place assigned via admin'
+            );
         }
 
         $placeName = null;
@@ -583,6 +596,18 @@ class AdminToiletController extends Controller
         }
 
         return redirect()->back()->with('success', "Place assigned for Toilet #{$toilet->id}.");
+    }
+
+    /**
+     * Restore toilet to a previous version.
+     */
+    public function restoreVersion(int $id, int $version): RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $this->revisionService->restoreRevision($toilet, $version);
+
+        return redirect()->route('admin.toilets.show', ['id' => $toilet->id])
+            ->with('success', "Toilet #{$toilet->id} was restored to version {$version} successfully (created version {$toilet->version}).");
     }
 
     /**

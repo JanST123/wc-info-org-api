@@ -159,6 +159,8 @@ class MigrateV2SchemaCommand extends Command
         $this->cleanupPropertiesTable();
         $this->cleanupUnknownPlaces();
         $this->createCostTrackingTables();
+        $this->createToiletRevisionsTable();
+        $this->optimizeIndexes();
     }
 
     private function renameTables(): void
@@ -530,6 +532,70 @@ class MigrateV2SchemaCommand extends Command
             ");
         } else {
             $this->info('Table app_settings already exists, skipping.');
+        }
+    }
+
+    private function createToiletRevisionsTable(): void
+    {
+        $this->info('Creating toilet_revisions table and version column...');
+
+        if (! $this->columnExists('toilets', 'version')) {
+            $this->runStatement('ALTER TABLE toilets ADD COLUMN version INT UNSIGNED NOT NULL DEFAULT 1 AFTER is_qualified');
+        } else {
+            $this->info('Column version already exists on toilets, skipping.');
+        }
+
+        if (! $this->tableExists('toilet_revisions')) {
+            $this->runStatement("
+                CREATE TABLE toilet_revisions (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    toilet_id INT UNSIGNED NOT NULL,
+                    version INT UNSIGNED NOT NULL,
+                    source VARCHAR(50) NOT NULL COMMENT 'e.g. initial, admin_edit, api_patch, add_properties, batch_place_assign, restore',
+                    toilet_data JSON NOT NULL COMMENT 'Snapshot of toilet model attributes',
+                    properties_data JSON NOT NULL COMMENT 'Snapshot of toilet properties key-value map',
+                    diff JSON NULL COMMENT 'Diff of changes compared to previous version',
+                    summary VARCHAR(255) NULL COMMENT 'Human readable summary of changes',
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_toilet_version (toilet_id, version),
+                    INDEX idx_toilet_created (toilet_id, created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            $this->info('Table toilet_revisions already exists, skipping.');
+        }
+    }
+
+    private function optimizeIndexes(): void
+    {
+        $this->info('Optimizing database indexes...');
+
+        // 1. toilets (status, lat, lon) composite index for bounding box and nearby queries
+        if (! $this->indexExists('toilets', 'idx_toilets_status_coords')) {
+            $this->runStatement('CREATE INDEX idx_toilets_status_coords ON toilets (status, lat, lon)');
+        } else {
+            $this->info('Index idx_toilets_status_coords already exists, skipping.');
+        }
+
+        // 2. toilets (flagged, id) index for admin flagged review list
+        if (! $this->indexExists('toilets', 'idx_toilets_flagged')) {
+            $this->runStatement('CREATE INDEX idx_toilets_flagged ON toilets (flagged, id)');
+        } else {
+            $this->info('Index idx_toilets_flagged already exists, skipping.');
+        }
+
+        // 3. toilets (created_at) index for admin dashboard 24h list
+        if (! $this->indexExists('toilets', 'idx_toilets_created_at')) {
+            $this->runStatement('CREATE INDEX idx_toilets_created_at ON toilets (created_at)');
+        } else {
+            $this->info('Index idx_toilets_created_at already exists, skipping.');
+        }
+
+        // 4. Drop redundant fk_toiletId index on toilet_properties if present (already prefix of PRIMARY KEY)
+        if ($this->indexExists('toilet_properties', 'fk_toiletId')) {
+            $this->runStatement('ALTER TABLE toilet_properties DROP INDEX fk_toiletId');
+        } else {
+            $this->info('Redundant index fk_toiletId already removed, skipping.');
         }
     }
 

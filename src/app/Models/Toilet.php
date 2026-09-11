@@ -29,6 +29,7 @@ class Toilet extends Model
         'status',
         'is_qualified',
         'flagged',
+        'version',
         'contact_email',
         'source',
         'created_at',
@@ -46,6 +47,7 @@ class Toilet extends Model
         'lon' => 'float',
         'is_qualified' => 'boolean',
         'flagged' => 'boolean',
+        'version' => 'integer',
         'email_sent' => 'integer',
         'created_at' => 'datetime',
         'updated' => 'datetime',
@@ -55,6 +57,11 @@ class Toilet extends Model
         'last_crawled' => 'datetime',
         'user_overridden' => 'array',
     ];
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(ToiletRevision::class, 'toilet_id')->orderByDesc('version');
+    }
 
     public function properties(): HasMany
     {
