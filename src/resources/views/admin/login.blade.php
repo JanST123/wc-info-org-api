@@ -181,6 +181,19 @@
                 >
             </div>
 
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.875rem; color: var(--gray-700); user-select: none;">
+                    <input
+                        type="checkbox"
+                        name="remember"
+                        value="1"
+                        style="width: 1rem; height: 1rem; accent-color: var(--primary); cursor: pointer;"
+                        {{ old('remember') ? 'checked' : '' }}
+                    >
+                    <span>Stay logged in (Remember me)</span>
+                </label>
+            </div>
+
             <button type="submit" class="btn-submit">Sign In to Admin</button>
         </form>
     </div>
