@@ -97,8 +97,8 @@
                         <th style="width: 180px;">Comment</th>
                         <th style="width: 180px;">Address</th>
                         <th style="width: 180px;">Current Place</th>
-                        <th style="min-width: 260px;">Assign Google Place (~40m)</th>
-                        <th style="width: 140px; text-align: right;">Action</th>
+                        <th style="min-width: 250px;">Assign Google Place (~40m)</th>
+                        <th style="width: 220px; text-align: right;">Action</th>
                     </tr>
                 </thead>
                 <tbody id="flagged-toilets-tbody">
@@ -165,18 +165,28 @@
                                 <div id="status-msg-{{ $toilet->id }}" style="font-size: 0.6875rem; color: var(--gray-500); margin-top: 0.125rem; display: none;"></div>
                             </td>
                             <td style="text-align: right;">
-                                <div style="display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end;">
+                                <div style="display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        id="ai-btn-{{ $toilet->id }}"
+                                        onclick="requestAiPlaceSuggestion(this, {{ $toilet->id }})"
+                                        title="Find and suggest matching Google Place via Gemini AI"
+                                        style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; border: none; font-weight: 600; white-space: nowrap; font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm);"
+                                    >
+                                        🤖 AI Match
+                                    </button>
                                     <button
                                         type="button"
                                         class="btn btn-secondary btn-sm"
                                         id="unflag-btn-{{ $toilet->id }}"
                                         onclick="unflagToilet(this, {{ $toilet->id }})"
                                         title="Remove flag and take out of review list"
-                                        style="white-space: nowrap;"
+                                        style="white-space: nowrap; font-size: 0.75rem; padding: 0.25rem 0.5rem;"
                                     >
                                         ✓ Unflag
                                     </button>
-                                    <a href="{{ route('admin.toilets.show', $toilet->id) }}" class="btn btn-secondary btn-sm" title="Edit details">
+                                    <a href="{{ route('admin.toilets.show', $toilet->id) }}" class="btn btn-secondary btn-sm" title="Edit details" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
                                         Edit
                                     </a>
                                 </div>
@@ -320,13 +330,302 @@
         </div>
     </div>
 
+    <!-- AI Suggestion Confirmation Modal -->
+    <div id="ai-modal-overlay" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem; overflow-y: auto;">
+        <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 620px; width: 100%; box-shadow: var(--shadow-lg); overflow: hidden; border: 1px solid var(--gray-200); position: relative; margin: auto;">
+            <!-- Header -->
+            <div style="padding: 1.25rem 1.5rem; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 0.625rem; font-weight: 700; font-size: 1.125rem;">
+                    <span>🤖</span>
+                    <span>AI Place Suggestion</span>
+                </div>
+                <button type="button" onclick="closeAiModal()" style="background: none; border: none; color: #ffffff; font-size: 1.5rem; line-height: 1; cursor: pointer; opacity: 0.8;" title="Close">&times;</button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 1.5rem;">
+                <!-- Toilet info bar -->
+                <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+                    <div style="font-size: 0.75rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Toilet Record:</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem;">
+                        <span id="ai-modal-toilet-name" style="font-weight: 700; color: var(--gray-900);"></span>
+                        <span id="ai-modal-toilet-coords" style="font-family: monospace; font-size: 0.8125rem; color: var(--gray-600);"></span>
+                    </div>
+                </div>
+
+                <!-- Matched Place Box -->
+                <div style="border: 2px solid #818cf8; background: #f5f3ff; border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                        <div style="font-size: 0.75rem; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em;">
+                            ⭐ Suggested Google Place
+                        </div>
+                        <span id="ai-modal-confidence-badge" class="badge" style="background: #dcfce7; color: #166534; font-size: 0.75rem;">High Confidence</span>
+                    </div>
+
+                    <h3 id="ai-modal-place-name" style="font-size: 1.125rem; font-weight: 700; color: #1e1b4b; margin-bottom: 0.35rem;"></h3>
+                    <div id="ai-modal-place-address" style="font-size: 0.875rem; color: #4b5563; margin-bottom: 0.5rem;"></div>
+
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                        <span id="ai-modal-place-distance" class="badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.75rem;">~0m away</span>
+                        <div id="ai-modal-place-types" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <!-- AI Reasoning -->
+                    <div style="background: #ffffff; border-radius: var(--radius-sm); padding: 0.75rem; border: 1px solid #e0e7ff; font-size: 0.8125rem; color: #374151;">
+                        <div style="font-weight: 600; color: #4f46e5; margin-bottom: 0.25rem;">💡 AI Reasoning:</div>
+                        <div id="ai-modal-reasoning" style="line-height: 1.4;"></div>
+                    </div>
+
+                    <!-- Google Maps Link -->
+                    <div style="margin-top: 1rem;">
+                        <a
+                            id="ai-modal-maps-link"
+                            href="#"
+                            target="_blank"
+                            rel="noopener"
+                            class="btn btn-secondary btn-sm"
+                            style="background: #ffffff; border: 1px solid #c7d2fe; color: #4338ca; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;"
+                        >
+                            🗺️ View Toilet Coordinates & Place on Google Maps ↗
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Public accessibility checkbox -->
+                <div id="ai-modal-public-container" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 0.875rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+                    <input type="checkbox" id="ai-modal-public-checkbox" style="margin-top: 0.2rem; cursor: pointer; width: 1.1rem; height: 1.1rem; accent-color: var(--success);">
+                    <label for="ai-modal-public-checkbox" style="font-size: 0.875rem; color: #166534; cursor: pointer; line-height: 1.4;">
+                        <strong>Set "public_accessible" property to Yes</strong>
+                        <div style="font-size: 0.75rem; color: #15803d; margin-top: 0.125rem;">The suggested place belongs to public transport, parks, civic buildings, or public amenities.</div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 1rem 1.5rem; background: var(--gray-50); border-top: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem;">
+                <button type="button" onclick="closeAiModal()" class="btn btn-secondary" style="font-weight: 600;">
+                    ✕ Reject / Close
+                </button>
+                <button type="button" id="ai-modal-confirm-btn" onclick="confirmAiMatch()" class="btn btn-primary" style="background: linear-gradient(135deg, #16a34a, #15803d); border: none; font-weight: 700;">
+                    ✓ Confirm & Assign Place
+                </button>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
 <script>
+    let activeAiMatchData = null;
+
     function getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     }
+
+    async function requestAiPlaceSuggestion(btnElem, toiletId) {
+        const originalText = btnElem.textContent;
+        btnElem.disabled = true;
+        btnElem.textContent = '⏳ Thinking...';
+
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '🤖 Gemini AI searching and evaluating places...';
+            statusMsg.style.color = '#6366f1';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/ai-suggest-place`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                const errMsg = data.error || 'Failed to get AI place suggestion.';
+                alert(`AI Suggestion Error: ${errMsg}`);
+                if (statusMsg) {
+                    statusMsg.textContent = `❌ ${errMsg}`;
+                    statusMsg.style.color = 'var(--danger)';
+                }
+                btnElem.disabled = false;
+                btnElem.textContent = originalText;
+                return;
+            }
+
+            if (!data.matched) {
+                alert(`ℹ️ No Matching Place Found:\n\n${data.message || ''}\n\nReason: ${data.reasoning || 'No candidate places matched.'}`);
+                if (statusMsg) {
+                    statusMsg.textContent = '⚠️ AI found no confident match.';
+                    statusMsg.style.color = 'var(--warning)';
+                }
+                btnElem.disabled = false;
+                btnElem.textContent = originalText;
+                return;
+            }
+
+            // Populate Modal
+            activeAiMatchData = data;
+
+            document.getElementById('ai-modal-toilet-name').textContent = `Toilet #${data.toilet_id} - ${data.toilet_name || 'Unnamed'}`;
+            const coordsText = (data.toilet_lat && data.toilet_lon) ? `Lat: ${data.toilet_lat}, Lon: ${data.toilet_lon}` : 'No coordinates';
+            document.getElementById('ai-modal-toilet-coords').textContent = coordsText;
+
+            document.getElementById('ai-modal-place-name').textContent = data.place.name || data.place.place_id;
+            document.getElementById('ai-modal-place-address').textContent = data.place.address || 'Address not specified';
+
+            const confBadge = document.getElementById('ai-modal-confidence-badge');
+            if (data.confidence === 'high') {
+                confBadge.textContent = '✓ High Confidence';
+                confBadge.style.background = '#dcfce7';
+                confBadge.style.color = '#166534';
+            } else if (data.confidence === 'medium') {
+                confBadge.textContent = '⚡ Medium Confidence';
+                confBadge.style.background = '#fef3c7';
+                confBadge.style.color = '#92400e';
+            } else {
+                confBadge.textContent = '⚠️ Low Confidence';
+                confBadge.style.background = '#fee2e2';
+                confBadge.style.color = '#991b1b';
+            }
+
+            const distBadge = document.getElementById('ai-modal-place-distance');
+            if (data.place.distance_m !== null) {
+                distBadge.textContent = `~${data.place.distance_m}m away`;
+                distBadge.style.display = 'inline-block';
+            } else {
+                distBadge.style.display = 'none';
+            }
+
+            // Types chips
+            const typesContainer = document.getElementById('ai-modal-place-types');
+            typesContainer.innerHTML = '';
+            if (Array.isArray(data.place.types)) {
+                data.place.types.forEach(t => {
+                    const tag = document.createElement('span');
+                    tag.className = 'badge';
+                    tag.style.background = '#e2e8f0';
+                    tag.style.color = '#334155';
+                    tag.style.fontSize = '0.6875rem';
+                    tag.textContent = t;
+                    typesContainer.appendChild(tag);
+                });
+            }
+
+            document.getElementById('ai-modal-reasoning').textContent = data.reasoning || 'Matched place with toilet record.';
+
+            const mapsLink = document.getElementById('ai-modal-maps-link');
+            mapsLink.href = data.place.maps_url || '#';
+
+            const publicCheckbox = document.getElementById('ai-modal-public-checkbox');
+            publicCheckbox.checked = Boolean(data.place.is_public_accessible);
+
+            // Open Modal
+            const overlay = document.getElementById('ai-modal-overlay');
+            overlay.style.display = 'flex';
+
+            if (statusMsg) {
+                statusMsg.textContent = '✓ AI suggested a place. Awaiting confirmation...';
+                statusMsg.style.color = '#4f46e5';
+            }
+        } catch (err) {
+            console.error('AI place match error:', err);
+            alert('An unexpected error occurred while requesting AI place suggestion.');
+            if (statusMsg) {
+                statusMsg.textContent = '❌ AI request error.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        } finally {
+            btnElem.disabled = false;
+            btnElem.textContent = originalText;
+        }
+    }
+
+    async function confirmAiMatch() {
+        if (!activeAiMatchData || !activeAiMatchData.place) {
+            return;
+        }
+
+        const confirmBtn = document.getElementById('ai-modal-confirm-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '⏳ Saving...';
+
+        const toiletId = activeAiMatchData.toilet_id;
+        const placeId = activeAiMatchData.place.place_id;
+        const setPublic = document.getElementById('ai-modal-public-checkbox').checked;
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/ai-accept-place`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    place_id: placeId,
+                    set_public_accessible: setPublic
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const resData = await response.json();
+
+            // Update UI table row
+            const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
+            if (currentPlaceElem) {
+                currentPlaceElem.textContent = resData.place_name || activeAiMatchData.place.name || placeId;
+            }
+
+            const dropdown = document.getElementById(`places-dropdown-${toiletId}`);
+            if (dropdown) {
+                dropdown.value = placeId;
+            }
+
+            const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+            if (statusMsg) {
+                statusMsg.style.display = 'block';
+                statusMsg.textContent = '✓ AI Place & properties applied!';
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 3000);
+            }
+
+            // Visual highlight row
+            const row = document.getElementById(`flagged-row-${toiletId}`);
+            if (row) {
+                row.style.transition = 'background-color 0.5s ease';
+                row.style.backgroundColor = '#dcfce7';
+                setTimeout(() => { row.style.backgroundColor = ''; }, 2000);
+            }
+
+            closeAiModal();
+        } catch (err) {
+            console.error('Failed to confirm AI place:', err);
+            alert('Failed to save the assigned place. Please try again.');
+        } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '✓ Confirm & Assign Place';
+        }
+    }
+
+    function closeAiModal() {
+        const overlay = document.getElementById('ai-modal-overlay');
+        overlay.style.display = 'none';
+        activeAiMatchData = null;
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeAiModal();
+        }
+    });
 
     async function loadNearbyPlaces(selectElem) {
         if (selectElem.dataset.loaded === 'true' || selectElem.dataset.loading === 'true') {

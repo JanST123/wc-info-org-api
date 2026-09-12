@@ -29,6 +29,7 @@ class AdminToiletController extends Controller
         private S3PhotoStorageService $s3,
         private GoogleCostService $costService,
         private ToiletRevisionService $revisionService,
+        private \App\Services\GeminiPlaceMatchingService $aiService,
     ) {}
 
     /**
@@ -596,6 +597,80 @@ class AdminToiletController extends Controller
         }
 
         return redirect()->back()->with('success', "Place assigned for Toilet #{$toilet->id}.");
+    }
+
+    /**
+     * Use Gemini AI to find and suggest a matching Google Place for a toilet.
+     */
+    public function aiSuggestPlace(int $id): JsonResponse
+    {
+        $toilet = Toilet::find($id);
+        if (! $toilet) {
+            return response()->json(['success' => false, 'error' => 'Toilet not found'], 404);
+        }
+
+        $result = $this->aiService->suggestPlace($toilet);
+
+        if (! empty($result['error'])) {
+            return response()->json($result, 400);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Accept and assign the AI-suggested Google Place to a toilet.
+     */
+    public function aiAcceptPlace(int $id, Request $request): JsonResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $newPlaceId = $request->input('place_id') ? trim((string) $request->input('place_id')) : null;
+
+        if (empty($newPlaceId)) {
+            return response()->json(['success' => false, 'error' => 'No place_id provided'], 422);
+        }
+
+        $oldPlaceId = $toilet->place_id;
+        $diff = [];
+
+        if ($oldPlaceId !== $newPlaceId) {
+            $diff['place_id'] = ['old' => $oldPlaceId, 'new' => $newPlaceId];
+            $toilet->place_id = $newPlaceId;
+            $toilet->markUserOverridden('place_id');
+            $toilet->save();
+        }
+
+        // Set public_accessible property if requested
+        $setPublicAccessible = $request->boolean('set_public_accessible');
+        if ($setPublicAccessible) {
+            $this->saveFlagProperty($toilet->id, 'public_accessible', true, $diff);
+        }
+
+        if (! empty($diff)) {
+            $toilet->update([
+                'email_sent' => 2,
+                'last_diff' => json_encode($diff),
+            ]);
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_ai_place_assign',
+                $diff,
+                'AI-suggested Google Place assigned'
+            );
+        }
+
+        $placeModel = Place::find($toilet->place_id);
+        $placeName = $placeModel?->getName() ?? $toilet->place_id;
+
+        return response()->json([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => $toilet->place_id,
+            'place_name' => $placeName,
+            'public_accessible' => $setPublicAccessible,
+            'message' => 'AI suggestion applied and place assigned successfully.',
+        ]);
     }
 
     /**

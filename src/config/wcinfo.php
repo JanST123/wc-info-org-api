@@ -16,6 +16,11 @@ return [
         'monthly_budget' => (float) env('GOOGLE_MONTHLY_BUDGET', 20.0),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+    ],
+
     'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hi@wc-info.org'),
 
     'smtp' => [

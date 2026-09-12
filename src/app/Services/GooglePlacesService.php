@@ -313,6 +313,71 @@ class GooglePlacesService
     }
 
     /**
+     * Fetch raw results from Google Places Text Search (New).
+     *
+     * @return array<int, array>
+     */
+    public function textSearchRaw(string $query, ?float $lat = null, ?float $lon = null, float $radiusMeters = 5000.0): array
+    {
+        if (! $this->costService->hasBudget()) {
+            Log::warning('Google API call blocked: Monthly budget exceeded', [
+                'service' => GoogleCostService::SERVICE_PLACES_TEXT_SEARCH,
+                'query' => $query,
+            ]);
+            $this->costService->checkBudgetAndNotify();
+
+            return [];
+        }
+
+        $endpoint = 'https://places.googleapis.com/v1/places:searchText';
+
+        $payload = [
+            'textQuery' => $query,
+            'languageCode' => 'de',
+            'maxResultCount' => 10,
+        ];
+
+        if ($lat !== null && $lon !== null) {
+            $payload['locationBias'] = [
+                'circle' => [
+                    'center' => [
+                        'latitude' => $lat,
+                        'longitude' => $lon,
+                    ],
+                    'radius' => min(max(50.0, $radiusMeters), 50000.0),
+                ],
+            ];
+        }
+
+        $response = Http::withHeaders([
+            'X-Goog-Api-Key' => $this->apiKey,
+            'X-Goog-FieldMask' => 'places.id,places.displayName,places.location,places.regularOpeningHours,places.websiteUri,places.formattedAddress,places.types',
+        ])->post($endpoint, $payload);
+
+        $this->costService->logApiCall(
+            GoogleCostService::SERVICE_PLACES_TEXT_SEARCH,
+            $endpoint,
+            GoogleCostService::COST_PLACES_TEXT_SEARCH_USD,
+            $response->status(),
+            ['query' => $query, 'lat' => $lat, 'lon' => $lon]
+        );
+
+        if ($response->failed()) {
+            Log::warning('Google Text Search request failed', [
+                'query' => $query,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [];
+        }
+
+        $json = $response->json();
+
+        return $json['places'] ?? [];
+    }
+
+    /**
      * Discover places near a coordinate using Google Places Nearby Search.
      *
      * Saves each result to the places table and creates a toilet record via

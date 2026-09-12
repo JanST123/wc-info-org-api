@@ -508,7 +508,7 @@ class MigrateV2SchemaCommand extends Command
             $this->runStatement("
                 CREATE TABLE google_api_logs (
                     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                    service ENUM('places_nearby', 'places_details', 'custom_search', 'geocoding') NOT NULL,
+                    service VARCHAR(50) NOT NULL,
                     endpoint VARCHAR(255) NOT NULL,
                     cost_usd DECIMAL(8, 4) NOT NULL DEFAULT 0.0000,
                     status_code SMALLINT UNSIGNED NOT NULL DEFAULT 200,
@@ -519,7 +519,8 @@ class MigrateV2SchemaCommand extends Command
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
         } else {
-            $this->info('Table google_api_logs already exists, skipping.');
+            $this->runStatement('ALTER TABLE google_api_logs MODIFY COLUMN service VARCHAR(50) NOT NULL');
+            $this->info('Table google_api_logs updated service column to VARCHAR(50).');
         }
 
         if (! $this->tableExists('app_settings')) {

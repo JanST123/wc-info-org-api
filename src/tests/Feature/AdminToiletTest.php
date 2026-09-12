@@ -539,5 +539,97 @@ class AdminToiletTest extends TestCase
         $toilet->refresh();
         $this->assertTrue((bool) $toilet->flagged);
     }
+
+    public function test_ai_suggest_place_endpoint(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toilet for AI Test',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $aiMock = $this->createMock(\App\Services\GeminiPlaceMatchingService::class);
+        $aiMock->expects($this->once())
+            ->method('suggestPlace')
+            ->willReturn([
+                'success' => true,
+                'matched' => true,
+                'toilet_id' => $toilet->id,
+                'toilet_name' => $toilet->name,
+                'toilet_lat' => 52.5200,
+                'toilet_lon' => 13.4050,
+                'place' => [
+                    'place_id' => 'ChIJaiplace123',
+                    'name' => 'AI Matched Train Station',
+                    'address' => 'Station Square 1',
+                    'types' => ['train_station', 'transit_station'],
+                    'lat' => 52.5201,
+                    'lon' => 13.4051,
+                    'distance_m' => 15,
+                    'maps_url' => 'https://www.google.com/maps/search/?api=1&query=52.52,13.405&query_place_id=ChIJaiplace123',
+                    'is_public_accessible' => true,
+                ],
+                'confidence' => 'high',
+                'reasoning' => 'Matched with train station at the same coordinate.',
+                'source' => 'nearby_gemini',
+            ]);
+        $this->app->instance(\App\Services\GeminiPlaceMatchingService::class, $aiMock);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$toilet->id}/ai-suggest-place");
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'matched' => true,
+            'place' => [
+                'place_id' => 'ChIJaiplace123',
+                'name' => 'AI Matched Train Station',
+                'is_public_accessible' => true,
+            ],
+            'confidence' => 'high',
+        ]);
+    }
+
+    public function test_ai_accept_place_updates_place_and_sets_public_accessible(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJacceptedAiPlace777',
+            'data' => [
+                'displayName' => ['text' => 'Accepted Station'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet for AI Accept',
+            'status' => 'active',
+            'place_id' => null,
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/ai-accept-place", [
+                'place_id' => 'ChIJacceptedAiPlace777',
+                'set_public_accessible' => true,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => 'ChIJacceptedAiPlace777',
+            'public_accessible' => true,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('ChIJacceptedAiPlace777', $toilet->place_id);
+        $this->assertTrue($toilet->isUserOverridden('place_id'));
+        $this->assertEquals('1', $toilet->propertyValue('public_accessible'));
+    }
 }
 
