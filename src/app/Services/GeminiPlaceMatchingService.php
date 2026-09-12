@@ -175,9 +175,78 @@ class GeminiPlaceMatchingService
             }
         }
 
-        // 3. Third Attempt (Fallback): Search websites of candidate places for toilet information
+        // 3. Third Attempt (Fallback): Fetch Google Places by exact Toilet Name
+        $toiletName = trim((string) ($toilet->name ?? ''));
+        $nameCandidates = [];
+        $genericNames = ['wc', 'toilette', 'toiletten', 'klo', 'restroom', 'bathroom', 'public toilet', 'öffentliche toilette'];
+
+        if ($toiletName !== '' && ! in_array(mb_strtolower($toiletName), $genericNames, true)) {
+            $rawNamePlaces = $this->placesService->textSearchRaw(
+                $toiletName,
+                $hasValidCoords ? (float) $toilet->lat : null,
+                $hasValidCoords ? (float) $toilet->lon : null,
+                1000.0
+            );
+
+            $nameCandidates = $this->normalizeCandidates(
+                $rawNamePlaces,
+                $hasValidCoords ? (float) $toilet->lat : null,
+                $hasValidCoords ? (float) $toilet->lon : null
+            );
+
+            // Check for public_bathroom in name candidates
+            $publicBathroomName = $this->findPublicBathroomCandidate($nameCandidates);
+            if ($publicBathroomName !== null) {
+                return $this->buildMatchResult(
+                    $toilet,
+                    $publicBathroomName,
+                    'high',
+                    'Found public bathroom place matching toilet name: ' . $toiletName,
+                    'name_public_bathroom'
+                );
+            }
+
+            // Check for establishment name match in name candidates
+            $nameSearchMatch = $this->findEstablishmentNameMatch($toilet, $nameCandidates);
+            if ($nameSearchMatch !== null && ($nameSearchMatch['score'] ?? 0) >= 0.7) {
+                return $this->buildMatchResult(
+                    $toilet,
+                    $nameSearchMatch['candidate'],
+                    'high',
+                    $nameSearchMatch['reason'],
+                    'name_search_match'
+                );
+            }
+
+            // Evaluate name search candidates with Gemini
+            if (! empty($nameCandidates)) {
+                $aiMatch = $this->queryGeminiForMatch($toilet, $toiletAddress, $toiletComment, $nameCandidates);
+                if ($aiMatch['match_found'] && ! empty($aiMatch['matched_place_id'])) {
+                    $matchedCandidate = $this->findCandidateById($nameCandidates, $aiMatch['matched_place_id']);
+                    if ($matchedCandidate !== null) {
+                        return $this->buildMatchResult(
+                            $toilet,
+                            $matchedCandidate,
+                            $aiMatch['confidence'] ?? 'medium',
+                            $aiMatch['reasoning'] ?? 'AI matched toilet with place found via name search.',
+                            'name_search_gemini'
+                        );
+                    }
+                } elseif ($nameSearchMatch !== null && ($nameSearchMatch['score'] ?? 0) >= 0.6) {
+                    return $this->buildMatchResult(
+                        $toilet,
+                        $nameSearchMatch['candidate'],
+                        'medium',
+                        $nameSearchMatch['reason'],
+                        'name_search_match'
+                    );
+                }
+            }
+        }
+
+        // 4. Fourth Attempt (Fallback): Search websites of candidate places for toilet information
         $allCandidatesWithWebsites = array_filter(
-            array_merge($nearbyCandidates, $addressCandidates ?? []),
+            array_merge($nearbyCandidates, $addressCandidates ?? [], $nameCandidates),
             fn ($c) => ! empty($c['website']) && preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/i', (string) $c['website'])
         );
 
@@ -232,7 +301,10 @@ class GeminiPlaceMatchingService
             'matched' => false,
             'toilet_id' => $toilet->id,
             'message' => 'No matching Google Place could be found.',
-            'reasoning' => 'Searched nearby places (~40m)' . (! empty($toiletAddress) ? ' and address ("' . $toiletAddress . '")' : '') . ' and crawled place websites, but no place matched the toilet record with sufficient confidence.',
+            'reasoning' => 'Searched nearby places (~40m)'
+                . (! empty($toiletAddress) ? ' and address ("' . $toiletAddress . '")' : '')
+                . ($toiletName !== '' ? ' and name ("' . $toiletName . '")' : '')
+                . ' and crawled place websites, but no place matched the toilet record with sufficient confidence.',
         ];
     }
 

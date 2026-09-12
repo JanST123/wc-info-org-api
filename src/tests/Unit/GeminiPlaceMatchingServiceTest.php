@@ -430,4 +430,53 @@ class GeminiPlaceMatchingServiceTest extends TestCase
         $this->assertEquals('nearby_name_match', $result['source']);
         $this->assertStringContainsString('Eis & Brot Standl', $result['reasoning']);
     }
+
+    public function test_suggest_place_falls_back_to_toilet_name_search(): void
+    {
+        $costMock = $this->createMock(GoogleCostService::class);
+        $costMock->method('hasBudget')->willReturn(true);
+
+        $placesMock = $this->createMock(GooglePlacesService::class);
+        // 1. Nearby search returns nothing
+        $placesMock->expects($this->once())
+            ->method('nearbySearchRaw')
+            ->willReturn([]);
+
+        // 2. Name search is called with exact toilet name
+        $placesMock->expects($this->once())
+            ->method('textSearchRaw')
+            ->with('Café Kraft', 49.4500, 11.0800, 1000.0)
+            ->willReturn([
+                [
+                    'id' => 'ChIJcafekraft123',
+                    'displayName' => ['text' => 'Café Kraft Bouldern'],
+                    'formattedAddress' => 'Gebertstraße 9, 90411 Nürnberg',
+                    'types' => ['gym', 'sports_complex', 'cafe', 'point_of_interest'],
+                    'location' => ['latitude' => 49.4505, 'longitude' => 11.0805],
+                ],
+            ]);
+
+        $service = new GeminiPlaceMatchingService(
+            $placesMock,
+            $costMock,
+            geminiApiKey: 'fake-api-key'
+        );
+
+        $toilet = Toilet::create([
+            'name' => 'Café Kraft',
+            'lat' => 49.4500,
+            'lon' => 11.0800,
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+        $this->createdPlaceIds[] = 'ChIJcafekraft123';
+
+        $result = $service->suggestPlace($toilet);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['matched']);
+        $this->assertEquals('ChIJcafekraft123', $result['place']['place_id']);
+        $this->assertEquals('name_search_match', $result['source']);
+        $this->assertEquals('high', $result['confidence']);
+    }
 }
