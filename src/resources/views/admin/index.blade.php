@@ -93,6 +93,7 @@
                 <thead>
                     <tr>
                         <th style="width: 70px;">ID</th>
+                        <th style="width: 110px;">Status</th>
                         <th style="width: 180px;">Name & Owner</th>
                         <th style="width: 180px;">Comment</th>
                         <th style="width: 180px;">Address</th>
@@ -108,6 +109,23 @@
                                 <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 700; font-family: monospace;">
                                     #{{ $toilet->id }}
                                 </a>
+                            </td>
+                            <td>
+                                <select
+                                    class="form-control"
+                                    id="status-select-{{ $toilet->id }}"
+                                    data-toilet-id="{{ $toilet->id }}"
+                                    data-original-value="{{ $toilet->status }}"
+                                    onchange="updateToiletStatus(this, {{ $toilet->id }})"
+                                    style="font-size: 0.75rem; height: 32px; padding: 0.125rem 0.375rem; width: 105px; font-weight: 600;
+                                        background-color: {{ $toilet->status === 'active' ? '#f0fdf4' : ($toilet->status === 'hidden' ? '#f8fafc' : '#fef2f2') }};
+                                        color: {{ $toilet->status === 'active' ? '#166534' : ($toilet->status === 'hidden' ? '#475569' : '#991b1b') }};
+                                        border-color: {{ $toilet->status === 'active' ? '#bbf7d0' : ($toilet->status === 'hidden' ? '#cbd5e1' : '#fecaca') }};"
+                                >
+                                    <option value="active" {{ $toilet->status === 'active' ? 'selected' : '' }}>🟢 Active</option>
+                                    <option value="hidden" {{ $toilet->status === 'hidden' ? 'selected' : '' }}>⚪ Hidden</option>
+                                    <option value="deleted" {{ $toilet->status === 'deleted' ? 'selected' : '' }}>🔴 Deleted</option>
+                                </select>
                             </td>
                             <td>
                                 <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 600; color: var(--gray-900);">
@@ -194,7 +212,7 @@
                         </tr>
                     @empty
                         <tr id="flagged-empty-row">
-                            <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
+                            <td colspan="8" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
                                 <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
                                 <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
                                 <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>
@@ -626,6 +644,79 @@
             closeAiModal();
         }
     });
+
+    async function updateToiletStatus(selectElem, toiletId) {
+        const newStatus = selectElem.value;
+        const originalVal = selectElem.dataset.originalValue || 'active';
+        selectElem.disabled = true;
+
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '💾 Updating status...';
+            statusMsg.style.color = 'var(--primary)';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+            selectElem.dataset.originalValue = data.status;
+
+            // Update styling based on new status
+            if (data.status === 'active') {
+                selectElem.style.backgroundColor = '#f0fdf4';
+                selectElem.style.color = '#166534';
+                selectElem.style.borderColor = '#bbf7d0';
+            } else if (data.status === 'hidden') {
+                selectElem.style.backgroundColor = '#f8fafc';
+                selectElem.style.color = '#475569';
+                selectElem.style.borderColor = '#cbd5e1';
+            } else if (data.status === 'deleted') {
+                selectElem.style.backgroundColor = '#fef2f2';
+                selectElem.style.color = '#991b1b';
+                selectElem.style.borderColor = '#fecaca';
+            }
+
+            // Visual feedback on row
+            const row = document.getElementById(`flagged-row-${toiletId}`);
+            if (row) {
+                if (data.status === 'deleted') {
+                    row.style.opacity = '0.5';
+                } else {
+                    row.style.opacity = '1.0';
+                }
+            }
+
+            if (statusMsg) {
+                statusMsg.textContent = `✓ Status changed to ${data.status}!`;
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 2000);
+            }
+        } catch (err) {
+            console.error('Error updating toilet status:', err);
+            selectElem.value = originalVal;
+            alert('Failed to update status. Please try again.');
+            if (statusMsg) {
+                statusMsg.textContent = '❌ Failed to change status.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        } finally {
+            selectElem.disabled = false;
+        }
+    }
 
     async function loadNearbyPlaces(selectElem) {
         if (selectElem.dataset.loaded === 'true' || selectElem.dataset.loading === 'true') {

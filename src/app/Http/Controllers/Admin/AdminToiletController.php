@@ -674,6 +674,49 @@ class AdminToiletController extends Controller
     }
 
     /**
+     * Quickly update toilet status from dropdown.
+     */
+    public function updateStatus(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $request->validate([
+            'status' => ['required', 'in:active,hidden,deleted'],
+        ]);
+
+        $newStatus = (string) $request->input('status');
+        $oldStatus = $toilet->status;
+
+        if ($oldStatus !== $newStatus) {
+            $toilet->status = $newStatus;
+            $toilet->markUserOverridden('status');
+            $diff = ['status' => ['old' => $oldStatus, 'new' => $newStatus]];
+
+            $toilet->update([
+                'email_sent' => 2,
+                'last_diff' => json_encode($diff),
+            ]);
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_status_change',
+                $diff,
+                "Status changed to '{$newStatus}' in admin"
+            );
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'status' => $toilet->status,
+                'message' => "Status changed to '{$toilet->status}'.",
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} status updated to '{$toilet->status}'.");
+    }
+
+    /**
      * Restore toilet to a previous version.
      */
     public function restoreVersion(int $id, int $version): RedirectResponse

@@ -48,6 +48,7 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
     Route::post('toilets/{id}', [AdminToiletController::class, 'update'])->name('toilets.update');
     Route::get('toilets/{id}/nearby-places', [AdminToiletController::class, 'getNearbyPlaces'])->name('toilets.nearby-places');
     Route::post('toilets/{id}/assign-place', [AdminToiletController::class, 'assignPlace'])->name('toilets.assign-place');
+    Route::post('toilets/{id}/status', [AdminToiletController::class, 'updateStatus'])->name('toilets.status');
     Route::get('toilets/{id}/ai-suggest-place', [AdminToiletController::class, 'aiSuggestPlace'])->name('toilets.ai-suggest-place');
     Route::post('toilets/{id}/ai-accept-place', [AdminToiletController::class, 'aiAcceptPlace'])->name('toilets.ai-accept-place');
     Route::post('toilets/{id}/unflag', [AdminToiletController::class, 'unflag'])->name('toilets.unflag');

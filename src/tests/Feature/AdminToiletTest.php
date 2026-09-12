@@ -631,5 +631,31 @@ class AdminToiletTest extends TestCase
         $this->assertTrue($toilet->isUserOverridden('place_id'));
         $this->assertEquals('1', $toilet->propertyValue('public_accessible'));
     }
+
+    public function test_quick_update_status_endpoint(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toilet for Status Quick Change',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/status", [
+                'status' => 'hidden',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'status' => 'hidden',
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('hidden', $toilet->status);
+        $this->assertTrue($toilet->isUserOverridden('status'));
+    }
 }
 
