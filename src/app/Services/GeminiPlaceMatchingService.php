@@ -316,13 +316,20 @@ class GeminiPlaceMatchingService
                 }
             }
 
+            $nameHint = $this->calculateNameMatchHint((string) ($toilet->name ?? ''), (string) ($c['name'] ?? ''));
+            if ($nameHint === null && ! empty($toilet->owner)) {
+                $nameHint = $this->calculateNameMatchHint((string) $toilet->owner, (string) ($c['name'] ?? ''));
+            }
+            $nameHintStr = $nameHint !== null ? "\n- Name Match Indicator: {$nameHint}" : '';
+
             $candidateDescriptions[] = sprintf(
-                "Candidate #%d:\n- Place ID: %s\n- Name: %s\n- Address: %s\n- Types: %s%s%s",
+                "Candidate #%d:\n- Place ID: %s\n- Name: %s\n- Address: %s\n- Types: %s%s%s%s",
                 $idx + 1,
                 $c['place_id'],
                 $c['name'],
                 $c['address'] ?: 'N/A',
                 $typesStr ?: 'N/A',
+                $nameHintStr,
                 $websiteStr,
                 $distStr
             );
@@ -348,11 +355,13 @@ TOILET RECORD:
 GOOGLE PLACE CANDIDATES:
 {$candidatesText}
 
-MATCHING RULES:
-1. If a candidate is of type "public_bathroom", "restroom", or "toilet", and is near the toilet, choose it with "high" confidence.
-2. If the toilet name, owner, comment, or address refers to a specific business, train station, subway station, shopping mall, museum, park, town square, library, restaurant, or public building that matches one of the candidates, choose that candidate.
-3. If candidate websites were searched and confirm on-site toilet facilities, consider this strong evidence that the toilet belongs to that place.
-4. If none of the candidates match the toilet or if the match is too ambiguous/uncertain, set "match_found" to false.
+MATCHING RULES & PRIORITIES:
+1. PRIORITY 1 — Dedicated Public Bathroom: If a candidate is of type "public_bathroom", "restroom", or "toilet", and is in close proximity to the toilet, choose it with "high" confidence.
+2. PRIORITY 2 — Name / Business / Establishment Match: Many public toilets in this database are customer toilets or facilities situated inside, belonging to, or operated by specific establishments (food stands/kiosks/stands like "Standl", bakeries, cafes, restaurants, bars, shops, supermarkets, gas stations, hotels, malls, transit stations, museums, parks, or public buildings).
+   - Compound / Location-prefixed names: Toilet names very often combine a location/market/station name with the business/establishment name (e.g., toilet "Elisabethmarkt Eis & Brot Standl" directly matches candidate place "Eis & Brot Standl"; toilet "München Hbf Yormas" matches candidate "Yormas"; toilet "Englischer Garten Seehaus" matches "Seehaus im Englischen Garten").
+   - If a candidate's name is contained within the toilet name (or vice versa), or shares the core brand/venue name with the toilet name/owner/comment, this is a STRONG match indicator. Choose this candidate with "high" or "medium" confidence.
+3. PRIORITY 3 — Website Toilet Verification: If candidate websites were searched and confirm on-site toilet facilities, consider this strong evidence that the toilet belongs to that place.
+4. If none of the candidates match the toilet (e.g. completely unrelated establishments with no name overlap or facility connection), set "match_found" to false.
 5. Do NOT guess or hallucinate.
 
 Respond ONLY with a JSON object in this exact schema:
@@ -514,5 +523,53 @@ PROMPT;
         }
 
         return $lat >= -90.0 && $lat <= 90.0 && $lon >= -180.0 && $lon <= 180.0;
+    }
+
+    /**
+     * Calculate name match hints between toilet name and candidate place name.
+     */
+    private function calculateNameMatchHint(string $toiletName, string $candidateName): ?string
+    {
+        $toiletName = trim($toiletName);
+        $candidateName = trim($candidateName);
+
+        if ($toiletName === '' || $candidateName === '') {
+            return null;
+        }
+
+        $cleanToilet = mb_strtolower($toiletName);
+        $cleanCandidate = mb_strtolower($candidateName);
+
+        if ($cleanToilet === $cleanCandidate) {
+            return "Exact name match with toilet ('{$toiletName}')";
+        }
+
+        if (str_contains($cleanToilet, $cleanCandidate)) {
+            return "Candidate name '{$candidateName}' is a direct substring of toilet name '{$toiletName}' (Strong Match Indicator)";
+        }
+
+        if (str_contains($cleanCandidate, $cleanToilet)) {
+            return "Toilet name '{$toiletName}' is a direct substring of candidate name '{$candidateName}' (Strong Match Indicator)";
+        }
+
+        // Word token overlap
+        $toiletWords = array_values(array_filter(preg_split('/[\s,.\-_&+\/]+/u', $cleanToilet) ?: [], fn ($w) => mb_strlen($w) > 2));
+        $candWords = array_values(array_filter(preg_split('/[\s,.\-_&+\/]+/u', $cleanCandidate) ?: [], fn ($w) => mb_strlen($w) > 2));
+
+        if (! empty($toiletWords) && ! empty($candWords)) {
+            $commonWords = array_intersect($candWords, $toiletWords);
+            $overlapRatio = count($commonWords) / count($candWords);
+            if ($overlapRatio >= 0.6 || count($commonWords) >= 2) {
+                return sprintf(
+                    "High word overlap (%d shared words: %s) between candidate '%s' and toilet '%s' (Strong Match Indicator)",
+                    count($commonWords),
+                    implode(', ', $commonWords),
+                    $candidateName,
+                    $toiletName
+                );
+            }
+        }
+
+        return null;
     }
 }

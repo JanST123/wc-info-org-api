@@ -355,4 +355,79 @@ class GeminiPlaceMatchingServiceTest extends TestCase
         $this->assertEquals('website_crawl', $result['source']);
         $this->assertEquals('high', $result['confidence']);
     }
+
+    public function test_suggest_place_matches_establishment_name_substring(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => function ($request) {
+                $body = json_decode($request->body(), true);
+                $promptText = $body['contents'][0]['parts'][0]['text'] ?? '';
+
+                // Verify the prompt contains the name match hint
+                $this->assertStringContainsString('Eis & Brot Standl', $promptText);
+                $this->assertStringContainsString('Elisabethmarkt Eis & Brot Standl', $promptText);
+                $this->assertStringContainsString('Name Match Indicator', $promptText);
+
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    [
+                                        'text' => json_encode([
+                                            'match_found' => true,
+                                            'matched_place_id' => 'ChIJeisundbrot',
+                                            'confidence' => 'high',
+                                            'reasoning' => 'The toilet name "Elisabethmarkt Eis & Brot Standl" matches the food stand candidate "Eis & Brot Standl" located on Elisabethmarkt.',
+                                        ]),
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $costMock = $this->createMock(GoogleCostService::class);
+        $costMock->method('hasBudget')->willReturn(true);
+
+        $placesMock = $this->createMock(GooglePlacesService::class);
+        $placesMock->expects($this->once())
+            ->method('nearbySearchRaw')
+            ->willReturn([
+                [
+                    'id' => 'ChIJeisundbrot',
+                    'displayName' => ['text' => 'Eis & Brot Standl'],
+                    'formattedAddress' => 'Elisabethplatz 1, 80796 München',
+                    'types' => ['bakery', 'food', 'point_of_interest', 'establishment'],
+                    'location' => ['latitude' => 48.1571, 'longitude' => 11.5742],
+                ],
+            ]);
+
+        $service = new GeminiPlaceMatchingService(
+            $placesMock,
+            $costMock,
+            geminiApiKey: 'fake-api-key'
+        );
+
+        $toilet = Toilet::create([
+            'name' => 'Elisabethmarkt Eis & Brot Standl',
+            'lat' => 48.1571,
+            'lon' => 11.5742,
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+        $this->createdPlaceIds[] = 'ChIJeisundbrot';
+
+        $result = $service->suggestPlace($toilet);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['matched']);
+        $this->assertEquals('ChIJeisundbrot', $result['place']['place_id']);
+        $this->assertEquals('Eis & Brot Standl', $result['place']['name']);
+        $this->assertEquals('high', $result['confidence']);
+        $this->assertEquals('nearby_gemini', $result['source']);
+        $this->assertStringContainsString('Eis & Brot Standl', $result['reasoning']);
+    }
 }
