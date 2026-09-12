@@ -600,6 +600,10 @@ class AdminToiletTest extends TestCase
             'place_id' => 'ChIJacceptedAiPlace777',
             'data' => [
                 'displayName' => ['text' => 'Accepted Station'],
+                'location' => [
+                    'latitude' => 52.5205,
+                    'longitude' => 13.4055,
+                ],
             ],
         ]);
         $this->createdPlaceIds[] = $place->place_id;
@@ -607,6 +611,8 @@ class AdminToiletTest extends TestCase
         $toilet = Toilet::create([
             'name' => 'Toilet for AI Accept',
             'status' => 'active',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
             'place_id' => null,
             'flagged' => 1,
         ]);
@@ -623,12 +629,18 @@ class AdminToiletTest extends TestCase
             'success' => true,
             'toilet_id' => $toilet->id,
             'place_id' => 'ChIJacceptedAiPlace777',
+            'lat' => 52.5205,
+            'lon' => 13.4055,
             'public_accessible' => true,
         ]);
 
         $toilet->refresh();
         $this->assertEquals('ChIJacceptedAiPlace777', $toilet->place_id);
+        $this->assertEquals(52.5205, $toilet->lat);
+        $this->assertEquals(13.4055, $toilet->lon);
         $this->assertTrue($toilet->isUserOverridden('place_id'));
+        $this->assertTrue($toilet->isUserOverridden('lat'));
+        $this->assertTrue($toilet->isUserOverridden('lon'));
         $this->assertEquals('1', $toilet->propertyValue('public_accessible'));
     }
 

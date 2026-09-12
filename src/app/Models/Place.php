@@ -40,4 +40,28 @@ class Place extends Model
             ?? (! str_starts_with((string) ($data['name'] ?? ''), 'places/') ? ($data['name'] ?? null) : null)
             ?? ($data['formattedAddress'] ?? $data['formatted_address'] ?? null);
     }
+
+    public function getLat(): ?float
+    {
+        $data = $this->data;
+        if (! is_array($data)) {
+            return null;
+        }
+
+        $lat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
+
+        return $lat !== null ? (float) $lat : null;
+    }
+
+    public function getLon(): ?float
+    {
+        $data = $this->data;
+        if (! is_array($data)) {
+            return null;
+        }
+
+        $lon = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
+
+        return $lon !== null ? (float) $lon : null;
+    }
 }

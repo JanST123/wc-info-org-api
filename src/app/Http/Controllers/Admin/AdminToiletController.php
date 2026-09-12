@@ -637,8 +637,34 @@ class AdminToiletController extends Controller
             $diff['place_id'] = ['old' => $oldPlaceId, 'new' => $newPlaceId];
             $toilet->place_id = $newPlaceId;
             $toilet->markUserOverridden('place_id');
-            $toilet->save();
         }
+
+        $placeModel = Place::find($newPlaceId);
+
+        // Update lat/lon from place data if available
+        if ($placeModel !== null) {
+            $newLat = $placeModel->getLat();
+            $newLon = $placeModel->getLon();
+
+            if ($newLat !== null && $newLon !== null) {
+                $oldLat = $toilet->lat !== null ? (float) $toilet->lat : null;
+                $oldLon = $toilet->lon !== null ? (float) $toilet->lon : null;
+
+                if ($oldLat !== (float) $newLat) {
+                    $diff['lat'] = ['old' => $oldLat, 'new' => (float) $newLat];
+                    $toilet->lat = (float) $newLat;
+                }
+                if ($oldLon !== (float) $newLon) {
+                    $diff['lon'] = ['old' => $oldLon, 'new' => (float) $newLon];
+                    $toilet->lon = (float) $newLon;
+                }
+                if ($oldLat !== (float) $newLat || $oldLon !== (float) $newLon) {
+                    $toilet->markUserOverridden('lat', 'lon');
+                }
+            }
+        }
+
+        $toilet->save();
 
         // Set public_accessible property if requested
         $setPublicAccessible = $request->boolean('set_public_accessible');
@@ -656,11 +682,10 @@ class AdminToiletController extends Controller
                 $toilet,
                 'admin_ai_place_assign',
                 $diff,
-                'AI-suggested Google Place assigned'
+                'AI-suggested Google Place and coordinates assigned'
             );
         }
 
-        $placeModel = Place::find($toilet->place_id);
         $placeName = $placeModel?->getName() ?? $toilet->place_id;
 
         return response()->json([
@@ -668,6 +693,8 @@ class AdminToiletController extends Controller
             'toilet_id' => $toilet->id,
             'place_id' => $toilet->place_id,
             'place_name' => $placeName,
+            'lat' => $toilet->lat !== null ? (float) $toilet->lat : null,
+            'lon' => $toilet->lon !== null ? (float) $toilet->lon : null,
             'public_accessible' => $setPublicAccessible,
             'message' => 'AI suggestion applied and place assigned successfully.',
         ]);

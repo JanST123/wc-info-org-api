@@ -136,19 +136,18 @@
                                         {{ $toilet->owner }}
                                     </div>
                                 @endif
-                                @if ($toilet->lat !== null && $toilet->lon !== null)
-                                    <div style="margin-top: 0.25rem;">
-                                        <a
-                                            href="https://www.google.com/maps/search/?api=1&query={{ $toilet->lat }},{{ $toilet->lon }}"
-                                            target="_blank"
-                                            rel="noopener"
-                                            style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: #1a73e8; text-decoration: none; font-weight: 500;"
-                                            title="Open coordinates in Google Maps"
-                                        >
-                                            🗺️ Google Maps ↗
-                                        </a>
-                                    </div>
-                                @endif
+                                <div id="maps-container-{{ $toilet->id }}" style="margin-top: 0.25rem; {{ ($toilet->lat !== null && $toilet->lon !== null) ? '' : 'display: none;' }}">
+                                    <a
+                                        id="maps-link-{{ $toilet->id }}"
+                                        href="{{ ($toilet->lat !== null && $toilet->lon !== null) ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon : '#' }}"
+                                        target="_blank"
+                                        rel="noopener"
+                                        style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: #1a73e8; text-decoration: none; font-weight: 500;"
+                                        title="Open coordinates in Google Maps"
+                                    >
+                                        🗺️ Google Maps ↗
+                                    </a>
+                                </div>
                             </td>
                             <td style="font-size: 0.8125rem; color: var(--gray-700); max-width: 200px; word-break: break-word;">
                                 {{ $toilet->propertyValue('comment') ?: '-' }}
@@ -606,10 +605,22 @@
                 dropdown.value = placeId;
             }
 
+            // Update maps link if lat/lon changed
+            if (resData.lat !== undefined && resData.lon !== undefined && resData.lat !== null && resData.lon !== null) {
+                const mapsLink = document.getElementById(`maps-link-${toiletId}`);
+                const mapsContainer = document.getElementById(`maps-container-${toiletId}`);
+                if (mapsLink) {
+                    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${resData.lat},${resData.lon}`;
+                }
+                if (mapsContainer) {
+                    mapsContainer.style.display = '';
+                }
+            }
+
             const statusMsg = document.getElementById(`status-msg-${toiletId}`);
             if (statusMsg) {
                 statusMsg.style.display = 'block';
-                statusMsg.textContent = '✓ AI Place & properties applied!';
+                statusMsg.textContent = '✓ AI Place & coordinates applied!';
                 statusMsg.style.color = 'var(--success)';
                 setTimeout(() => { statusMsg.style.display = 'none'; }, 3000);
             }
