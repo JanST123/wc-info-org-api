@@ -384,6 +384,7 @@ class AdminToiletTest extends TestCase
         $response->assertSee('Needs place re-verification');
         $response->assertSee('Alexanderplatz 5, 10178 Berlin');
         $response->assertSee('Flagged Cafe Place');
+        $response->assertSee('https://www.google.com/maps/search/?api=1&query=52.52,13.405', false);
     }
 
     public function test_get_nearby_places_returns_places_json(): void
