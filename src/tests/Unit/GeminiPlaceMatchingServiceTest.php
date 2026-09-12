@@ -427,7 +427,7 @@ class GeminiPlaceMatchingServiceTest extends TestCase
         $this->assertEquals('ChIJeisundbrot', $result['place']['place_id']);
         $this->assertEquals('Eis & Brot Standl', $result['place']['name']);
         $this->assertEquals('high', $result['confidence']);
-        $this->assertEquals('nearby_gemini', $result['source']);
+        $this->assertEquals('nearby_name_match', $result['source']);
         $this->assertStringContainsString('Eis & Brot Standl', $result['reasoning']);
     }
 }

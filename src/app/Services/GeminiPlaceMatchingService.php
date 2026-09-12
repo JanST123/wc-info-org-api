@@ -72,7 +72,19 @@ class GeminiPlaceMatchingService
             );
         }
 
-        // 1b. Evaluate nearby candidates with Gemini if any exist
+        // 1b. Check for high-confidence establishment name match in nearby candidates
+        $nameMatch = $this->findEstablishmentNameMatch($toilet, $nearbyCandidates);
+        if ($nameMatch !== null && ($nameMatch['score'] ?? 0) >= 0.7) {
+            return $this->buildMatchResult(
+                $toilet,
+                $nameMatch['candidate'],
+                'high',
+                $nameMatch['reason'],
+                'nearby_name_match'
+            );
+        }
+
+        // 1c. Evaluate nearby candidates with Gemini if any exist
         if (! empty($nearbyCandidates)) {
             $aiMatch = $this->queryGeminiForMatch($toilet, $toiletAddress, $toiletComment, $nearbyCandidates);
             if ($aiMatch['match_found'] && ! empty($aiMatch['matched_place_id'])) {
@@ -86,6 +98,15 @@ class GeminiPlaceMatchingService
                         'nearby_gemini'
                     );
                 }
+            } elseif ($nameMatch !== null && ($nameMatch['score'] ?? 0) >= 0.6) {
+                // Fallback to name match if Gemini was inconclusive or had an API error
+                return $this->buildMatchResult(
+                    $toilet,
+                    $nameMatch['candidate'],
+                    'medium',
+                    $nameMatch['reason'],
+                    'nearby_name_match'
+                );
             }
         }
 
@@ -116,6 +137,18 @@ class GeminiPlaceMatchingService
                 );
             }
 
+            // Check for establishment name match in address candidates
+            $addrNameMatch = $this->findEstablishmentNameMatch($toilet, $addressCandidates);
+            if ($addrNameMatch !== null && ($addrNameMatch['score'] ?? 0) >= 0.7) {
+                return $this->buildMatchResult(
+                    $toilet,
+                    $addrNameMatch['candidate'],
+                    'high',
+                    $addrNameMatch['reason'],
+                    'address_name_match'
+                );
+            }
+
             // Evaluate address candidates with Gemini
             if (! empty($addressCandidates)) {
                 $aiMatch = $this->queryGeminiForMatch($toilet, $toiletAddress, $toiletComment, $addressCandidates);
@@ -130,6 +163,14 @@ class GeminiPlaceMatchingService
                             'address_gemini'
                         );
                     }
+                } elseif ($addrNameMatch !== null && ($addrNameMatch['score'] ?? 0) >= 0.6) {
+                    return $this->buildMatchResult(
+                        $toilet,
+                        $addrNameMatch['candidate'],
+                        'medium',
+                        $addrNameMatch['reason'],
+                        'address_name_match'
+                    );
                 }
             }
         }
@@ -273,6 +314,109 @@ class GeminiPlaceMatchingService
             if (in_array('public_bathroom', $types, true) || in_array('restroom', $types, true) || in_array('toilet', $types, true)) {
                 return $cand;
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Find a candidate place whose name strongly matches the toilet's name or owner.
+     *
+     * @param array<int, array> $candidates
+     * @return array{candidate: array, score: float, reason: string}|null
+     */
+    private function findEstablishmentNameMatch(Toilet $toilet, array $candidates): ?array
+    {
+        $toiletName = trim((string) ($toilet->name ?? ''));
+        $toiletOwner = trim((string) ($toilet->owner ?? ''));
+
+        if ($toiletName === '' && $toiletOwner === '') {
+            return null;
+        }
+
+        $stopwords = [
+            'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'eines',
+            'am', 'im', 'vom', 'beim', 'zum', 'zur', 'und', 'and', 'the', 'von',
+            'für', 'fuer', 'mit', 'auf', 'vor', 'nach', 'bei', 'in', 'an', 'wc',
+            'toilette', 'toiletten', 'klo', 'restroom', 'bathroom',
+        ];
+
+        $bestCandidate = null;
+        $bestScore = 0.0;
+        $bestReason = '';
+
+        foreach ($candidates as $cand) {
+            $candName = trim((string) ($cand['name'] ?? ''));
+            if ($candName === '') {
+                continue;
+            }
+
+            foreach ([$toiletName, $toiletOwner] as $sourceName) {
+                if ($sourceName === '') {
+                    continue;
+                }
+
+                $cleanSource = mb_strtolower($sourceName);
+                $cleanCand = mb_strtolower($candName);
+
+                if ($cleanSource === $cleanCand) {
+                    return [
+                        'candidate' => $cand,
+                        'score' => 1.0,
+                        'reason' => "Exact name match between toilet ('{$sourceName}') and Google Place ('{$candName}').",
+                    ];
+                }
+
+                $srcWords = array_values(array_filter(
+                    preg_split('/[\s,.\-_&+\/()]+/u', $cleanSource) ?: [],
+                    fn ($w) => mb_strlen($w) > 1 && ! in_array($w, $stopwords, true)
+                ));
+
+                $candWords = array_values(array_filter(
+                    preg_split('/[\s,.\-_&+\/()]+/u', $cleanCand) ?: [],
+                    fn ($w) => mb_strlen($w) > 1 && ! in_array($w, $stopwords, true)
+                ));
+
+                if (empty($srcWords) || empty($candWords)) {
+                    continue;
+                }
+
+                $common = array_intersect($candWords, $srcWords);
+                $commonCount = count($common);
+                if ($commonCount === 0) {
+                    continue;
+                }
+
+                $candCoverage = $commonCount / count($candWords);
+                $srcCoverage = $commonCount / count($srcWords);
+                $isSubstring = str_contains($cleanSource, $cleanCand) || str_contains($cleanCand, $cleanSource);
+
+                $score = ($candCoverage * 0.6) + ($srcCoverage * 0.3) + ($isSubstring ? 0.3 : 0.0);
+
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $bestCandidate = $cand;
+                    if ($isSubstring) {
+                        $bestReason = "Google Place name '{$candName}' is directly contained in toilet name '{$sourceName}'.";
+                    } else {
+                        $bestReason = sprintf(
+                            "Strong name similarity (%d matching words: %s) between toilet '%s' and place '%s'.",
+                            $commonCount,
+                            implode(', ', $common),
+                            $sourceName,
+                            $candName
+                        );
+                    }
+                }
+            }
+        }
+
+        if ($bestCandidate !== null && $bestScore >= 0.6) {
+            return [
+                'candidate' => $bestCandidate,
+                'score' => round($bestScore, 3),
+                'reason' => $bestReason,
+            ];
         }
 
         return null;

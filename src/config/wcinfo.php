@@ -18,7 +18,7 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
     ],
 
     'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hi@wc-info.org'),
