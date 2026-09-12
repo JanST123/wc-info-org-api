@@ -261,4 +261,98 @@ class GeminiPlaceMatchingServiceTest extends TestCase
         $this->assertTrue($result['place']['is_public_accessible']); // shopping_mall in public_accessible_types
         $this->assertEquals('address_gemini', $result['source']);
     }
+
+    public function test_suggest_place_falls_back_to_website_crawl(): void
+    {
+        // 1. First Gemini call (nearby places) returns match_found = false
+        // 2. Second Gemini call (website crawl confirmed candidates) returns match_found = true
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    [
+                                        'text' => json_encode([
+                                            'match_found' => false,
+                                            'matched_place_id' => null,
+                                            'confidence' => 'low',
+                                            'reasoning' => 'Name alone does not match generic cafe name.',
+                                        ]),
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ], 200)
+                ->push([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    [
+                                        'text' => json_encode([
+                                            'match_found' => true,
+                                            'matched_place_id' => 'ChIJresort111',
+                                            'confidence' => 'high',
+                                            'reasoning' => 'Place website confirms public guest toilets on premises.',
+                                        ]),
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ], 200),
+        ]);
+
+        $costMock = $this->createMock(GoogleCostService::class);
+        $costMock->method('hasBudget')->willReturn(true);
+
+        $placesMock = $this->createMock(GooglePlacesService::class);
+        $placesMock->expects($this->once())
+            ->method('nearbySearchRaw')
+            ->willReturn([
+                [
+                    'id' => 'ChIJresort111',
+                    'displayName' => ['text' => 'Holiday Resort & Camp'],
+                    'formattedAddress' => 'Lake Road 1',
+                    'types' => ['campground', 'lodging'],
+                    'websiteUri' => 'https://www.holiday-resort.de/',
+                    'location' => ['latitude' => 52.2000, 'longitude' => 13.7000],
+                ],
+            ]);
+
+        $placesMock->expects($this->once())
+            ->method('crawlWebsite')
+            ->with('https://www.holiday-resort.de/', 'toilet')
+            ->willReturn([
+                'toiletType' => 'mw',
+                'contactEmail' => 'info@holiday-resort.de',
+                'resultCount' => 3,
+            ]);
+
+        $service = new GeminiPlaceMatchingService(
+            $placesMock,
+            $costMock,
+            geminiApiKey: 'fake-api-key'
+        );
+
+        $toilet = Toilet::create([
+            'name' => 'WC am See',
+            'lat' => 52.2000,
+            'lon' => 13.7000,
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+        $this->createdPlaceIds[] = 'ChIJresort111';
+
+        $result = $service->suggestPlace($toilet);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['matched']);
+        $this->assertEquals('ChIJresort111', $result['place']['place_id']);
+        $this->assertEquals('website_crawl', $result['source']);
+        $this->assertEquals('high', $result['confidence']);
+    }
 }

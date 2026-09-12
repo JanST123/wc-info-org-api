@@ -134,12 +134,64 @@ class GeminiPlaceMatchingService
             }
         }
 
+        // 3. Third Attempt (Fallback): Search websites of candidate places for toilet information
+        $allCandidatesWithWebsites = array_filter(
+            array_merge($nearbyCandidates, $addressCandidates ?? []),
+            fn ($c) => ! empty($c['website']) && preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/i', (string) $c['website'])
+        );
+
+        $uniqueWebsiteCandidates = [];
+        foreach ($allCandidatesWithWebsites as $c) {
+            if (! isset($uniqueWebsiteCandidates[$c['place_id']])) {
+                $uniqueWebsiteCandidates[$c['place_id']] = $c;
+            }
+        }
+
+        if (! empty($uniqueWebsiteCandidates) && $this->costService->hasBudget()) {
+            $confirmedCandidates = [];
+            foreach (array_slice(array_values($uniqueWebsiteCandidates), 0, 5) as $cand) {
+                if (! $this->costService->hasBudget()) {
+                    break;
+                }
+
+                try {
+                    $crawlResult = $this->placesService->crawlWebsite((string) $cand['website'], 'toilet');
+                    if (($crawlResult['toiletType'] ?? 'none') !== 'none' || ($crawlResult['resultCount'] ?? 0) > 0) {
+                        $cand['website_crawl'] = $crawlResult;
+                        $confirmedCandidates[] = $cand;
+                    }
+                } catch (\Throwable $e) {
+                    Log::info('Website crawl in AI matcher skipped/failed', [
+                        'place_id' => $cand['place_id'],
+                        'website' => $cand['website'],
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if (! empty($confirmedCandidates)) {
+                $aiMatch = $this->queryGeminiForMatch($toilet, $toiletAddress, $toiletComment, $confirmedCandidates);
+                if ($aiMatch['match_found'] && ! empty($aiMatch['matched_place_id'])) {
+                    $matchedCandidate = $this->findCandidateById($confirmedCandidates, $aiMatch['matched_place_id']);
+                    if ($matchedCandidate !== null) {
+                        return $this->buildMatchResult(
+                            $toilet,
+                            $matchedCandidate,
+                            $aiMatch['confidence'] ?? 'medium',
+                            $aiMatch['reasoning'] ?? 'Place website (' . $matchedCandidate['website'] . ') confirmed toilet facilities on site.',
+                            'website_crawl'
+                        );
+                    }
+                }
+            }
+        }
+
         return [
             'success' => true,
             'matched' => false,
             'toilet_id' => $toilet->id,
             'message' => 'No matching Google Place could be found.',
-            'reasoning' => 'Searched nearby places (~40m)' . (! empty($toiletAddress) ? ' and address ("' . $toiletAddress . '")' : '') . ', but no place matched the toilet record with sufficient confidence.',
+            'reasoning' => 'Searched nearby places (~40m)' . (! empty($toiletAddress) ? ' and address ("' . $toiletAddress . '")' : '') . ' and crawled place websites, but no place matched the toilet record with sufficient confidence.',
         ];
     }
 
@@ -176,6 +228,10 @@ class GeminiPlaceMatchingService
                 ?? $item['formatted_address']
                 ?? '';
 
+            $website = $item['websiteUri']
+                ?? $item['website']
+                ?? null;
+
             $types = $item['types'] ?? [];
             if (! is_array($types)) {
                 $types = [];
@@ -193,6 +249,7 @@ class GeminiPlaceMatchingService
                 'place_id' => $pid,
                 'name' => $name,
                 'address' => $address,
+                'website' => $website,
                 'types' => $types,
                 'lat' => $pLat !== null ? (float) $pLat : null,
                 'lon' => $pLon !== null ? (float) $pLon : null,
@@ -249,13 +306,24 @@ class GeminiPlaceMatchingService
         foreach ($candidates as $idx => $c) {
             $typesStr = implode(', ', $c['types'] ?? []);
             $distStr = $c['distance_m'] !== null ? " ({$c['distance_m']}m away)" : '';
+            $websiteStr = '';
+            if (! empty($c['website'])) {
+                $websiteStr = "\n- Website: {$c['website']}";
+                if (! empty($c['website_crawl'])) {
+                    $crawlType = $c['website_crawl']['toiletType'] ?? 'none';
+                    $crawlMatches = $c['website_crawl']['resultCount'] ?? 0;
+                    $websiteStr .= " (Website search confirmed toilet facilities: type '{$crawlType}', {$crawlMatches} mentions found)";
+                }
+            }
+
             $candidateDescriptions[] = sprintf(
-                "Candidate #%d:\n- Place ID: %s\n- Name: %s\n- Address: %s\n- Types: %s%s",
+                "Candidate #%d:\n- Place ID: %s\n- Name: %s\n- Address: %s\n- Types: %s%s%s",
                 $idx + 1,
                 $c['place_id'],
                 $c['name'],
                 $c['address'] ?: 'N/A',
                 $typesStr ?: 'N/A',
+                $websiteStr,
                 $distStr
             );
         }
@@ -283,8 +351,9 @@ GOOGLE PLACE CANDIDATES:
 MATCHING RULES:
 1. If a candidate is of type "public_bathroom", "restroom", or "toilet", and is near the toilet, choose it with "high" confidence.
 2. If the toilet name, owner, comment, or address refers to a specific business, train station, subway station, shopping mall, museum, park, town square, library, restaurant, or public building that matches one of the candidates, choose that candidate.
-3. If none of the candidates match the toilet or if the match is too ambiguous/uncertain, set "match_found" to false.
-4. Do NOT guess or hallucinate.
+3. If candidate websites were searched and confirm on-site toilet facilities, consider this strong evidence that the toilet belongs to that place.
+4. If none of the candidates match the toilet or if the match is too ambiguous/uncertain, set "match_found" to false.
+5. Do NOT guess or hallucinate.
 
 Respond ONLY with a JSON object in this exact schema:
 {
