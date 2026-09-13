@@ -479,11 +479,20 @@ class AdminToiletController extends Controller
             $currentAddress = $toilet->place?->data['formattedAddress']
                 ?? $toilet->place?->data['formatted_address']
                 ?? '';
+            $currentTypes = $toilet->place?->data['types'] ?? [];
+            if (! is_array($currentTypes)) {
+                $currentTypes = [];
+            }
+            $isPublicBathroom = in_array('public_bathroom', $currentTypes, true)
+                || in_array('restroom', $currentTypes, true)
+                || in_array('toilet', $currentTypes, true);
 
             $places[] = [
                 'place_id' => $toilet->place_id,
                 'name' => $currentPlaceName ?: $toilet->place_id,
                 'address' => $currentAddress,
+                'types' => $currentTypes,
+                'is_public_bathroom' => $isPublicBathroom,
                 'distance_m' => 0.0,
                 'is_current' => true,
             ];
@@ -518,6 +527,14 @@ class AdminToiletController extends Controller
                     ?? $item['formatted_address']
                     ?? '';
 
+                $types = $item['types'] ?? [];
+                if (! is_array($types)) {
+                    $types = [];
+                }
+                $isPublicBathroom = in_array('public_bathroom', $types, true)
+                    || in_array('restroom', $types, true)
+                    || in_array('toilet', $types, true);
+
                 $pLat = $item['location']['latitude'] ?? $item['location']['lat'] ?? $item['geometry']['location']['lat'] ?? null;
                 $pLon = $item['location']['longitude'] ?? $item['location']['lng'] ?? $item['geometry']['location']['lng'] ?? null;
 
@@ -535,6 +552,8 @@ class AdminToiletController extends Controller
                     'place_id' => $pid,
                     'name' => $name,
                     'address' => $address,
+                    'types' => $types,
+                    'is_public_bathroom' => $isPublicBathroom,
                     'distance_m' => $dist,
                     'is_current' => false,
                 ];
@@ -551,7 +570,7 @@ class AdminToiletController extends Controller
     }
 
     /**
-     * Directly assign a place_id to a toilet.
+     * Assign a Google Place to a toilet directly from the admin interface.
      */
     public function assignPlace(int $id, Request $request): JsonResponse|RedirectResponse
     {
@@ -581,9 +600,12 @@ class AdminToiletController extends Controller
         }
 
         $placeName = null;
+        $isPublicBathroom = false;
         if (! empty($toilet->place_id)) {
             $placeModel = Place::find($toilet->place_id);
             $placeName = $placeModel?->getName() ?? $toilet->place_id;
+            $placeTypes = $placeModel?->data['types'] ?? [];
+            $isPublicBathroom = is_array($placeTypes) && (in_array('public_bathroom', $placeTypes, true) || in_array('restroom', $placeTypes, true) || in_array('toilet', $placeTypes, true));
         }
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -592,6 +614,7 @@ class AdminToiletController extends Controller
                 'toilet_id' => $toilet->id,
                 'place_id' => $toilet->place_id,
                 'place_name' => $placeName ?: ($toilet->place_id ?? '-'),
+                'is_public_bathroom' => $isPublicBathroom,
                 'message' => 'Place assigned successfully.',
             ]);
         }
@@ -685,12 +708,15 @@ class AdminToiletController extends Controller
         }
 
         $placeName = $placeModel?->getName() ?? $toilet->place_id;
+        $placeTypes = $placeModel?->data['types'] ?? [];
+        $isPublicBathroom = is_array($placeTypes) && (in_array('public_bathroom', $placeTypes, true) || in_array('restroom', $placeTypes, true) || in_array('toilet', $placeTypes, true));
 
         return response()->json([
             'success' => true,
             'toilet_id' => $toilet->id,
             'place_id' => $toilet->place_id,
             'place_name' => $placeName,
+            'is_public_bathroom' => $isPublicBathroom,
             'lat' => $toilet->lat !== null ? (float) $toilet->lat : null,
             'lon' => $toilet->lon !== null ? (float) $toilet->lon : null,
             'public_accessible' => $setPublicAccessible,
@@ -895,6 +921,7 @@ class AdminToiletController extends Controller
         if (! empty($toilet->place_id)) {
             $currentPlaceName = null;
             $currentPlaceAddress = '';
+            $currentPlaceTypes = [];
             $currentPlaceLat = null;
             $currentPlaceLon = null;
 
@@ -909,6 +936,7 @@ class AdminToiletController extends Controller
                     $currentPlaceAddress = $data['formattedAddress']
                         ?? $data['formatted_address']
                         ?? '';
+                    $currentPlaceTypes = $data['types'] ?? [];
                     $currentPlaceLat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
                     $currentPlaceLon = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
                 }
@@ -930,6 +958,7 @@ class AdminToiletController extends Controller
                         $currentPlaceAddress = $fetched['formattedAddress']
                             ?? $fetched['formatted_address']
                             ?? '';
+                        $currentPlaceTypes = $fetched['types'] ?? [];
                         $currentPlaceLat = $fetched['location']['latitude'] ?? $fetched['location']['lat'] ?? $fetched['geometry']['location']['lat'] ?? null;
                         $currentPlaceLon = $fetched['location']['longitude'] ?? $fetched['location']['lng'] ?? $fetched['geometry']['location']['lng'] ?? null;
                     }
@@ -948,10 +977,19 @@ class AdminToiletController extends Controller
                     : (! empty($toilet->name) && $toilet->name !== 'Toilette' && ! str_starts_with($toilet->name, 'WC #') ? $toilet->name : $toilet->place_id);
             }
 
+            if (! is_array($currentPlaceTypes)) {
+                $currentPlaceTypes = [];
+            }
+            $isPublicBathroom = in_array('public_bathroom', $currentPlaceTypes, true)
+                || in_array('restroom', $currentPlaceTypes, true)
+                || in_array('toilet', $currentPlaceTypes, true);
+
             $places[] = [
                 'place_id' => $toilet->place_id,
                 'name' => $currentPlaceName,
                 'address' => $currentPlaceAddress,
+                'types' => $currentPlaceTypes,
+                'is_public_bathroom' => $isPublicBathroom,
                 'lat' => $currentPlaceLat !== null ? (float) $currentPlaceLat : null,
                 'lon' => $currentPlaceLon !== null ? (float) $currentPlaceLon : null,
                 'distance_m' => 0.0,
@@ -979,6 +1017,14 @@ class AdminToiletController extends Controller
                         ?? $item['formatted_address']
                         ?? '';
 
+                    $types = $item['types'] ?? [];
+                    if (! is_array($types)) {
+                        $types = [];
+                    }
+                    $isPublicBathroom = in_array('public_bathroom', $types, true)
+                        || in_array('restroom', $types, true)
+                        || in_array('toilet', $types, true);
+
                     $pLat = $item['location']['latitude'] ?? $item['location']['lat'] ?? $item['geometry']['location']['lat'] ?? null;
                     $pLon = $item['location']['longitude'] ?? $item['location']['lng'] ?? $item['geometry']['location']['lng'] ?? null;
 
@@ -996,6 +1042,8 @@ class AdminToiletController extends Controller
                         'place_id' => $pid,
                         'name' => $name,
                         'address' => $address,
+                        'types' => $types,
+                        'is_public_bathroom' => $isPublicBathroom,
                         'lat' => $pLat !== null ? (float) $pLat : null,
                         'lon' => $pLon !== null ? (float) $pLon : null,
                         'distance_m' => $dist,

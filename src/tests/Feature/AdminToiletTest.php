@@ -411,8 +411,9 @@ class AdminToiletTest extends TestCase
             ->willReturn([
                 [
                     'id' => 'ChIJnewplace456',
-                    'displayName' => ['text' => 'Nearby Bakery'],
+                    'displayName' => ['text' => 'Nearby Restroom'],
                     'formattedAddress' => 'Nearby Str. 2',
+                    'types' => ['public_bathroom'],
                     'location' => ['latitude' => 52.5201, 'longitude' => 13.4051],
                 ],
             ]);
@@ -422,10 +423,11 @@ class AdminToiletTest extends TestCase
             ->getJson("/admin/toilets/{$toilet->id}/nearby-places");
 
         $response->assertStatus(200);
-        $response->assertJsonStructure(['places' => [['place_id', 'name', 'address', 'distance_m']]]);
+        $response->assertJsonStructure(['places' => [['place_id', 'name', 'address', 'types', 'is_public_bathroom', 'distance_m']]]);
         $response->assertJsonFragment([
             'place_id' => 'ChIJnewplace456',
-            'name' => 'Nearby Bakery',
+            'name' => 'Nearby Restroom',
+            'is_public_bathroom' => true,
         ]);
 
         // Verify place was saved in places table

@@ -339,13 +339,17 @@
                     >
                         <option value="" data-lat="" data-lon="" {{ empty($toilet->place_id) ? 'selected' : '' }}>-- No Google Place Assigned (Unlink) --</option>
                         @foreach ($nearbyPlaces as $p)
+                            @php
+                                $isToilet = !empty($p['is_public_bathroom']) || (isset($p['types']) && is_array($p['types']) && (in_array('public_bathroom', $p['types'], true) || in_array('restroom', $p['types'], true) || in_array('toilet', $p['types'], true)));
+                                $prefix = $isToilet ? '🚽 ' : '';
+                            @endphp
                             <option
                                 value="{{ $p['place_id'] }}"
                                 data-lat="{{ $p['lat'] ?? '' }}"
                                 data-lon="{{ $p['lon'] ?? '' }}"
                                 {{ old('place_id', $toilet->place_id) === $p['place_id'] ? 'selected' : '' }}
                             >
-                                {{ $p['name'] }} @if($p['address']) ({{ $p['address'] }}) @endif
+                                {{ $prefix }}{{ $p['name'] }} @if($p['address']) ({{ $p['address'] }}) @endif
                                 @if(isset($p['distance_m'])) [~{{ $p['distance_m'] }}m away] @endif
                                 — ID: {{ $p['place_id'] }}
                                 @if(!empty($p['is_current'])) (Current) @endif

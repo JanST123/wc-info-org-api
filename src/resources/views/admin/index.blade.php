@@ -205,7 +205,12 @@
                             </td>
                             <td style="font-size: 0.8125rem;">
                                 <div id="current-place-name-{{ $toilet->id }}" style="font-weight: 600; color: var(--gray-900);">
-                                    {{ $toilet->place?->getName() ?? ($toilet->place_id ?: '-') }}
+                                    @php
+                                        $currentTypes = $toilet->place?->data['types'] ?? [];
+                                        $isToilet = is_array($currentTypes) && (in_array('public_bathroom', $currentTypes, true) || in_array('restroom', $currentTypes, true) || in_array('toilet', $currentTypes, true));
+                                        $prefix = $isToilet ? '🚽 ' : '';
+                                    @endphp
+                                    {{ $toilet->place?->getName() ? $prefix . $toilet->place->getName() : ($toilet->place_id ?: '-') }}
                                 </div>
                                 @if (!empty($toilet->place_id))
                                     <div style="font-family: monospace; font-size: 0.6875rem; color: var(--gray-400);">
@@ -239,7 +244,12 @@
                                     style="font-size: 0.8125rem; height: 34px; padding: 0.25rem 0.5rem;"
                                 >
                                     <option value="{{ $toilet->place_id ?? '' }}">
-                                        {{ $toilet->place?->getName() ? 'Current: ' . $toilet->place->getName() : ($toilet->place_id ? 'Current ID: ' . $toilet->place_id : '-- Click to load places (~40m) --') }}
+                                        @php
+                                            $currentTypes = $toilet->place?->data['types'] ?? [];
+                                            $isToilet = is_array($currentTypes) && (in_array('public_bathroom', $currentTypes, true) || in_array('restroom', $currentTypes, true) || in_array('toilet', $currentTypes, true));
+                                            $prefix = $isToilet ? '🚽 ' : '';
+                                        @endphp
+                                        {{ $toilet->place?->getName() ? 'Current: ' . $prefix . $toilet->place->getName() : ($toilet->place_id ? 'Current ID: ' . $toilet->place_id : '-- Click to load places (~40m) --') }}
                                     </option>
                                 </select>
                                 <div id="status-msg-{{ $toilet->id }}" style="font-size: 0.6875rem; color: var(--gray-500); margin-top: 0.125rem; display: none;"></div>
@@ -584,7 +594,13 @@
             const coordsText = (data.toilet_lat && data.toilet_lon) ? `Lat: ${data.toilet_lat}, Lon: ${data.toilet_lon}` : 'No coordinates';
             document.getElementById('ai-modal-toilet-coords').textContent = coordsText;
 
-            document.getElementById('ai-modal-place-name').textContent = data.place.name || data.place.place_id;
+            const isPublicBathroom = Boolean(data.place?.is_public_bathroom || (Array.isArray(data.place?.types) && (
+                data.place.types.includes('public_bathroom') ||
+                data.place.types.includes('restroom') ||
+                data.place.types.includes('toilet')
+            )));
+            const placePrefix = isPublicBathroom ? '🚽 ' : '';
+            document.getElementById('ai-modal-place-name').textContent = `${placePrefix}${data.place.name || data.place.place_id}`;
             document.getElementById('ai-modal-place-address').textContent = data.place.address || 'Address not specified';
 
             const confBadge = document.getElementById('ai-modal-confidence-badge');
@@ -617,10 +633,17 @@
                 data.place.types.forEach(t => {
                     const tag = document.createElement('span');
                     tag.className = 'badge';
-                    tag.style.background = '#e2e8f0';
-                    tag.style.color = '#334155';
+                    if (t === 'public_bathroom' || t === 'restroom' || t === 'toilet') {
+                        tag.style.background = '#dcfce7';
+                        tag.style.color = '#166534';
+                        tag.style.fontWeight = '700';
+                        tag.textContent = `🚽 ${t}`;
+                    } else {
+                        tag.style.background = '#e2e8f0';
+                        tag.style.color = '#334155';
+                        tag.textContent = t;
+                    }
                     tag.style.fontSize = '0.6875rem';
-                    tag.textContent = t;
                     typesContainer.appendChild(tag);
                 });
             }
@@ -688,14 +711,38 @@
             const resData = await response.json();
 
             // Update UI table row
+            const isToilet = Boolean(resData.is_public_bathroom || (Array.isArray(activeAiMatchData?.place?.types) && (
+                activeAiMatchData.place.types.includes('public_bathroom') ||
+                activeAiMatchData.place.types.includes('restroom') ||
+                activeAiMatchData.place.types.includes('toilet')
+            )));
+            const prefix = isToilet ? '🚽 ' : '';
+
             const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
             if (currentPlaceElem) {
-                currentPlaceElem.textContent = resData.place_name || activeAiMatchData.place.name || placeId;
+                currentPlaceElem.textContent = `${prefix}${resData.place_name || activeAiMatchData.place.name || placeId}`;
             }
 
             const dropdown = document.getElementById(`places-dropdown-${toiletId}`);
             if (dropdown) {
-                dropdown.value = placeId;
+                let found = false;
+                for (let i = 0; i < dropdown.options.length; i++) {
+                    if (dropdown.options[i].value === placeId) {
+                        dropdown.options[i].selected = true;
+                        if (isToilet && !dropdown.options[i].textContent.startsWith('🚽 ')) {
+                            dropdown.options[i].textContent = '🚽 ' + dropdown.options[i].textContent;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    const newOpt = document.createElement('option');
+                    newOpt.value = placeId;
+                    newOpt.selected = true;
+                    newOpt.textContent = `Current: ${prefix}${resData.place_name || activeAiMatchData.place.name || placeId}`;
+                    dropdown.prepend(newOpt);
+                }
             }
 
             // Update maps link if lat/lon changed
@@ -1051,7 +1098,13 @@
                     opt.value = p.place_id;
                     const distStr = p.distance_m !== null ? ` (${p.distance_m}m)` : '';
                     const addrStr = p.address ? ` - ${p.address}` : '';
-                    opt.textContent = `${p.name}${distStr}${addrStr}`;
+                    const isToilet = Boolean(p.is_public_bathroom || (Array.isArray(p.types) && (
+                        p.types.includes('public_bathroom') ||
+                        p.types.includes('restroom') ||
+                        p.types.includes('toilet')
+                    )));
+                    const prefix = isToilet ? '🚽 ' : '';
+                    opt.textContent = `${prefix}${p.name}${distStr}${addrStr}`;
                     if (p.is_current || p.place_id === originalVal) {
                         opt.selected = true;
                     }
@@ -1108,7 +1161,10 @@
             // Update current place text in table
             const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
             if (currentPlaceElem) {
-                currentPlaceElem.textContent = data.place_name || '-';
+                const selectedOpt = selectElem.options[selectElem.selectedIndex];
+                const isToilet = Boolean(data.is_public_bathroom || (selectedOpt && selectedOpt.textContent.startsWith('🚽 ')));
+                const prefix = (isToilet && data.place_name && !data.place_name.startsWith('🚽 ')) ? '🚽 ' : '';
+                currentPlaceElem.textContent = data.place_name ? `${prefix}${data.place_name}` : '-';
             }
 
             // Visual feedback
