@@ -493,6 +493,36 @@
         </div>
     </div>
 
+    <!-- Floating Undo Toast for Unflagging -->
+    <div id="undo-toast" style="display: none; position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: #0f172a; color: #f8fafc; padding: 0.75rem 1.25rem; border-radius: 9999px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2); z-index: 99999; align-items: center; gap: 1rem; font-size: 0.875rem; border: 1px solid rgba(255, 255, 255, 0.15); opacity: 0; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #22c55e; color: #ffffff; border-radius: 50%; font-size: 0.75rem; font-weight: bold;">✓</span>
+            <span id="undo-toast-text" style="font-weight: 500;">Toilet unflagged</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button
+                type="button"
+                id="undo-toast-btn"
+                onclick="executeUndoUnflag()"
+                style="background: #3b82f6; color: #ffffff; border: none; font-weight: 600; font-size: 0.8125rem; padding: 0.3rem 0.85rem; border-radius: 9999px; cursor: pointer; transition: all 0.15s ease;"
+                onmouseover="this.style.background='#2563eb'"
+                onmouseout="this.style.background='#3b82f6'"
+            >
+                ↩ Undo (<span id="undo-toast-timer">5</span>s)
+            </button>
+            <button
+                type="button"
+                onclick="dismissUndoToast()"
+                title="Dismiss"
+                style="background: none; border: none; color: #94a3b8; font-size: 1.125rem; cursor: pointer; padding: 0.125rem 0.375rem; line-height: 1; border-radius: 4px;"
+                onmouseover="this.style.color='#ffffff'"
+                onmouseout="this.style.color='#94a3b8'"
+            >
+                ✕
+            </button>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
@@ -1103,9 +1133,158 @@
         }
     }
 
+    let undoToastTimeout = null;
+    let undoToastInterval = null;
+    let activeUndoToilet = null;
+
+    function showUndoToast(toiletId, toiletName, rowElem, btnElem) {
+        if (undoToastTimeout) clearTimeout(undoToastTimeout);
+        if (undoToastInterval) clearInterval(undoToastInterval);
+
+        activeUndoToilet = {
+            id: toiletId,
+            name: toiletName,
+            rowElem: rowElem,
+            btnElem: btnElem
+        };
+
+        const toast = document.getElementById('undo-toast');
+        const toastText = document.getElementById('undo-toast-text');
+        const timerSpan = document.getElementById('undo-toast-timer');
+        const undoBtn = document.getElementById('undo-toast-btn');
+
+        if (!toast || !toastText || !timerSpan) return;
+
+        const displayName = toiletName ? `"${toiletName}" (#${toiletId})` : `#${toiletId}`;
+        toastText.textContent = `Toilet ${displayName} unflagged`;
+        if (undoBtn) {
+            undoBtn.style.display = 'inline-block';
+            undoBtn.disabled = false;
+            undoBtn.innerHTML = `↩ Undo (<span id="undo-toast-timer">5</span>s)`;
+        }
+
+        let secondsLeft = 5;
+        toast.style.display = 'flex';
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(-50%) translateY(0)';
+        });
+
+        undoToastInterval = setInterval(() => {
+            secondsLeft -= 1;
+            const currentTimerSpan = document.getElementById('undo-toast-timer');
+            if (currentTimerSpan && secondsLeft > 0) {
+                currentTimerSpan.textContent = secondsLeft.toString();
+            } else {
+                clearInterval(undoToastInterval);
+            }
+        }, 1000);
+
+        undoToastTimeout = setTimeout(() => {
+            dismissUndoToast();
+        }, 5000);
+    }
+
+    function dismissUndoToast() {
+        if (undoToastTimeout) clearTimeout(undoToastTimeout);
+        if (undoToastInterval) clearInterval(undoToastInterval);
+
+        const toast = document.getElementById('undo-toast');
+        if (toast) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(-50%) translateY(20px)';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 250);
+        }
+        activeUndoToilet = null;
+    }
+
+    async function executeUndoUnflag() {
+        if (!activeUndoToilet) return;
+
+        const { id, name, rowElem, btnElem } = activeUndoToilet;
+        const undoBtn = document.getElementById('undo-toast-btn');
+        const toastText = document.getElementById('undo-toast-text');
+
+        if (undoBtn) {
+            undoBtn.disabled = true;
+            undoBtn.textContent = '⏳ Restoring...';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${id}/toggle-flag`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ flagged: true })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            // Restore row in table
+            if (rowElem) {
+                rowElem.style.display = '';
+                rowElem.style.transition = 'background-color 0.4s ease';
+                rowElem.style.backgroundColor = '#dcfce7';
+                setTimeout(() => {
+                    rowElem.style.backgroundColor = '';
+                }, 1500);
+            }
+
+            if (btnElem) {
+                btnElem.disabled = false;
+                btnElem.textContent = '✓ Unflag';
+            }
+
+            // Update badge count (+1)
+            const badge = document.getElementById('flagged-count-badge');
+            if (badge) {
+                const count = parseInt(badge.textContent, 10);
+                if (!isNaN(count)) {
+                    badge.textContent = (count + 1).toString();
+                }
+            }
+
+            // Hide empty row if visible
+            const emptyRow = document.getElementById('flagged-empty-row');
+            if (emptyRow) {
+                emptyRow.remove();
+            }
+
+            if (toastText) {
+                const displayName = name ? `"${name}" (#${id})` : `#${id}`;
+                toastText.textContent = `✓ Toilet ${displayName} restored!`;
+            }
+            if (undoBtn) {
+                undoBtn.style.display = 'none';
+            }
+
+            if (undoToastTimeout) clearTimeout(undoToastTimeout);
+            if (undoToastInterval) clearInterval(undoToastInterval);
+
+            setTimeout(() => {
+                dismissUndoToast();
+            }, 1800);
+        } catch (err) {
+            console.error('Error undoing unflag:', err);
+            alert('Failed to undo unflagging. Please try again.');
+            dismissUndoToast();
+        }
+    }
+
     async function unflagToilet(btnElem, toiletId) {
         btnElem.disabled = true;
         btnElem.textContent = '⏳...';
+
+        const row = document.getElementById(`flagged-row-${toiletId}`);
+        const nameLink = document.getElementById(`toilet-name-link-${toiletId}`);
+        const toiletName = nameLink ? nameLink.textContent.trim() : '';
 
         try {
             const response = await fetch(`/admin/toilets/${toiletId}/unflag`, {
@@ -1121,13 +1300,13 @@
                 throw new Error(`HTTP error ${response.status}`);
             }
 
-            const row = document.getElementById(`flagged-row-${toiletId}`);
             if (row) {
-                row.style.transition = 'all 0.3s ease';
-                row.style.backgroundColor = '#dcfce7';
+                row.style.transition = 'all 0.25s ease';
                 row.style.opacity = '0';
                 setTimeout(() => {
-                    row.remove();
+                    row.style.display = 'none';
+                    row.style.opacity = '1';
+
                     // Update badge count
                     const badge = document.getElementById('flagged-count-badge');
                     if (badge) {
@@ -1137,20 +1316,27 @@
                         }
                     }
 
-                    // If no rows left, show empty row
+                    // If no visible rows left, show empty row
                     const tbody = document.getElementById('flagged-toilets-tbody');
-                    if (tbody && tbody.children.length === 0) {
-                        tbody.innerHTML = `
-                            <tr id="flagged-empty-row">
+                    if (tbody) {
+                        const visibleRows = Array.from(tbody.querySelectorAll('tr[id^="flagged-row-"]')).filter(r => r.style.display !== 'none');
+                        if (visibleRows.length === 0 && !document.getElementById('flagged-empty-row')) {
+                            const emptyTr = document.createElement('tr');
+                            emptyTr.id = 'flagged-empty-row';
+                            emptyTr.innerHTML = `
                                 <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
                                     <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
                                     <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
                                     <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>
                                 </td>
-                            </tr>
-                        `;
+                            `;
+                            tbody.appendChild(emptyTr);
+                        }
                     }
-                }, 300);
+
+                    // Trigger bottom Undo Toast
+                    showUndoToast(toiletId, toiletName, row, btnElem);
+                }, 250);
             }
         } catch (err) {
             console.error('Error unflagging toilet:', err);
