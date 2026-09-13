@@ -340,8 +340,8 @@
                         <option value="" data-lat="" data-lon="" {{ empty($toilet->place_id) ? 'selected' : '' }}>-- No Google Place Assigned (Unlink) --</option>
                         @foreach ($nearbyPlaces as $p)
                             @php
-                                $isToilet = !empty($p['is_public_bathroom']) || (isset($p['types']) && is_array($p['types']) && (in_array('public_bathroom', $p['types'], true) || in_array('restroom', $p['types'], true) || in_array('toilet', $p['types'], true)));
-                                $prefix = $isToilet ? '🚽 ' : '';
+                                $emoji = $p['emoji'] ?? \App\Models\Place::getEmojiForTypes($p['types'] ?? []);
+                                $prefix = $emoji ? $emoji . ' ' : '';
                             @endphp
                             <option
                                 value="{{ $p['place_id'] }}"

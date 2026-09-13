@@ -206,9 +206,8 @@
                             <td style="font-size: 0.8125rem;">
                                 <div id="current-place-name-{{ $toilet->id }}" style="font-weight: 600; color: var(--gray-900);">
                                     @php
-                                        $currentTypes = $toilet->place?->data['types'] ?? [];
-                                        $isToilet = is_array($currentTypes) && (in_array('public_bathroom', $currentTypes, true) || in_array('restroom', $currentTypes, true) || in_array('toilet', $currentTypes, true));
-                                        $prefix = $isToilet ? '🚽 ' : '';
+                                        $placeEmoji = $toilet->place?->getEmoji() ?? '';
+                                        $prefix = $placeEmoji ? $placeEmoji . ' ' : '';
                                     @endphp
                                     {{ $toilet->place?->getName() ? $prefix . $toilet->place->getName() : ($toilet->place_id ?: '-') }}
                                 </div>
@@ -245,9 +244,8 @@
                                 >
                                     <option value="{{ $toilet->place_id ?? '' }}">
                                         @php
-                                            $currentTypes = $toilet->place?->data['types'] ?? [];
-                                            $isToilet = is_array($currentTypes) && (in_array('public_bathroom', $currentTypes, true) || in_array('restroom', $currentTypes, true) || in_array('toilet', $currentTypes, true));
-                                            $prefix = $isToilet ? '🚽 ' : '';
+                                            $placeEmoji = $toilet->place?->getEmoji() ?? '';
+                                            $prefix = $placeEmoji ? $placeEmoji . ' ' : '';
                                         @endphp
                                         {{ $toilet->place?->getName() ? 'Current: ' . $prefix . $toilet->place->getName() : ($toilet->place_id ? 'Current ID: ' . $toilet->place_id : '-- Click to load places (~40m) --') }}
                                     </option>
@@ -536,8 +534,75 @@
 @endsection
 
 @push('scripts')
-<script>
     let activeAiMatchData = null;
+
+    function getPlaceEmoji(types) {
+        if (!Array.isArray(types) || types.length === 0) return '';
+        
+        const typeEmojiMap = {
+            public_bathroom: '🚽',
+            restroom: '🚽',
+            toilet: '🚽',
+            train_station: '🚉',
+            subway_station: '🚉',
+            transit_station: '🚉',
+            light_rail_station: '🚉',
+            railway_station: '🚉',
+            bus_station: '🚌',
+            bus_stop: '🚌',
+            airport: '✈️',
+            restaurant: '🍽️',
+            fast_food_restaurant: '🍽️',
+            meal_takeaway: '🍽️',
+            meal_delivery: '🍽️',
+            food_court: '🍽️',
+            cafe: '☕',
+            coffee_shop: '☕',
+            bakery: '☕',
+            bar: '🍺',
+            pub: '🍺',
+            night_club: '🍺',
+            park: '🌳',
+            campground: '🌳',
+            garden: '🌳',
+            national_park: '🌳',
+            supermarket: '🛒',
+            grocery_store: '🛒',
+            shopping_mall: '🛒',
+            department_store: '🛒',
+            convenience_store: '🛒',
+            store: '🛒',
+            gas_station: '⛽',
+            electric_vehicle_charging_station: '⛽',
+            lodging: '🏨',
+            hotel: '🏨',
+            motel: '🏨',
+            hospital: '🏥',
+            doctor: '🏥',
+            pharmacy: '🏥',
+            parking: '🅿️',
+            museum: '🏛️',
+            art_gallery: '🏛️',
+            library: '🏛️',
+            tourist_attraction: '🏛️',
+            place_of_worship: '🏛️',
+            church: '🏛️',
+            city_hall: '🏛️',
+            town_hall: '🏛️',
+            stadium: '🏟️',
+            sports_complex: '🏟️',
+            gym: '🏟️',
+            playground: '🎡',
+            amusement_park: '🎡'
+        };
+
+        for (const [key, emoji] of Object.entries(typeEmojiMap)) {
+            if (types.includes(key)) {
+                return emoji;
+            }
+        }
+        return '';
+    }
 
     function getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -594,12 +659,8 @@
             const coordsText = (data.toilet_lat && data.toilet_lon) ? `Lat: ${data.toilet_lat}, Lon: ${data.toilet_lon}` : 'No coordinates';
             document.getElementById('ai-modal-toilet-coords').textContent = coordsText;
 
-            const isPublicBathroom = Boolean(data.place?.is_public_bathroom || (Array.isArray(data.place?.types) && (
-                data.place.types.includes('public_bathroom') ||
-                data.place.types.includes('restroom') ||
-                data.place.types.includes('toilet')
-            )));
-            const placePrefix = isPublicBathroom ? '🚽 ' : '';
+            const placeEmoji = data.place?.emoji || getPlaceEmoji(data.place?.types) || (data.place?.is_public_bathroom ? '🚽' : '');
+            const placePrefix = placeEmoji ? `${placeEmoji} ` : '';
             document.getElementById('ai-modal-place-name').textContent = `${placePrefix}${data.place.name || data.place.place_id}`;
             document.getElementById('ai-modal-place-address').textContent = data.place.address || 'Address not specified';
 
@@ -633,11 +694,12 @@
                 data.place.types.forEach(t => {
                     const tag = document.createElement('span');
                     tag.className = 'badge';
-                    if (t === 'public_bathroom' || t === 'restroom' || t === 'toilet') {
-                        tag.style.background = '#dcfce7';
-                        tag.style.color = '#166534';
-                        tag.style.fontWeight = '700';
-                        tag.textContent = `🚽 ${t}`;
+                    const chipEmoji = getPlaceEmoji([t]);
+                    if (chipEmoji) {
+                        tag.style.background = (t === 'public_bathroom' || t === 'restroom' || t === 'toilet') ? '#dcfce7' : '#e0e7ff';
+                        tag.style.color = (t === 'public_bathroom' || t === 'restroom' || t === 'toilet') ? '#166534' : '#3730a3';
+                        tag.style.fontWeight = '600';
+                        tag.textContent = `${chipEmoji} ${t}`;
                     } else {
                         tag.style.background = '#e2e8f0';
                         tag.style.color = '#334155';
@@ -711,12 +773,8 @@
             const resData = await response.json();
 
             // Update UI table row
-            const isToilet = Boolean(resData.is_public_bathroom || (Array.isArray(activeAiMatchData?.place?.types) && (
-                activeAiMatchData.place.types.includes('public_bathroom') ||
-                activeAiMatchData.place.types.includes('restroom') ||
-                activeAiMatchData.place.types.includes('toilet')
-            )));
-            const prefix = isToilet ? '🚽 ' : '';
+            const placeEmoji = resData.emoji || activeAiMatchData?.place?.emoji || getPlaceEmoji(activeAiMatchData?.place?.types) || (resData.is_public_bathroom ? '🚽' : '');
+            const prefix = placeEmoji ? `${placeEmoji} ` : '';
 
             const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
             if (currentPlaceElem) {
@@ -729,8 +787,8 @@
                 for (let i = 0; i < dropdown.options.length; i++) {
                     if (dropdown.options[i].value === placeId) {
                         dropdown.options[i].selected = true;
-                        if (isToilet && !dropdown.options[i].textContent.startsWith('🚽 ')) {
-                            dropdown.options[i].textContent = '🚽 ' + dropdown.options[i].textContent;
+                        if (placeEmoji && !dropdown.options[i].textContent.startsWith(placeEmoji)) {
+                            dropdown.options[i].textContent = `${prefix}${resData.place_name || activeAiMatchData.place.name || placeId}`;
                         }
                         found = true;
                         break;
@@ -1098,12 +1156,8 @@
                     opt.value = p.place_id;
                     const distStr = p.distance_m !== null ? ` (${p.distance_m}m)` : '';
                     const addrStr = p.address ? ` - ${p.address}` : '';
-                    const isToilet = Boolean(p.is_public_bathroom || (Array.isArray(p.types) && (
-                        p.types.includes('public_bathroom') ||
-                        p.types.includes('restroom') ||
-                        p.types.includes('toilet')
-                    )));
-                    const prefix = isToilet ? '🚽 ' : '';
+                    const emoji = p.emoji || getPlaceEmoji(p.types) || (p.is_public_bathroom ? '🚽' : '');
+                    const prefix = emoji ? `${emoji} ` : '';
                     opt.textContent = `${prefix}${p.name}${distStr}${addrStr}`;
                     if (p.is_current || p.place_id === originalVal) {
                         opt.selected = true;
@@ -1162,9 +1216,15 @@
             const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
             if (currentPlaceElem) {
                 const selectedOpt = selectElem.options[selectElem.selectedIndex];
-                const isToilet = Boolean(data.is_public_bathroom || (selectedOpt && selectedOpt.textContent.startsWith('🚽 ')));
-                const prefix = (isToilet && data.place_name && !data.place_name.startsWith('🚽 ')) ? '🚽 ' : '';
-                currentPlaceElem.textContent = data.place_name ? `${prefix}${data.place_name}` : '-';
+                let prefix = data.emoji ? `${data.emoji} ` : '';
+                if (!prefix && selectedOpt) {
+                    const match = selectedOpt.textContent.match(/^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F]|\uD83E[\uDD00-\uDDFF]|🅿️|☕|✈️|🍽️|🏛️|🏟️|🚉|🚆|🚌|⛽|🏨|🏥|🛒|🌳|🍺|🚽)\s*/u);
+                    if (match) {
+                        prefix = match[0];
+                    }
+                }
+                const cleanName = data.place_name ? data.place_name.replace(/^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F]|\uD83E[\uDD00-\uDDFF]|🅿️|☕|✈️|🍽️|🏛️|🏟️|🚉|🚆|🚌|⛽|🏨|🏥|🛒|🌳|🍺|🚽)\s*/u, '') : '';
+                currentPlaceElem.textContent = data.place_name ? `${prefix}${cleanName}` : '-';
             }
 
             // Visual feedback
