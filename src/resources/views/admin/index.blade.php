@@ -98,6 +98,7 @@
                         <th style="width: 180px;">Comment</th>
                         <th style="width: 180px;">Address</th>
                         <th style="width: 180px;">Current Place</th>
+                        <th style="width: 100px; text-align: center;">Public Acc.</th>
                         <th style="min-width: 250px;">Assign Google Place (~40m)</th>
                         <th style="width: 220px; text-align: right;">Action</th>
                     </tr>
@@ -165,6 +166,21 @@
                                     </div>
                                 @endif
                             </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <label style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; margin: 0; user-select: none;" title="Toggle public_accessible flag">
+                                    <input
+                                        type="checkbox"
+                                        id="public-accessible-checkbox-{{ $toilet->id }}"
+                                        data-toilet-id="{{ $toilet->id }}"
+                                        {{ $toilet->isFlagSet('public_accessible') ? 'checked' : '' }}
+                                        onchange="updateToiletPublicAccessible(this, {{ $toilet->id }})"
+                                        style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary);"
+                                    >
+                                    <span id="public-accessible-label-{{ $toilet->id }}" style="font-size: 0.75rem; font-weight: 600; color: {{ $toilet->isFlagSet('public_accessible') ? '#166534' : '#64748b' }};">
+                                        {{ $toilet->isFlagSet('public_accessible') ? 'Yes' : 'No' }}
+                                    </span>
+                                </label>
+                            </td>
                             <td>
                                 <select
                                     class="form-control places-dropdown"
@@ -211,7 +227,7 @@
                         </tr>
                     @empty
                         <tr id="flagged-empty-row">
-                            <td colspan="8" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
+                            <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
                                 <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
                                 <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
                                 <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>
@@ -617,10 +633,23 @@
                 }
             }
 
+            // Update public accessible checkbox & label
+            if (resData.public_accessible !== undefined) {
+                const publicCheckbox = document.getElementById(`public-accessible-checkbox-${toiletId}`);
+                const publicLabel = document.getElementById(`public-accessible-label-${toiletId}`);
+                if (publicCheckbox) {
+                    publicCheckbox.checked = !!resData.public_accessible;
+                }
+                if (publicLabel) {
+                    publicLabel.textContent = resData.public_accessible ? 'Yes' : 'No';
+                    publicLabel.style.color = resData.public_accessible ? '#166534' : '#64748b';
+                }
+            }
+
             const statusMsg = document.getElementById(`status-msg-${toiletId}`);
             if (statusMsg) {
                 statusMsg.style.display = 'block';
-                statusMsg.textContent = '✓ AI Place & coordinates applied!';
+                statusMsg.textContent = '✓ AI Place, coordinates & properties applied!';
                 statusMsg.style.color = 'var(--success)';
                 setTimeout(() => { statusMsg.style.display = 'none'; }, 3000);
             }
@@ -726,6 +755,61 @@
             }
         } finally {
             selectElem.disabled = false;
+        }
+    }
+
+    async function updateToiletPublicAccessible(checkboxElem, toiletId) {
+        const isChecked = checkboxElem.checked;
+        checkboxElem.disabled = true;
+
+        const labelElem = document.getElementById(`public-accessible-label-${toiletId}`);
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '💾 Saving public accessibility...';
+            statusMsg.style.color = 'var(--primary)';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/public-accessible`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ public_accessible: isChecked })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (labelElem) {
+                labelElem.textContent = data.public_accessible ? 'Yes' : 'No';
+                labelElem.style.color = data.public_accessible ? '#166534' : '#64748b';
+            }
+
+            if (statusMsg) {
+                statusMsg.textContent = `✓ Public accessibility: ${data.public_accessible ? 'Yes' : 'No'}!`;
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 2000);
+            }
+        } catch (err) {
+            console.error('Error updating public accessibility:', err);
+            checkboxElem.checked = !isChecked;
+            if (labelElem) {
+                labelElem.textContent = !isChecked ? 'Yes' : 'No';
+                labelElem.style.color = !isChecked ? '#166534' : '#64748b';
+            }
+            alert('Failed to update public accessibility. Please try again.');
+            if (statusMsg) {
+                statusMsg.textContent = '❌ Failed to change public accessibility.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        } finally {
+            checkboxElem.disabled = false;
         }
     }
 
@@ -908,7 +992,7 @@
                     if (tbody && tbody.children.length === 0) {
                         tbody.innerHTML = `
                             <tr id="flagged-empty-row">
-                                <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
+                                <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--gray-500);">
                                     <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">🎉</div>
                                     <div style="font-weight: 600; font-size: 0.9375rem; color: var(--gray-700);">No toilets currently flagged for review</div>
                                     <div style="font-size: 0.8125rem; color: var(--gray-400); margin-top: 0.25rem;">Flag toilets in the edit view or when importing data to review and correct Google Places here.</div>

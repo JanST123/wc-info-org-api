@@ -666,11 +666,9 @@ class AdminToiletController extends Controller
 
         $toilet->save();
 
-        // Set public_accessible property if requested
+        // Set public_accessible property explicitly (true or false)
         $setPublicAccessible = $request->boolean('set_public_accessible');
-        if ($setPublicAccessible) {
-            $this->saveFlagProperty($toilet->id, 'public_accessible', true, $diff);
-        }
+        $this->saveFlagProperty($toilet->id, 'public_accessible', $setPublicAccessible, $diff);
 
         if (! empty($diff)) {
             $toilet->update([
@@ -698,6 +696,47 @@ class AdminToiletController extends Controller
             'public_accessible' => $setPublicAccessible,
             'message' => 'AI suggestion applied and place assigned successfully.',
         ]);
+    }
+
+    /**
+     * Quickly update public_accessible flag from table checkbox.
+     */
+    public function updatePublicAccessible(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $request->validate([
+            'public_accessible' => ['required', 'boolean'],
+        ]);
+
+        $newValue = $request->boolean('public_accessible');
+        $diff = [];
+
+        $this->saveFlagProperty($toilet->id, 'public_accessible', $newValue, $diff);
+
+        if (! empty($diff)) {
+            $toilet->update([
+                'email_sent' => 2,
+                'last_diff' => json_encode($diff),
+            ]);
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_public_accessible_change',
+                $diff,
+                'Public accessibility ' . ($newValue ? 'enabled' : 'disabled') . ' in admin'
+            );
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'public_accessible' => $newValue,
+                'message' => 'Public accessibility set to ' . ($newValue ? 'Yes' : 'No') . '.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} public accessibility updated.");
     }
 
     /**

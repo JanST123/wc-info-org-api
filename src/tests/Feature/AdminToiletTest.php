@@ -669,5 +669,99 @@ class AdminToiletTest extends TestCase
         $this->assertEquals('hidden', $toilet->status);
         $this->assertTrue($toilet->isUserOverridden('status'));
     }
+
+    public function test_ai_accept_place_with_false_public_accessible_explicitly_sets_property_to_zero(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJacceptedFalsePlace999',
+            'data' => [
+                'displayName' => ['text' => 'Private Cafe'],
+                'location' => [
+                    'latitude' => 52.5100,
+                    'longitude' => 13.4000,
+                ],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet for AI Accept False',
+            'status' => 'active',
+            'lat' => 52.5000,
+            'lon' => 13.3900,
+            'place_id' => null,
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // Existing public_accessible was '1'
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'public_accessible',
+            'value' => '1',
+        ]);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/ai-accept-place", [
+                'place_id' => 'ChIJacceptedFalsePlace999',
+                'set_public_accessible' => false,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => 'ChIJacceptedFalsePlace999',
+            'public_accessible' => false,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('0', $toilet->propertyValue('public_accessible'));
+        $this->assertFalse($toilet->isFlagSet('public_accessible'));
+    }
+
+    public function test_update_public_accessible_endpoint(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toilet for Public Accessible Toggle',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // 1. Set to true
+        $resTrue = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/public-accessible", [
+                'public_accessible' => true,
+            ]);
+
+        $resTrue->assertStatus(200);
+        $resTrue->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'public_accessible' => true,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('1', $toilet->propertyValue('public_accessible'));
+        $this->assertTrue($toilet->isFlagSet('public_accessible'));
+
+        // 2. Set to false
+        $resFalse = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/public-accessible", [
+                'public_accessible' => false,
+            ]);
+
+        $resFalse->assertStatus(200);
+        $resFalse->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'public_accessible' => false,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('0', $toilet->propertyValue('public_accessible'));
+        $this->assertFalse($toilet->isFlagSet('public_accessible'));
+    }
 }
 
