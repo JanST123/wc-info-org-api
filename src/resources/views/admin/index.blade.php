@@ -1150,10 +1150,9 @@
 
         const toast = document.getElementById('undo-toast');
         const toastText = document.getElementById('undo-toast-text');
-        const timerSpan = document.getElementById('undo-toast-timer');
         const undoBtn = document.getElementById('undo-toast-btn');
 
-        if (!toast || !toastText || !timerSpan) return;
+        if (!toast || !toastText) return;
 
         const displayName = toiletName ? `"${toiletName}" (#${toiletId})` : `#${toiletId}`;
         toastText.textContent = `Toilet ${displayName} unflagged`;
