@@ -740,6 +740,50 @@ class AdminToiletController extends Controller
     }
 
     /**
+     * Inline update toilet name.
+     */
+    public function updateName(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $newName = $request->input('name') !== null ? trim((string) $request->input('name')) : '';
+        $oldName = (string) ($toilet->name ?? '');
+
+        if ($oldName !== $newName) {
+            $diff = ['name' => ['old' => $oldName ?: null, 'new' => $newName ?: null]];
+            $toilet->name = $newName !== '' ? $newName : null;
+            $toilet->markUserOverridden('name');
+
+            $toilet->update([
+                'email_sent' => 2,
+                'last_diff' => json_encode($diff),
+            ]);
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_name_change',
+                $diff,
+                "Toilet name updated to '" . ($toilet->name ?? 'Unnamed') . "' in admin"
+            );
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'name' => $toilet->name,
+                'display_name' => $toilet->name ?: 'Unnamed Toilet',
+                'message' => 'Toilet name updated successfully.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} name updated.");
+    }
+
+    /**
      * Quickly update toilet status from dropdown.
      */
     public function updateStatus(int $id, Request $request): JsonResponse|RedirectResponse

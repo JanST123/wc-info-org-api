@@ -128,15 +128,62 @@
                                     <option value="deleted" {{ $toilet->status === 'deleted' ? 'selected' : '' }}>🔴 Deleted</option>
                                 </select>
                             </td>
-                            <td>
-                                <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 600; color: var(--gray-900);">
-                                    {{ $toilet->name ?: 'Unnamed Toilet' }}
-                                </a>
-                                @if (!empty($toilet->owner))
-                                    <div style="font-size: 0.75rem; color: var(--gray-500);">
-                                        {{ $toilet->owner }}
+                            <td id="name-cell-{{ $toilet->id }}" style="min-width: 180px;">
+                                <div id="name-display-container-{{ $toilet->id }}" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.25rem;">
+                                    <div>
+                                        <a href="{{ route('admin.toilets.show', $toilet->id) }}" id="toilet-name-link-{{ $toilet->id }}" style="font-weight: 600; color: var(--gray-900);">
+                                            {{ $toilet->name ?: 'Unnamed Toilet' }}
+                                        </a>
+                                        @if (!empty($toilet->owner))
+                                            <div style="font-size: 0.75rem; color: var(--gray-500);">
+                                                {{ $toilet->owner }}
+                                            </div>
+                                        @endif
                                     </div>
-                                @endif
+                                    <button
+                                        type="button"
+                                        onclick="startInlineNameEdit({{ $toilet->id }})"
+                                        title="Quickly edit name"
+                                        style="background: none; border: none; cursor: pointer; padding: 0.125rem 0.25rem; font-size: 0.75rem; opacity: 0.6; transition: opacity 0.2s; line-height: 1;"
+                                        onmouseover="this.style.opacity='1'"
+                                        onmouseout="this.style.opacity='0.6'"
+                                    >
+                                        ✏️
+                                    </button>
+                                </div>
+
+                                <div id="name-edit-container-{{ $toilet->id }}" style="display: none; margin-bottom: 0.25rem;">
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <input
+                                            type="text"
+                                            class="form-control"
+                                            id="name-input-{{ $toilet->id }}"
+                                            value="{{ $toilet->name ?? '' }}"
+                                            data-original-value="{{ $toilet->name ?? '' }}"
+                                            style="font-size: 0.75rem; height: 28px; padding: 0.125rem 0.375rem; width: 140px; font-weight: 600;"
+                                            onkeydown="handleNameInputKeydown(event, {{ $toilet->id }})"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary btn-sm"
+                                            onclick="saveInlineName({{ $toilet->id }})"
+                                            title="Save name (Enter)"
+                                            style="height: 28px; padding: 0 0.375rem; font-size: 0.75rem; display: flex; align-items: center; justify-content: center;"
+                                        >
+                                            ✓
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-secondary btn-sm"
+                                            onclick="cancelInlineNameEdit({{ $toilet->id }})"
+                                            title="Cancel (Esc)"
+                                            style="height: 28px; padding: 0 0.375rem; font-size: 0.75rem; display: flex; align-items: center; justify-content: center;"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div id="maps-container-{{ $toilet->id }}" style="margin-top: 0.25rem; {{ ($toilet->lat !== null && $toilet->lon !== null) ? '' : 'display: none;' }}">
                                     <a
                                         id="maps-link-{{ $toilet->id }}"
@@ -684,6 +731,109 @@
             closeAiModal();
         }
     });
+
+    function startInlineNameEdit(toiletId) {
+        const displayContainer = document.getElementById(`name-display-container-${toiletId}`);
+        const editContainer = document.getElementById(`name-edit-container-${toiletId}`);
+        const input = document.getElementById(`name-input-${toiletId}`);
+
+        if (displayContainer && editContainer && input) {
+            displayContainer.style.display = 'none';
+            editContainer.style.display = 'block';
+            input.focus();
+            input.select();
+        }
+    }
+
+    function cancelInlineNameEdit(toiletId) {
+        const displayContainer = document.getElementById(`name-display-container-${toiletId}`);
+        const editContainer = document.getElementById(`name-edit-container-${toiletId}`);
+        const input = document.getElementById(`name-input-${toiletId}`);
+
+        if (displayContainer && editContainer && input) {
+            input.value = input.dataset.originalValue || '';
+            editContainer.style.display = 'none';
+            displayContainer.style.display = 'flex';
+        }
+    }
+
+    function handleNameInputKeydown(event, toiletId) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveInlineName(toiletId);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            cancelInlineNameEdit(toiletId);
+        }
+    }
+
+    async function saveInlineName(toiletId) {
+        const input = document.getElementById(`name-input-${toiletId}`);
+        if (!input) return;
+
+        const newName = input.value.trim();
+        const originalValue = input.dataset.originalValue || '';
+
+        if (newName === originalValue) {
+            cancelInlineNameEdit(toiletId);
+            return;
+        }
+
+        input.disabled = true;
+        const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = '💾 Saving name...';
+            statusMsg.style.color = 'var(--primary)';
+        }
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/name`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ name: newName })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+            input.dataset.originalValue = data.name || '';
+            input.value = data.name || '';
+
+            const link = document.getElementById(`toilet-name-link-${toiletId}`);
+            if (link) {
+                link.textContent = data.display_name || 'Unnamed Toilet';
+            }
+
+            const displayContainer = document.getElementById(`name-display-container-${toiletId}`);
+            const editContainer = document.getElementById(`name-edit-container-${toiletId}`);
+            if (displayContainer && editContainer) {
+                editContainer.style.display = 'none';
+                displayContainer.style.display = 'flex';
+            }
+
+            if (statusMsg) {
+                statusMsg.textContent = '✓ Name updated!';
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 2000);
+            }
+        } catch (err) {
+            console.error('Error updating toilet name:', err);
+            alert('Failed to save name. Please try again.');
+            if (statusMsg) {
+                statusMsg.textContent = '❌ Failed to save name.';
+                statusMsg.style.color = 'var(--danger)';
+            }
+        } finally {
+            input.disabled = false;
+        }
+    }
 
     async function updateToiletStatus(selectElem, toiletId) {
         const newStatus = selectElem.value;

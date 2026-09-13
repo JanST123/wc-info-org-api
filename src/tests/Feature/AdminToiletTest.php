@@ -763,5 +763,32 @@ class AdminToiletTest extends TestCase
         $this->assertEquals('0', $toilet->propertyValue('public_accessible'));
         $this->assertFalse($toilet->isFlagSet('public_accessible'));
     }
+
+    public function test_inline_update_name_endpoint(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Old Name',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/name", [
+                'name' => 'Brand New Name',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'name' => 'Brand New Name',
+            'display_name' => 'Brand New Name',
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('Brand New Name', $toilet->name);
+        $this->assertTrue($toilet->isUserOverridden('name'));
+    }
 }
 
