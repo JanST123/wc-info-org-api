@@ -534,6 +534,7 @@
 @endsection
 
 @push('scripts')
+<script>
     let activeAiMatchData = null;
 
     function getPlaceEmoji(types) {
