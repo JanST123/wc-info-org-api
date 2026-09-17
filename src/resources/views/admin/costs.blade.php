@@ -59,15 +59,15 @@
             </div>
 
             <!-- Progress Bar -->
-            <div style="width: 100%; height: 12px; background-color: var(--gray-200); border-radius: 6px; overflow: hidden; margin-bottom: 1.5rem;">
+            <div style="width: 100%; height: 12px; background-color: var(--border-main); border-radius: 6px; overflow: hidden; margin-bottom: 1.5rem;">
                 <div style="width: {{ min(100, $monthlyStats['percentage_used']) }}%; height: 100%; background-color: {{ $monthlyStats['percentage_used'] >= 90 ? 'var(--danger)' : ($monthlyStats['percentage_used'] >= 70 ? 'var(--warning)' : 'var(--primary)') }}; transition: width 0.3s ease;"></div>
             </div>
 
             <!-- Update Budget Form -->
-            <form action="{{ route('admin.costs.budget') }}" method="POST" style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <form action="{{ route('admin.costs.budget') }}" method="POST" style="background: var(--bg-subtle); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-main); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                 @csrf
                 <div>
-                    <label for="budget" style="font-weight: 600; font-size: 0.875rem; color: var(--gray-800); display: block;">
+                    <label for="budget" style="font-weight: 600; font-size: 0.875rem; color: var(--text-secondary); display: block;">
                         Change Monthly Budget Limit (USD)
                     </label>
                     <div class="form-hint" style="margin-top: 0.125rem;">
@@ -77,7 +77,7 @@
 
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <div style="position: relative;">
-                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-500); font-weight: 600;">$</span>
+                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-weight: 600;">$</span>
                         <input
                             type="number"
                             step="1"
@@ -103,13 +103,13 @@
     <div class="grid-4" style="margin-bottom: 1.5rem;">
         @foreach ($monthlyStats['services'] as $serviceKey => $svc)
             <div class="card" style="margin-bottom: 0; padding: 1.25rem;">
-                <div style="font-size: 0.75rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
                     {{ $svc['name'] }}
                 </div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-top: 0.25rem;">
+                <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-heading); margin-top: 0.25rem;">
                     ${{ number_format($svc['cost'], 2) }}
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--gray-500); margin-top: 0.375rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.375rem;">
                     <span>{{ number_format($svc['count']) }} requests</span>
                     <span style="font-family: monospace;">${{ $svc['unit_cost'] }}/req</span>
                 </div>

@@ -31,7 +31,7 @@
             </div>
         </div>
 
-        <div class="card" style="margin-bottom: 0; padding: 1.25rem; background: linear-gradient(to bottom right, #ffffff, var(--primary-light));">
+        <div class="card" style="margin-bottom: 0; padding: 1.25rem; border-color: var(--primary);">
             <div style="font-size: 0.8125rem; color: var(--primary); font-weight: 600; text-transform: uppercase;">Quick Open by ID</div>
             <form action="{{ route('admin.toilets.find') }}" method="POST" style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
                 @csrf
@@ -50,11 +50,11 @@
     </div>
 
     <!-- Google Cost Summary Banner -->
-    <div class="card" style="padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background-color: {{ $stats['is_budget_exceeded'] ? 'var(--danger-light)' : '#ffffff' }}; border-color: {{ $stats['is_budget_exceeded'] ? '#fca5a5' : 'var(--gray-200)' }};">
+    <div class="card" style="padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background-color: {{ $stats['is_budget_exceeded'] ? 'var(--danger-light)' : 'var(--bg-card)' }}; border-color: {{ $stats['is_budget_exceeded'] ? 'var(--danger)' : 'var(--border-main)' }};">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <div style="font-size: 1.5rem;">📊</div>
             <div>
-                <div style="font-weight: 600; font-size: 0.9375rem; color: {{ $stats['is_budget_exceeded'] ? 'var(--danger)' : 'var(--gray-900)' }};">
+                <div style="font-weight: 600; font-size: 0.9375rem; color: {{ $stats['is_budget_exceeded'] ? 'var(--danger)' : 'var(--text-heading)' }};">
                     Google Cloud API Budget ({{ date('F Y') }}):
                     <span style="font-family: monospace;">${{ number_format($stats['current_month_cost'], 2) }}</span> /
                     <span style="font-family: monospace;">${{ number_format($stats['monthly_budget'], 2) }} USD</span>
@@ -64,7 +64,7 @@
                         <span class="badge badge-active" style="margin-left: 0.5rem;">✓ Active</span>
                     @endif
                 </div>
-                <div style="font-size: 0.8125rem; color: var(--gray-500); margin-top: 0.125rem;">
+                <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.125rem;">
                     Calls to Places Nearby, Place Details, and Custom Search are tracked and throttled to prevent runaway costs.
                 </div>
             </div>
@@ -78,12 +78,12 @@
 
     <!-- Section 1: Flagged Toilets for Review -->
     <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="card-header" style="background: #fffdf5; border-bottom: 1px solid #fef3c7;">
-            <div class="card-title" style="color: #92400e;">
+        <div class="card-header card-header-flagged">
+            <div class="card-title">
                 <span>🚩 Flagged Toilets for Review</span>
                 <span id="flagged-count-badge" class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.8125rem;">{{ $flaggedToilets->total() }}</span>
             </div>
-            <div style="font-size: 0.8125rem; color: #b45309;">
+            <div class="card-subtitle">
                 Fast Place correction workflow • Places API queries only on dropdown open
             </div>
         </div>
@@ -113,15 +113,12 @@
                             </td>
                             <td>
                                 <select
-                                    class="form-control"
+                                    class="form-control status-select-{{ $toilet->status }}"
                                     id="status-select-{{ $toilet->id }}"
                                     data-toilet-id="{{ $toilet->id }}"
                                     data-original-value="{{ $toilet->status }}"
                                     onchange="updateToiletStatus(this, {{ $toilet->id }})"
-                                    style="font-size: 0.75rem; height: 32px; padding: 0.125rem 0.375rem; width: 105px; font-weight: 600;
-                                        background-color: {{ $toilet->status === 'active' ? '#f0fdf4' : ($toilet->status === 'hidden' ? '#f8fafc' : '#fef2f2') }};
-                                        color: {{ $toilet->status === 'active' ? '#166534' : ($toilet->status === 'hidden' ? '#475569' : '#991b1b') }};
-                                        border-color: {{ $toilet->status === 'active' ? '#bbf7d0' : ($toilet->status === 'hidden' ? '#cbd5e1' : '#fecaca') }};"
+                                    style="font-size: 0.75rem; height: 32px; padding: 0.125rem 0.375rem; width: 105px; font-weight: 600;"
                                 >
                                     <option value="active" {{ $toilet->status === 'active' ? 'selected' : '' }}>🟢 Active</option>
                                     <option value="hidden" {{ $toilet->status === 'hidden' ? 'selected' : '' }}>⚪ Hidden</option>
@@ -419,8 +416,8 @@
     </div>
 
     <!-- AI Suggestion Confirmation Modal -->
-    <div id="ai-modal-overlay" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem; overflow-y: auto;">
-        <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 620px; width: 100%; box-shadow: var(--shadow-lg); overflow: hidden; border: 1px solid var(--gray-200); position: relative; margin: auto;">
+    <div id="ai-modal-overlay" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem; overflow-y: auto;">
+        <div class="card" style="max-width: 620px; width: 100%; box-shadow: var(--shadow-lg); overflow: hidden; position: relative; margin: auto; padding: 0;">
             <!-- Header -->
             <div style="padding: 1.25rem 1.5rem; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 0.625rem; font-weight: 700; font-size: 1.125rem;">
@@ -433,33 +430,33 @@
             <!-- Body -->
             <div style="padding: 1.5rem;">
                 <!-- Toilet info bar -->
-                <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
-                    <div style="font-size: 0.75rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Toilet Record:</div>
+                <div style="background: var(--bg-subtle); border: 1px solid var(--border-main); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Toilet Record:</div>
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem;">
-                        <span id="ai-modal-toilet-name" style="font-weight: 700; color: var(--gray-900);"></span>
-                        <span id="ai-modal-toilet-coords" style="font-family: monospace; font-size: 0.8125rem; color: var(--gray-600);"></span>
+                        <span id="ai-modal-toilet-name" style="font-weight: 700; color: var(--text-heading);"></span>
+                        <span id="ai-modal-toilet-coords" style="font-family: monospace; font-size: 0.8125rem; color: var(--text-muted);"></span>
                     </div>
                 </div>
 
                 <!-- Matched Place Box -->
-                <div style="border: 2px solid #818cf8; background: #f5f3ff; border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem;">
+                <div class="ai-place-card">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
-                        <div style="font-size: 0.75rem; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em;">
+                        <div class="ai-place-card-title">
                             ⭐ Suggested Google Place
                         </div>
                         <span id="ai-modal-confidence-badge" class="badge" style="background: #dcfce7; color: #166534; font-size: 0.75rem;">High Confidence</span>
                     </div>
 
-                    <h3 id="ai-modal-place-name" style="font-size: 1.125rem; font-weight: 700; color: #1e1b4b; margin-bottom: 0.35rem;"></h3>
-                    <div id="ai-modal-place-address" style="font-size: 0.875rem; color: #4b5563; margin-bottom: 0.5rem;"></div>
+                    <h3 id="ai-modal-place-name" style="font-size: 1.125rem; font-weight: 700; margin-bottom: 0.35rem;"></h3>
+                    <div id="ai-modal-place-address" style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;"></div>
 
                     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
-                        <span id="ai-modal-place-distance" class="badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.75rem;">~0m away</span>
+                        <span id="ai-modal-place-distance" class="badge badge-distance-near" style="font-size: 0.75rem;">~0m away</span>
                         <div id="ai-modal-place-types" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
                     </div>
 
                     <!-- AI Reasoning -->
-                    <div style="background: #ffffff; border-radius: var(--radius-sm); padding: 0.75rem; border: 1px solid #e0e7ff; font-size: 0.8125rem; color: #374151;">
+                    <div class="ai-reasoning-box">
                         <div style="font-weight: 600; color: #4f46e5; margin-bottom: 0.25rem;">💡 AI Reasoning:</div>
                         <div id="ai-modal-reasoning" style="line-height: 1.4;"></div>
                     </div>
@@ -472,7 +469,7 @@
                             target="_blank"
                             rel="noopener"
                             class="btn btn-secondary btn-sm"
-                            style="background: #ffffff; border: 1px solid #c7d2fe; color: #4338ca; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;"
+                            style="font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;"
                         >
                             🗺️ View Toilet Coordinates & Place on Google Maps ↗
                         </a>
@@ -480,17 +477,17 @@
                 </div>
 
                 <!-- Public accessibility checkbox -->
-                <div id="ai-modal-public-container" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 0.875rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+                <div id="ai-modal-public-container" class="ai-public-box">
                     <input type="checkbox" id="ai-modal-public-checkbox" style="margin-top: 0.2rem; cursor: pointer; width: 1.1rem; height: 1.1rem; accent-color: var(--success);">
-                    <label for="ai-modal-public-checkbox" style="font-size: 0.875rem; color: #166534; cursor: pointer; line-height: 1.4;">
+                    <label for="ai-modal-public-checkbox">
                         <strong>Set "public_accessible" property to Yes</strong>
-                        <div style="font-size: 0.75rem; color: #15803d; margin-top: 0.125rem;">The suggested place belongs to public transport, parks, civic buildings, or public amenities.</div>
+                        <div class="ai-public-desc">The suggested place belongs to public transport, parks, civic buildings, or public amenities.</div>
                     </label>
                 </div>
             </div>
 
             <!-- Footer -->
-            <div style="padding: 1rem 1.5rem; background: var(--gray-50); border-top: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem;">
+            <div style="padding: 1rem 1.5rem; background: var(--bg-subtle); border-top: 1px solid var(--border-main); display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem;">
                 <button type="button" onclick="closeAiModal()" class="btn btn-secondary" style="font-weight: 600;">
                     ✕ Reject / Close
                 </button>
@@ -682,7 +679,10 @@
 
             const distBadge = document.getElementById('ai-modal-place-distance');
             if (data.place.distance_m !== null) {
-                distBadge.textContent = `~${data.place.distance_m}m away`;
+                const dist = data.place.distance_m;
+                const isFar = dist > 100;
+                distBadge.textContent = isFar ? `⚠️ ~${dist}m away (>100m!)` : `~${dist}m away`;
+                distBadge.className = isFar ? 'badge badge-distance-far' : 'badge badge-distance-near';
                 distBadge.style.display = 'inline-block';
             } else {
                 distBadge.style.display = 'none';
@@ -1002,19 +1002,7 @@
             selectElem.dataset.originalValue = data.status;
 
             // Update styling based on new status
-            if (data.status === 'active') {
-                selectElem.style.backgroundColor = '#f0fdf4';
-                selectElem.style.color = '#166534';
-                selectElem.style.borderColor = '#bbf7d0';
-            } else if (data.status === 'hidden') {
-                selectElem.style.backgroundColor = '#f8fafc';
-                selectElem.style.color = '#475569';
-                selectElem.style.borderColor = '#cbd5e1';
-            } else if (data.status === 'deleted') {
-                selectElem.style.backgroundColor = '#fef2f2';
-                selectElem.style.color = '#991b1b';
-                selectElem.style.borderColor = '#fecaca';
-            }
+            selectElem.className = `form-control status-select-${data.status}`;
 
             // Visual feedback on row
             const row = document.getElementById(`flagged-row-${toiletId}`);

@@ -6,19 +6,47 @@
     <title>Admin Login - WC-Info API</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            try {
+                const savedTheme = localStorage.getItem('admin_theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = savedTheme ? savedTheme : (prefersDark ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
     <style>
         :root {
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
-            --gray-50: #f9fafb;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-300: #d1d5db;
-            --gray-700: #374151;
-            --gray-900: #111827;
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --border-card: #e2e8f0;
+            --border-header: #f1f5f9;
+            --text-heading: #111827;
+            --text-main: #1f2937;
+            --text-muted: #64748b;
+            --bg-input: #ffffff;
+            --border-input: #d1d5db;
             --danger-light: #fef2f2;
             --danger: #dc2626;
+        }
+
+        [data-theme="dark"] {
+            --primary: #3b82f6;
+            --primary-hover: #60a5fa;
+            --bg-body: #0b0f19;
+            --bg-card: #131b2e;
+            --border-card: #243049;
+            --border-header: #1e293b;
+            --text-heading: #f8fafc;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --bg-input: #0b0f19;
+            --border-input: #334155;
+            --danger-light: rgba(239, 68, 68, 0.18);
+            --danger: #ef4444;
         }
 
         * {
@@ -29,35 +57,37 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #f1f5f9;
-            color: var(--gray-900);
+            background-color: var(--bg-body);
+            color: var(--text-main);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 1.5rem;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
 
         .login-card {
-            background: #ffffff;
-            border: 1px solid var(--gray-200);
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
             border-radius: 12px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 420px;
             overflow: hidden;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
         }
 
         .login-header {
             padding: 2rem 2rem 1.5rem;
             text-align: center;
-            border-bottom: 1px solid var(--gray-100);
+            border-bottom: 1px solid var(--border-header);
         }
 
         .login-header h1 {
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--gray-900);
+            color: var(--text-heading);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -65,7 +95,7 @@
         }
 
         .login-header p {
-            color: #64748b;
+            color: var(--text-muted);
             font-size: 0.875rem;
             margin-top: 0.25rem;
         }
@@ -76,7 +106,7 @@
 
         .alert-error {
             background-color: var(--danger-light);
-            border: 1px solid #fecaca;
+            border: 1px solid rgba(239, 68, 68, 0.35);
             color: var(--danger);
             padding: 0.75rem 1rem;
             border-radius: 6px;
@@ -92,7 +122,7 @@
             display: block;
             font-size: 0.875rem;
             font-weight: 500;
-            color: var(--gray-700);
+            color: var(--text-main);
             margin-bottom: 0.375rem;
         }
 
@@ -100,12 +130,12 @@
             width: 100%;
             padding: 0.625rem 0.875rem;
             font-size: 0.9375rem;
-            color: var(--gray-900);
-            background-color: #ffffff;
-            border: 1px solid var(--gray-300);
+            color: var(--text-heading);
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-input);
             border-radius: 6px;
             outline: none;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease, color 0.2s ease;
         }
 
         .form-control:focus {
