@@ -2513,12 +2513,25 @@
                 }
             }
 
-            // Refresh map context
-            if (currentMapContext && currentMapContext.toilet && currentMapContext.toilet.id === toiletId) {
-                openToiletMapModal(toiletId, currentMapContext.toilet.lat, currentMapContext.toilet.lon, currentMapContext.toilet.name);
+            // Close map modal
+            closeToiletMapModal();
+
+            // Status message feedback
+            const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+            if (statusMsg) {
+                statusMsg.style.display = 'block';
+                statusMsg.textContent = `✓ Assigned "${placeName}"${data.coordinates_updated ? ' & updated coordinates' : ''}!`;
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 3000);
             }
 
-            alert(`✓ Successfully assigned "${placeName}" to Toilet #${toiletId}${data.coordinates_updated ? ' and updated coordinates' : ''}!`);
+            // Visual highlight row
+            const row = document.getElementById(`flagged-row-${toiletId}`);
+            if (row) {
+                row.style.transition = 'background-color 0.5s ease';
+                row.style.backgroundColor = '#dcfce7';
+                setTimeout(() => { row.style.backgroundColor = ''; }, 2000);
+            }
         } catch (err) {
             console.error('Failed to assign place from map:', err);
             alert('Failed to assign place: ' + err.message);
