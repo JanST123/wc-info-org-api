@@ -520,22 +520,22 @@
     <div id="toilet-map-modal-overlay" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1rem; overflow: hidden;">
         <div class="card" style="max-width: 1400px; width: 96vw; height: 90vh; box-shadow: var(--shadow-lg); overflow: hidden; position: relative; margin: auto; padding: 0; display: flex; flex-direction: column;">
             <!-- Header -->
-            <div style="padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 0.625rem;">
-                    <span style="font-size: 1.25rem;">🛰️</span>
-                    <div>
-                        <div style="font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: nowrap;">
+                <div style="display: flex; align-items: center; gap: 0.625rem; min-width: 0; flex-shrink: 1;">
+                    <span style="font-size: 1.25rem; flex-shrink: 0;">🛰️</span>
+                    <div style="min-width: 0; overflow: hidden;">
+                        <div style="font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             <span>Satellite & POI Map Preview</span>
-                            <span id="map-modal-target-badge" class="badge" style="background: rgba(255,255,255,0.2); color: #ffffff; font-family: monospace;"></span>
-                            <span id="map-modal-target-name" style="font-size: 0.875rem; font-weight: 600; color: #e0e7ff;"></span>
+                            <span id="map-modal-target-badge" class="badge" style="background: rgba(255,255,255,0.2); color: #ffffff; font-family: monospace; flex-shrink: 0;"></span>
+                            <span id="map-modal-target-name" style="font-size: 0.875rem; font-weight: 600; color: #e0e7ff; overflow: hidden; text-overflow: ellipsis;"></span>
                         </div>
-                        <div id="map-modal-target-sub" style="font-size: 0.75rem; color: #c7d2fe; margin-top: 0.125rem;"></div>
+                        <div id="map-modal-target-sub" style="font-size: 0.75rem; color: #c7d2fe; margin-top: 0.125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
                     </div>
                 </div>
 
                 <!-- Layer and Filter Bar -->
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.625rem; flex-wrap: nowrap; flex-shrink: 0;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.75rem; white-space: nowrap;">
                         <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #ffffff; font-weight: 500;">
                             <input type="checkbox" id="map-filter-target" checked onchange="toggleMapFilter('target')" style="accent-color: #ef4444; cursor: pointer;">
                             <span>🚩 Target</span>
@@ -552,13 +552,8 @@
                         </label>
                     </div>
 
-                    <span id="map-pois-loading-badge" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #fde047; font-weight: 600; background: rgba(0,0,0,0.4); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm);">
-                        <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(253,224,71,0.3); border-top-color: #fde047; border-radius: 50%; animation: spin 0.8s infinite linear;"></span>
-                        <span>Loading view...</span>
-                    </span>
-
                     <!-- View Mode Switcher -->
-                    <div style="display: flex; align-items: center; gap: 0.2rem; background: rgba(0,0,0,0.4); padding: 0.2rem; border-radius: var(--radius-sm);">
+                    <div style="display: flex; align-items: center; gap: 0.2rem; background: rgba(0,0,0,0.4); padding: 0.2rem; border-radius: var(--radius-sm); white-space: nowrap;">
                         <button
                             type="button"
                             id="map-mode-map-btn"
@@ -588,7 +583,7 @@
                         </button>
                     </div>
 
-                    <button type="button" class="btn btn-sm" onclick="recenterMapTarget()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); font-size: 0.75rem; padding: 0.25rem 0.625rem;" title="Recenter on target toilet">
+                    <button type="button" class="btn btn-sm" onclick="recenterMapTarget()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); font-size: 0.75rem; padding: 0.25rem 0.625rem; white-space: nowrap;" title="Recenter on target toilet">
                         🎯 Recenter
                     </button>
                     <button type="button" onclick="closeToiletMapModal()" style="background: none; border: none; color: #ffffff; font-size: 1.5rem; line-height: 1; cursor: pointer; opacity: 0.8;" title="Close (Esc)">&times;</button>
@@ -597,6 +592,12 @@
 
             <!-- Main Content Area: Map + Street View + Sidebar -->
             <div style="display: flex; flex: 1; overflow: hidden; position: relative;">
+                <!-- Floating POIs Loading Pill -->
+                <div id="map-pois-loading-badge" style="display: none; position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 1500; align-items: center; gap: 0.45rem; font-size: 0.75rem; color: #ffffff; font-weight: 600; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(6px); padding: 0.35rem 0.85rem; border-radius: 9999px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.2); pointer-events: none;">
+                    <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(253,224,71,0.4); border-top-color: #fde047; border-radius: 50%; animation: spin 0.8s infinite linear;"></span>
+                    <span style="color: #fde047;">Loading view POIs...</span>
+                </div>
+
                 <!-- Map Container -->
                 <div id="toilet-leaflet-map" style="flex: 1; height: 100%; min-height: 400px; z-index: 1;"></div>
 
