@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
         (function() {
             try {
@@ -776,6 +778,137 @@
             width: 1.25rem;
             height: 1.25rem;
             vertical-align: middle;
+        }
+
+        /* Leaflet Custom Map Styles & Markers */
+        .leaflet-container {
+            font-family: inherit;
+            background-color: var(--bg-body);
+        }
+
+        .map-pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(220, 38, 38, 0.25);
+            animation: mapRadarPulse 2s infinite ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes mapRadarPulse {
+            0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0.9; }
+            100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; }
+        }
+
+        .map-pin-target-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+            font-size: 16px;
+            font-weight: bold;
+            position: relative;
+            z-index: 10;
+        }
+
+        .map-pin-db-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: #2563eb;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+            font-size: 13px;
+        }
+
+        .map-pin-db-icon.status-hidden {
+            background: #64748b;
+        }
+
+        .map-pin-db-icon.status-deleted {
+            background: #991b1b;
+            opacity: 0.7;
+        }
+
+        .map-pin-poi-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            border: 2px solid #6366f1;
+            color: #1e1b4b;
+            border-radius: 20px;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            white-space: nowrap;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+        }
+
+        .map-pin-poi-icon.is-bathroom {
+            border-color: #16a34a;
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        [data-theme="dark"] .map-pin-poi-icon {
+            background: #1e1b4b;
+            color: #e0e7ff;
+            border-color: #818cf8;
+        }
+
+        [data-theme="dark"] .map-pin-poi-icon.is-bathroom {
+            background: #064e3b;
+            color: #a7f3d0;
+            border-color: #34d399;
+        }
+
+        [data-theme="dark"] .leaflet-popup-content-wrapper {
+            background-color: #131b2e;
+            color: #f8fafc;
+            border: 1px solid #243049;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+        }
+
+        [data-theme="dark"] .leaflet-popup-tip {
+            background-color: #131b2e;
+        }
+
+        [data-theme="dark"] .leaflet-control-layers {
+            background-color: #131b2e;
+            color: #f8fafc;
+            border-color: #243049;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        [data-theme="dark"] .leaflet-bar a {
+            background-color: #131b2e;
+            color: #f8fafc;
+            border-bottom-color: #243049;
+        }
+
+        [data-theme="dark"] .leaflet-bar a:hover {
+            background-color: #1e293b;
+            color: #ffffff;
         }
     </style>
     @stack('styles')

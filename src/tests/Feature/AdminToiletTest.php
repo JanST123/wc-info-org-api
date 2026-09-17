@@ -792,5 +792,58 @@ class AdminToiletTest extends TestCase
         $this->assertEquals('Brand New Name', $toilet->name);
         $this->assertTrue($toilet->isUserOverridden('name'));
     }
+
+    public function test_map_context_endpoint_returns_target_toilet_places_and_nearby_toilets(): void
+    {
+        $targetToilet = Toilet::create([
+            'name' => 'Main Target Toilet',
+            'status' => 'active',
+            'flagged' => 1,
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'place_id' => 'ChIJtarget123',
+        ]);
+        $this->createdToiletIds[] = $targetToilet->id;
+
+        $targetPlace = Place::create([
+            'place_id' => 'ChIJtarget123',
+            'data' => [
+                'displayName' => ['text' => 'Alexanderplatz Station'],
+                'formattedAddress' => 'Alexanderplatz, 10178 Berlin',
+                'types' => ['transit_station', 'train_station'],
+                'location' => ['latitude' => 52.5205, 'longitude' => 13.4055],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $targetPlace->place_id;
+
+        $nearbyToilet = Toilet::create([
+            'name' => 'Nearby DB Toilet',
+            'status' => 'active',
+            'lat' => 52.5210,
+            'lon' => 13.4060,
+        ]);
+        $this->createdToiletIds[] = $nearbyToilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$targetToilet->id}/map-context");
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'toilet' => [
+                'id', 'name', 'status', 'flagged', 'lat', 'lon', 'place_id', 'place_name'
+            ],
+            'google_places',
+            'nearby_toilets',
+        ]);
+
+        $response->assertJsonPath('toilet.id', $targetToilet->id);
+        $response->assertJsonPath('toilet.name', 'Main Target Toilet');
+        $response->assertJsonPath('toilet.place_name', 'Alexanderplatz Station');
+
+        // Verify nearby toilet is included
+        $nearbyToilets = $response->json('nearby_toilets');
+        $this->assertNotEmpty($nearbyToilets);
+        $this->assertContains($nearbyToilet->id, array_column($nearbyToilets, 'id'));
+    }
 }
 

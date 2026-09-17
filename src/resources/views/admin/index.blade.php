@@ -181,17 +181,25 @@
                                     </div>
                                 </div>
 
-                                <div id="maps-container-{{ $toilet->id }}" style="margin-top: 0.25rem; {{ ($toilet->lat !== null && $toilet->lon !== null) ? '' : 'display: none;' }}">
+                                <div id="maps-container-{{ $toilet->id }}" style="margin-top: 0.25rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; {{ ($toilet->lat !== null && $toilet->lon !== null) ? '' : 'display: none;' }}">
                                     <a
                                         id="maps-link-{{ $toilet->id }}"
                                         href="{{ ($toilet->lat !== null && $toilet->lon !== null) ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon : '#' }}"
                                         target="_blank"
                                         rel="noopener"
-                                        style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: #1a73e8; text-decoration: none; font-weight: 500;"
+                                        style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--primary); text-decoration: none; font-weight: 500;"
                                         title="Open coordinates in Google Maps"
                                     >
                                         🗺️ Google Maps ↗
                                     </a>
+                                    <button
+                                        type="button"
+                                        onclick="openToiletMapModal({{ $toilet->id }}, {{ $toilet->lat ?? 0 }}, {{ $toilet->lon ?? 0 }}, '{{ addslashes($toilet->name ?: 'Toilet #' . $toilet->id) }}')"
+                                        style="background: none; border: none; padding: 0; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: #7c3aed; cursor: pointer; font-weight: 600; text-decoration: underline;"
+                                        title="Open interactive satellite map with POIs & database toilets"
+                                    >
+                                        🛰️ Satellite Map
+                                    </button>
                                 </div>
                             </td>
                             <td style="font-size: 0.8125rem; color: var(--gray-700); max-width: 200px; word-break: break-word;">
@@ -364,15 +372,25 @@
                             </td>
                             <td style="font-family: monospace; font-size: 0.8125rem;">
                                 @if ($toilet->lat !== null && $toilet->lon !== null)
-                                    <a
-                                        href="https://www.google.com/maps/search/?api=1&query={{ $toilet->lat }},{{ $toilet->lon }}"
-                                        target="_blank"
-                                        rel="noopener"
-                                        style="color: #1a73e8; text-decoration: none;"
-                                        title="Open coordinates in Google Maps"
-                                    >
-                                        {{ number_format($toilet->lat, 4) }}, {{ number_format($toilet->lon, 4) }} ↗
-                                    </a>
+                                    <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                        <a
+                                            href="https://www.google.com/maps/search/?api=1&query={{ $toilet->lat }},{{ $toilet->lon }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                            style="color: var(--primary); text-decoration: none;"
+                                            title="Open coordinates in Google Maps"
+                                        >
+                                            {{ number_format($toilet->lat, 4) }}, {{ number_format($toilet->lon, 4) }} ↗
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onclick="openToiletMapModal({{ $toilet->id }}, {{ $toilet->lat }}, {{ $toilet->lon }}, '{{ addslashes($toilet->name ?: 'Toilet #' . $toilet->id) }}')"
+                                            style="background: none; border: none; padding: 0; display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.6875rem; color: #7c3aed; cursor: pointer; font-weight: 600; text-decoration: underline; text-align: left;"
+                                            title="Open interactive satellite map with POIs & database toilets"
+                                        >
+                                            🛰️ Satellite Map
+                                        </button>
+                                    </div>
                                 @else
                                     <span style="color: var(--gray-400);">-</span>
                                 @endif
@@ -494,6 +512,90 @@
                 <button type="button" id="ai-modal-confirm-btn" onclick="confirmAiMatch()" class="btn btn-primary" style="background: linear-gradient(135deg, #16a34a, #15803d); border: none; font-weight: 700;">
                     ✓ Confirm & Assign Place
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Satellite & POI Map Modal Overlay -->
+    <div id="toilet-map-modal-overlay" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 1rem; overflow: hidden;">
+        <div class="card" style="max-width: 1400px; width: 96vw; height: 90vh; box-shadow: var(--shadow-lg); overflow: hidden; position: relative; margin: auto; padding: 0; display: flex; flex-direction: column;">
+            <!-- Header -->
+            <div style="padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.625rem;">
+                    <span style="font-size: 1.25rem;">🛰️</span>
+                    <div>
+                        <div style="font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <span>Satellite & POI Map Preview</span>
+                            <span id="map-modal-target-badge" class="badge" style="background: rgba(255,255,255,0.2); color: #ffffff; font-family: monospace;"></span>
+                            <span id="map-modal-target-name" style="font-size: 0.875rem; font-weight: 600; color: #e0e7ff;"></span>
+                        </div>
+                        <div id="map-modal-target-sub" style="font-size: 0.75rem; color: #c7d2fe; margin-top: 0.125rem;"></div>
+                    </div>
+                </div>
+
+                <!-- Layer and Filter Bar -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #ffffff; font-weight: 500;">
+                            <input type="checkbox" id="map-filter-target" checked onchange="toggleMapFilter('target')" style="accent-color: #ef4444; cursor: pointer;">
+                            <span>🚩 Target</span>
+                        </label>
+                        <span style="color: rgba(255,255,255,0.3);">|</span>
+                        <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #ffffff; font-weight: 500;">
+                            <input type="checkbox" id="map-filter-pois" checked onchange="toggleMapFilter('pois')" style="accent-color: #818cf8; cursor: pointer;">
+                            <span>⭐ Google POIs (<span id="map-pois-count">0</span>)</span>
+                        </label>
+                        <span style="color: rgba(255,255,255,0.3);">|</span>
+                        <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; color: #ffffff; font-weight: 500;">
+                            <input type="checkbox" id="map-filter-toilets" checked onchange="toggleMapFilter('toilets')" style="accent-color: #3b82f6; cursor: pointer;">
+                            <span>🚽 DB Toilets (<span id="map-toilets-count">0</span>)</span>
+                        </label>
+                    </div>
+
+                    <button type="button" class="btn btn-sm" onclick="recenterMapTarget()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); font-size: 0.75rem; padding: 0.25rem 0.625rem;" title="Recenter on target toilet">
+                        🎯 Recenter
+                    </button>
+                    <button type="button" onclick="closeToiletMapModal()" style="background: none; border: none; color: #ffffff; font-size: 1.5rem; line-height: 1; cursor: pointer; opacity: 0.8;" title="Close (Esc)">&times;</button>
+                </div>
+            </div>
+
+            <!-- Main Content Area: Map + Sidebar -->
+            <div style="display: flex; flex: 1; overflow: hidden; position: relative;">
+                <!-- Map Container -->
+                <div id="toilet-leaflet-map" style="flex: 1; height: 100%; min-height: 400px; z-index: 1;"></div>
+
+                <!-- Loading overlay -->
+                <div id="map-loading-overlay" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; color: #ffffff; font-weight: 600; font-size: 1rem; gap: 0.75rem;">
+                    <div style="width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #ffffff; border-radius: 50%; animation: spin 1s infinite linear;"></div>
+                    <span>Loading satellite map & POI data...</span>
+                </div>
+
+                <!-- Right Sidebar (Places & Nearby Toilets list) -->
+                <div id="map-sidebar" style="width: 340px; border-left: 1px solid var(--border-main); background: var(--bg-card); display: flex; flex-direction: column; overflow: hidden; z-index: 10;">
+                    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-main); background: var(--bg-subtle); display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-weight: 700; font-size: 0.8125rem; color: var(--text-heading); text-transform: uppercase; letter-spacing: 0.05em;">
+                            POIs & DB Toilets
+                        </span>
+                        <span id="map-sidebar-total" class="badge" style="background: var(--primary-light); color: var(--primary); font-size: 0.6875rem;">0</span>
+                    </div>
+
+                    <div id="map-sidebar-items" style="flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <!-- Items rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 0.625rem 1.25rem; background: var(--bg-subtle); border-top: 1px solid var(--border-main); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <span>💡 <em>Click any Google POI marker on the map to inspect details or assign it directly to the toilet.</em></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span id="map-modal-coords" style="font-family: monospace;"></span>
+                    <button type="button" onclick="closeToiletMapModal()" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1449,5 +1551,469 @@
             alert('Failed to unflag toilet. Please try again.');
         }
     }
+
+    // ==========================================
+    // SATELLITE & POI MAP MODAL LOGIC
+    // ==========================================
+    let toiletMap = null;
+    let mapTargetMarker = null;
+    let mapPoiMarkers = [];
+    let mapToiletMarkers = [];
+    let currentMapContext = null;
+    let mapLayerControl = null;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
+    async function openToiletMapModal(toiletId, lat, lon, name) {
+        const overlay = document.getElementById('toilet-map-modal-overlay');
+        const loading = document.getElementById('map-loading-overlay');
+        const badge = document.getElementById('map-modal-target-badge');
+        const titleName = document.getElementById('map-modal-target-name');
+        const sub = document.getElementById('map-modal-target-sub');
+        const coords = document.getElementById('map-modal-coords');
+
+        badge.textContent = `Toilet #${toiletId}`;
+        titleName.textContent = name ? `— ${name}` : '';
+        sub.textContent = `Target coordinates: ${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`;
+        coords.textContent = `Lat: ${Number(lat).toFixed(5)}, Lon: ${Number(lon).toFixed(5)}`;
+
+        overlay.style.display = 'flex';
+        loading.style.display = 'flex';
+
+        // Initialize Leaflet map if needed
+        if (!toiletMap) {
+            const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: '&copy; Google Maps Satellite'
+            });
+
+            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: '&copy; Esri World Imagery'
+            });
+
+            const osmStreets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            });
+
+            toiletMap = L.map('toilet-leaflet-map', {
+                center: [lat, lon],
+                zoom: 18,
+                layers: [googleHybrid]
+            });
+
+            const baseLayers = {
+                '🛰️ Google Satellite (Hybrid)': googleHybrid,
+                '🛰️ Esri Satellite (Clean)': esriSatellite,
+                '🗺️ OpenStreetMap (Streets)': osmStreets
+            };
+
+            mapLayerControl = L.control.layers(baseLayers, null, { position: 'topright' }).addTo(toiletMap);
+        } else {
+            toiletMap.setView([lat, lon], 18);
+        }
+
+        setTimeout(() => {
+            if (toiletMap) toiletMap.invalidateSize();
+        }, 150);
+
+        clearMapMarkers();
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/map-context`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+            currentMapContext = data;
+
+            renderMapContext(data);
+        } catch (err) {
+            console.error('Failed to load map context:', err);
+            alert('Could not load map context: ' + err.message);
+        } finally {
+            loading.style.display = 'none';
+            setTimeout(() => { if (toiletMap) toiletMap.invalidateSize(); }, 200);
+        }
+    }
+
+    function clearMapMarkers() {
+        if (mapTargetMarker && toiletMap) {
+            toiletMap.removeLayer(mapTargetMarker);
+            mapTargetMarker = null;
+        }
+        mapPoiMarkers.forEach(m => {
+            if (toiletMap) toiletMap.removeLayer(m);
+        });
+        mapPoiMarkers = [];
+
+        mapToiletMarkers.forEach(m => {
+            if (toiletMap) toiletMap.removeLayer(m);
+        });
+        mapToiletMarkers = [];
+    }
+
+    function renderMapContext(data) {
+        if (!toiletMap || !data || !data.toilet) return;
+
+        const targetLat = data.toilet.lat;
+        const targetLon = data.toilet.lon;
+
+        // 1. Target Toilet Marker
+        const targetCustomIcon = L.divIcon({
+            className: 'map-target-icon-wrapper',
+            html: `
+                <div style="position: relative; width: 32px; height: 32px;">
+                    <div class="map-pulse-ring"></div>
+                    <div class="map-pin-target-icon">🚽</div>
+                </div>
+            `,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+        });
+
+        mapTargetMarker = L.marker([targetLat, targetLon], { icon: targetCustomIcon, zIndexOffset: 1000 })
+            .addTo(toiletMap)
+            .bindPopup(`
+                <div style="padding: 0.25rem;">
+                    <div style="font-weight: 700; font-size: 0.9375rem; color: #dc2626;">🚩 Target: Toilet #${data.toilet.id}</div>
+                    <div style="font-weight: 600; font-size: 0.8125rem; margin-top: 0.125rem;">${escapeHtml(data.toilet.name)}</div>
+                    ${data.toilet.owner ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(data.toilet.owner)}</div>` : ''}
+                    ${data.toilet.address ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">📍 ${escapeHtml(data.toilet.address)}</div>` : ''}
+                    <div style="font-size: 0.75rem; margin-top: 0.35rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;">
+                        <span class="badge badge-${data.toilet.status}">${data.toilet.status}</span>
+                        ${data.toilet.place_name ? `<span class="badge" style="background: #e0e7ff; color: #4338ca;">⭐ ${escapeHtml(data.toilet.place_name)}</span>` : ''}
+                    </div>
+                    <div style="margin-top: 0.6rem;">
+                        <a href="/admin/toilets/${data.toilet.id}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" target="_blank">Open Details ↗</a>
+                    </div>
+                </div>
+            `);
+
+        // 2. Google Places POIs
+        const pois = data.google_places || [];
+        document.getElementById('map-pois-count').textContent = pois.length;
+
+        pois.forEach((p) => {
+            if (p.lat === null || p.lon === null) return;
+
+            const emoji = p.emoji || (p.is_public_bathroom ? '🚽' : '⭐');
+            const isCurrent = p.is_current || p.place_id === data.toilet.place_id;
+            const isFar = p.distance_m !== null && p.distance_m > 100;
+            const distText = p.distance_m !== null ? `~${Math.round(p.distance_m)}m` : '';
+
+            const poiCustomIcon = L.divIcon({
+                className: 'map-poi-wrapper',
+                html: `
+                    <div class="map-pin-poi-icon ${p.is_public_bathroom ? 'is-bathroom' : ''}" style="${isCurrent ? 'border-color: #f59e0b; box-shadow: 0 0 0 2px #f59e0b;' : ''}">
+                        <span>${emoji}</span>
+                        <span style="max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.name)}</span>
+                        ${distText ? `<span style="font-size: 0.625rem; opacity: 0.8; margin-left: 2px;">${distText}</span>` : ''}
+                    </div>
+                `,
+                iconSize: [null, 24],
+                iconAnchor: [12, 12],
+                popupAnchor: [0, -14]
+            });
+
+            const marker = L.marker([p.lat, p.lon], { icon: poiCustomIcon, zIndexOffset: isCurrent ? 900 : 500 })
+                .addTo(toiletMap)
+                .bindPopup(`
+                    <div style="padding: 0.25rem; min-width: 220px;">
+                        <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; font-size: 0.875rem; color: #4338ca;">
+                            <span>${emoji}</span>
+                            <span>${escapeHtml(p.name)}</span>
+                        </div>
+                        ${p.address ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">${escapeHtml(p.address)}</div>` : ''}
+                        <div style="display: flex; gap: 0.25rem; align-items: center; margin-top: 0.35rem; flex-wrap: wrap;">
+                            ${distText ? `<span class="badge ${isFar ? 'badge-distance-far' : 'badge-distance-near'}">${distText} away</span>` : ''}
+                            ${isCurrent ? `<span class="badge badge-active">Current Assigned</span>` : ''}
+                        </div>
+                        <div style="margin-top: 0.6rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="assignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}')" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                                ✓ Assign this Place
+                            </button>
+                            <a href="https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(p.place_id)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                                Maps ↗
+                            </a>
+                        </div>
+                    </div>
+                `);
+
+            marker._poiData = p;
+            mapPoiMarkers.push(marker);
+        });
+
+        // 3. Nearby Database Toilets
+        const toilets = data.nearby_toilets || [];
+        document.getElementById('map-toilets-count').textContent = toilets.length;
+
+        toilets.forEach((t) => {
+            if (t.lat === null || t.lon === null) return;
+
+            const toiletIcon = L.divIcon({
+                className: 'map-db-toilet-wrapper',
+                html: `
+                    <div class="map-pin-db-icon status-${t.status}" title="Toilet #${t.id}: ${escapeHtml(t.name)}">
+                        🚽
+                    </div>
+                `,
+                iconSize: [26, 26],
+                iconAnchor: [13, 13],
+                popupAnchor: [0, -14]
+            });
+
+            const marker = L.marker([t.lat, t.lon], { icon: toiletIcon, zIndexOffset: 200 })
+                .addTo(toiletMap)
+                .bindPopup(`
+                    <div style="padding: 0.25rem; min-width: 180px;">
+                        <div style="font-weight: 700; font-size: 0.875rem; color: #2563eb;">Toilet #${t.id}</div>
+                        <div style="font-weight: 600; font-size: 0.8125rem; margin-top: 0.125rem;">${escapeHtml(t.name)}</div>
+                        ${t.owner ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(t.owner)}</div>` : ''}
+                        <div style="font-size: 0.75rem; margin-top: 0.35rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;">
+                            <span class="badge badge-${t.status}">${t.status}</span>
+                            <span class="badge" style="background: var(--bg-subtle); color: var(--text-muted);">~${t.distance_m}m away</span>
+                        </div>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="/admin/toilets/${t.id}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" target="_blank">
+                                Open Toilet #${t.id} ↗
+                            </a>
+                        </div>
+                    </div>
+                `);
+
+            marker._toiletData = t;
+            mapToiletMarkers.push(marker);
+        });
+
+        // 4. Render Sidebar Items
+        renderMapSidebar(data);
+    }
+
+    function renderMapSidebar(data) {
+        const sidebarContainer = document.getElementById('map-sidebar-items');
+        const sidebarTotal = document.getElementById('map-sidebar-total');
+        sidebarContainer.innerHTML = '';
+
+        const pois = data.google_places || [];
+        const toilets = data.nearby_toilets || [];
+        sidebarTotal.textContent = `${pois.length} POIs / ${toilets.length} WCs`;
+
+        // Section: Google POIs
+        if (pois.length > 0) {
+            const sectionTitle = document.createElement('div');
+            sectionTitle.style.cssText = 'font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 0.25rem; margin-bottom: 0.25rem; padding-left: 0.25rem;';
+            sectionTitle.textContent = `⭐ Google Places POIs (${pois.length})`;
+            sidebarContainer.appendChild(sectionTitle);
+
+            pois.forEach(p => {
+                const isCurrent = p.is_current || p.place_id === data.toilet.place_id;
+                const emoji = p.emoji || (p.is_public_bathroom ? '🚽' : '⭐');
+                const isFar = p.distance_m !== null && p.distance_m > 100;
+                const distText = p.distance_m !== null ? `~${Math.round(p.distance_m)}m` : '';
+
+                const card = document.createElement('div');
+                card.style.cssText = `
+                    padding: 0.5rem 0.625rem;
+                    border: 1px solid ${isCurrent ? '#f59e0b' : 'var(--border-main)'};
+                    border-radius: var(--radius-md);
+                    background: ${isCurrent ? 'var(--bg-subtle)' : 'var(--bg-card)'};
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                `;
+                card.onmouseover = () => { card.style.borderColor = 'var(--primary)'; };
+                card.onmouseout = () => { card.style.borderColor = isCurrent ? '#f59e0b' : 'var(--border-main)'; };
+                card.onclick = () => {
+                    if (p.lat !== null && p.lon !== null && toiletMap) {
+                        toiletMap.setView([p.lat, p.lon], 19, { animate: true });
+                        const found = mapPoiMarkers.find(m => m._poiData && m._poiData.place_id === p.place_id);
+                        if (found) found.openPopup();
+                    }
+                };
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.35rem;">
+                        <span style="font-weight: 600; font-size: 0.8125rem; color: var(--text-heading); display: flex; align-items: center; gap: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span>${emoji}</span>
+                            <span>${escapeHtml(p.name)}</span>
+                        </span>
+                        ${distText ? `<span class="badge ${isFar ? 'badge-distance-far' : 'badge-distance-near'}" style="font-size: 0.625rem; padding: 0.1rem 0.35rem;">${distText}</span>` : ''}
+                    </div>
+                    ${p.address ? `<div style="font-size: 0.6875rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.address)}</div>` : ''}
+                    <div style="display: flex; justify-content: flex-end; gap: 0.25rem; margin-top: 0.125rem;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation(); assignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}')" style="font-size: 0.6875rem; padding: 0.125rem 0.375rem; height: 22px;">
+                            Assign
+                        </button>
+                    </div>
+                `;
+
+                sidebarContainer.appendChild(card);
+            });
+        }
+
+        // Section: DB Toilets
+        if (toilets.length > 0) {
+            const sectionTitle = document.createElement('div');
+            sectionTitle.style.cssText = 'font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 0.75rem; margin-bottom: 0.25rem; padding-left: 0.25rem;';
+            sectionTitle.textContent = `🚽 Database Toilets (${toilets.length})`;
+            sidebarContainer.appendChild(sectionTitle);
+
+            toilets.forEach(t => {
+                const card = document.createElement('div');
+                card.style.cssText = `
+                    padding: 0.5rem 0.625rem;
+                    border: 1px solid var(--border-main);
+                    border-radius: var(--radius-md);
+                    background: var(--bg-card);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                `;
+                card.onmouseover = () => { card.style.borderColor = 'var(--primary)'; };
+                card.onmouseout = () => { card.style.borderColor = 'var(--border-main)'; };
+                card.onclick = () => {
+                    if (t.lat !== null && t.lon !== null && toiletMap) {
+                        toiletMap.setView([t.lat, t.lon], 19, { animate: true });
+                        const found = mapToiletMarkers.find(m => m._toiletData && m._toiletData.id === t.id);
+                        if (found) found.openPopup();
+                    }
+                };
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.35rem;">
+                        <span style="font-weight: 600; font-size: 0.8125rem; color: var(--text-heading); display: flex; align-items: center; gap: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span>🚽</span>
+                            <span>Toilet #${t.id}: ${escapeHtml(t.name)}</span>
+                        </span>
+                        <span class="badge badge-${t.status}" style="font-size: 0.625rem; padding: 0.1rem 0.35rem;">${t.status}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.6875rem; color: var(--text-muted);">
+                        <span>${t.owner ? escapeHtml(t.owner) : ''}</span>
+                        <span>~${t.distance_m}m away</span>
+                    </div>
+                `;
+
+                sidebarContainer.appendChild(card);
+            });
+        }
+    }
+
+    function recenterMapTarget() {
+        if (currentMapContext && currentMapContext.toilet && toiletMap) {
+            toiletMap.setView([currentMapContext.toilet.lat, currentMapContext.toilet.lon], 18, { animate: true });
+            if (mapTargetMarker) {
+                mapTargetMarker.openPopup();
+            }
+        }
+    }
+
+    function toggleMapFilter(type) {
+        const isChecked = document.getElementById(`map-filter-${type}`).checked;
+        if (type === 'target') {
+            if (mapTargetMarker) {
+                if (isChecked) mapTargetMarker.addTo(toiletMap);
+                else toiletMap.removeLayer(mapTargetMarker);
+            }
+        } else if (type === 'pois') {
+            mapPoiMarkers.forEach(m => {
+                if (isChecked) m.addTo(toiletMap);
+                else toiletMap.removeLayer(m);
+            });
+        } else if (type === 'toilets') {
+            mapToiletMarkers.forEach(m => {
+                if (isChecked) m.addTo(toiletMap);
+                else toiletMap.removeLayer(m);
+            });
+        }
+    }
+
+    function closeToiletMapModal() {
+        const overlay = document.getElementById('toilet-map-modal-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
+    async function assignPlaceFromMap(toiletId, placeId, placeName) {
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/assign-place`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ place_id: placeId })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            // Update dropdown in main table
+            const dropdown = document.getElementById(`places-dropdown-${toiletId}`);
+            if (dropdown) {
+                let found = false;
+                for (let opt of dropdown.options) {
+                    if (opt.value === placeId) {
+                        opt.selected = true;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    const newOpt = document.createElement('option');
+                    newOpt.value = placeId;
+                    newOpt.textContent = `Assigned: ${placeName}`;
+                    newOpt.selected = true;
+                    dropdown.appendChild(newOpt);
+                }
+            }
+
+            // Update current place name cell in table
+            const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
+            if (currentPlaceElem) {
+                currentPlaceElem.textContent = placeName;
+            }
+
+            alert(`✓ Successfully assigned "${placeName}" to Toilet #${toiletId}!`);
+
+            // Refresh map context
+            if (currentMapContext && currentMapContext.toilet && currentMapContext.toilet.id === toiletId) {
+                openToiletMapModal(toiletId, currentMapContext.toilet.lat, currentMapContext.toilet.lon, currentMapContext.toilet.name);
+            }
+        } catch (err) {
+            console.error('Failed to assign place from map:', err);
+            alert('Failed to assign place: ' + err.message);
+        }
+    }
+
+    // ESC key closes both modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAiModal();
+            closeToiletMapModal();
+        }
+    });
 </script>
 @endpush

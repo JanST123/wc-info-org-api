@@ -572,6 +572,71 @@ class AdminToiletController extends Controller
     }
 
     /**
+     * Get map context (target toilet, Google places, and nearby database toilets) for satellite map view.
+     */
+    public function mapContext(int $id): JsonResponse
+    {
+        $toilet = Toilet::with(['properties', 'place'])->findOrFail($id);
+
+        if ($toilet->lat === null || $toilet->lon === null) {
+            return response()->json([
+                'error' => 'Toilet has no coordinates set.',
+            ], 422);
+        }
+
+        // 1. Google Places around toilet (up to ~100m)
+        $googlePlaces = $this->fetchNearbyPlaces($toilet);
+
+        // 2. Nearby toilets in our database (within ~1.5km bounding box)
+        $nearbyToilets = Toilet::where('id', '!=', $toilet->id)
+            ->whereNotNull('lat')
+            ->whereNotNull('lon')
+            ->whereBetween('lat', [$toilet->lat - 0.015, $toilet->lat + 0.015])
+            ->whereBetween('lon', [$toilet->lon - 0.025, $toilet->lon + 0.025])
+            ->with('place')
+            ->limit(50)
+            ->get()
+            ->map(function (Toilet $t) use ($toilet) {
+                return [
+                    'id' => $t->id,
+                    'name' => $t->name ?: "Toilet #{$t->id}",
+                    'owner' => $t->owner,
+                    'status' => $t->status,
+                    'lat' => (float) $t->lat,
+                    'lon' => (float) $t->lon,
+                    'place_id' => $t->place_id,
+                    'place_name' => $t->place?->getName(),
+                    'flagged' => (bool) $t->flagged,
+                    'public_accessible' => $t->isFlagSet('public_accessible'),
+                    'has_wheelchair_access' => $t->isFlagSet('has_wheelchair_access'),
+                    'distance_m' => round($this->calculateDistanceMeters($toilet->lat, $toilet->lon, (float) $t->lat, (float) $t->lon), 1),
+                ];
+            })
+            ->sortBy('distance_m')
+            ->values();
+
+        return response()->json([
+            'toilet' => [
+                'id' => $toilet->id,
+                'name' => $toilet->name ?: "Toilet #{$toilet->id}",
+                'owner' => $toilet->owner,
+                'status' => $toilet->status,
+                'flagged' => (bool) $toilet->flagged,
+                'lat' => (float) $toilet->lat,
+                'lon' => (float) $toilet->lon,
+                'place_id' => $toilet->place_id,
+                'place_name' => $toilet->place?->getName(),
+                'address' => $toilet->propertyValue('address') ?: '',
+                'comment' => $toilet->propertyValue('comment') ?: '',
+                'public_accessible' => $toilet->isFlagSet('public_accessible'),
+                'has_wheelchair_access' => $toilet->isFlagSet('has_wheelchair_access'),
+            ],
+            'google_places' => $googlePlaces,
+            'nearby_toilets' => $nearbyToilets,
+        ]);
+    }
+
+    /**
      * Assign a Google Place to a toilet directly from the admin interface.
      */
     public function assignPlace(int $id, Request $request): JsonResponse|RedirectResponse
