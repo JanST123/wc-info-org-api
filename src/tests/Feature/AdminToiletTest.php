@@ -496,6 +496,98 @@ class AdminToiletTest extends TestCase
         $this->assertTrue($toilet->isUserOverridden('place_id'));
     }
 
+    public function test_assign_place_with_apply_coordinates(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJplacecoords999',
+            'data' => [
+                'displayName' => ['text' => 'Coord Place'],
+                'location' => [
+                    'latitude' => 52.52055,
+                    'longitude' => 13.40555,
+                ],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet with Old Coords',
+            'status' => 'active',
+            'lat' => 52.51000,
+            'lon' => 13.40000,
+            'place_id' => null,
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/assign-place", [
+                'place_id' => 'ChIJplacecoords999',
+                'apply_coordinates' => true,
+                'lat' => 52.52055,
+                'lon' => 13.40555,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => 'ChIJplacecoords999',
+            'lat' => 52.52055,
+            'lon' => 13.40555,
+            'coordinates_updated' => true,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('ChIJplacecoords999', $toilet->place_id);
+        $this->assertEquals(52.52055, (float) $toilet->lat);
+        $this->assertEquals(13.40555, (float) $toilet->lon);
+        $this->assertTrue($toilet->isUserOverridden('place_id'));
+        $this->assertTrue($toilet->isUserOverridden('lat'));
+        $this->assertTrue($toilet->isUserOverridden('lon'));
+    }
+
+    public function test_assign_place_with_public_accessible(): void
+    {
+        $place = Place::create([
+            'place_id' => 'ChIJpublicplace999',
+            'data' => [
+                'displayName' => ['text' => 'Public Place'],
+                'types' => ['public_bathroom'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet for Public Access',
+            'status' => 'active',
+            'place_id' => null,
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $this->assertFalse($toilet->isFlagSet('public_accessible'));
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/assign-place", [
+                'place_id' => 'ChIJpublicplace999',
+                'set_public_accessible' => true,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'place_id' => 'ChIJpublicplace999',
+            'public_accessible' => true,
+            'is_public_bathroom' => true,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals('ChIJpublicplace999', $toilet->place_id);
+        $this->assertTrue($toilet->isFlagSet('public_accessible'));
+    }
+
     public function test_unflag_sets_flagged_to_false(): void
     {
         $toilet = Toilet::create([
@@ -844,6 +936,38 @@ class AdminToiletTest extends TestCase
         $nearbyToilets = $response->json('nearby_toilets');
         $this->assertNotEmpty($nearbyToilets);
         $this->assertContains($nearbyToilet->id, array_column($nearbyToilets, 'id'));
+    }
+
+    public function test_map_context_with_viewport_bounds(): void
+    {
+        $targetToilet = Toilet::create([
+            'name' => 'Target for Bounds',
+            'status' => 'active',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+        ]);
+        $this->createdToiletIds[] = $targetToilet->id;
+
+        $inViewToilet = Toilet::create([
+            'name' => 'In View DB Toilet',
+            'status' => 'active',
+            'lat' => 52.5220,
+            'lon' => 13.4070,
+        ]);
+        $this->createdToiletIds[] = $inViewToilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$targetToilet->id}/map-context?south=52.518&west=13.400&north=52.525&east=13.410");
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'toilet',
+            'google_places',
+            'nearby_toilets',
+        ]);
+
+        $nearbyToilets = $response->json('nearby_toilets');
+        $this->assertContains($inViewToilet->id, array_column($nearbyToilets, 'id'));
     }
 }
 

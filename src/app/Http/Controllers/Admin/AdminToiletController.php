@@ -574,7 +574,7 @@ class AdminToiletController extends Controller
     /**
      * Get map context (target toilet, Google places, and nearby database toilets) for satellite map view.
      */
-    public function mapContext(int $id): JsonResponse
+    public function mapContext(int $id, Request $request): JsonResponse
     {
         $toilet = Toilet::with(['properties', 'place'])->findOrFail($id);
 
@@ -584,17 +584,40 @@ class AdminToiletController extends Controller
             ], 422);
         }
 
-        // 1. Google Places around toilet (up to ~100m)
-        $googlePlaces = $this->fetchNearbyPlaces($toilet);
+        $south = $request->input('south') !== null ? (float) $request->input('south') : null;
+        $west = $request->input('west') !== null ? (float) $request->input('west') : null;
+        $north = $request->input('north') !== null ? (float) $request->input('north') : null;
+        $east = $request->input('east') !== null ? (float) $request->input('east') : null;
 
-        // 2. Nearby toilets in our database (within ~1.5km bounding box)
+        $hasBounds = $south !== null && $west !== null && $north !== null && $east !== null;
+
+        if ($hasBounds) {
+            $centerLat = ($north + $south) / 2;
+            $centerLon = ($east + $west) / 2;
+            $radiusMeters = $this->calculateDistanceMeters($centerLat, $centerLon, $north, $east);
+            $distanceKm = min(max($radiusMeters / 1000, 0.05), 0.5); // between 50m and 500m
+        } else {
+            $centerLat = (float) $toilet->lat;
+            $centerLon = (float) $toilet->lon;
+            $distanceKm = 0.1; // 100m default around target toilet
+        }
+
+        // 1. Google Places around center / bounds
+        $googlePlaces = $this->fetchNearbyPlaces($toilet, $centerLat, $centerLon, $distanceKm);
+
+        // 2. Nearby toilets in our database
+        $minLat = $hasBounds ? min($south, $toilet->lat - 0.015) : $toilet->lat - 0.015;
+        $maxLat = $hasBounds ? max($north, $toilet->lat + 0.015) : $toilet->lat + 0.015;
+        $minLon = $hasBounds ? min($west, $toilet->lon - 0.025) : $toilet->lon - 0.025;
+        $maxLon = $hasBounds ? max($east, $toilet->lon + 0.025) : $toilet->lon + 0.025;
+
         $nearbyToilets = Toilet::where('id', '!=', $toilet->id)
             ->whereNotNull('lat')
             ->whereNotNull('lon')
-            ->whereBetween('lat', [$toilet->lat - 0.015, $toilet->lat + 0.015])
-            ->whereBetween('lon', [$toilet->lon - 0.025, $toilet->lon + 0.025])
+            ->whereBetween('lat', [$minLat, $maxLat])
+            ->whereBetween('lon', [$minLon, $maxLon])
             ->with('place')
-            ->limit(50)
+            ->limit(100)
             ->get()
             ->map(function (Toilet $t) use ($toilet) {
                 return [
@@ -647,22 +670,66 @@ class AdminToiletController extends Controller
             $newPlaceId = null;
         }
 
+        $applyCoordinates = $request->boolean('apply_coordinates', false);
+        $newLat = $request->input('lat') !== null ? (float) $request->input('lat') : null;
+        $newLon = $request->input('lon') !== null ? (float) $request->input('lon') : null;
+
         $oldPlaceId = $toilet->place_id;
+        $diff = [];
+        $updates = [];
 
         if ($oldPlaceId !== $newPlaceId) {
             $toilet->place_id = $newPlaceId;
             $toilet->markUserOverridden('place_id');
+            $diff['place_id'] = ['old' => $oldPlaceId, 'new' => $newPlaceId];
+            $updates['place_id'] = $newPlaceId;
+        }
 
-            $toilet->update([
-                'email_sent' => 2,
-                'last_diff' => json_encode(['place_id' => ['old' => $oldPlaceId, 'new' => $newPlaceId]]),
-            ]);
+        // Handle apply coordinates
+        if ($applyCoordinates) {
+            if ($newLat === null || $newLon === null) {
+                if (! empty($newPlaceId)) {
+                    $placeModel = Place::find($newPlaceId);
+                    $newLat = $placeModel?->data['location']['latitude'] ?? $placeModel?->data['location']['lat'] ?? $placeModel?->data['geometry']['location']['lat'] ?? null;
+                    $newLon = $placeModel?->data['location']['longitude'] ?? $placeModel?->data['location']['lng'] ?? $placeModel?->data['geometry']['location']['lng'] ?? null;
+                    if ($newLat !== null) $newLat = (float) $newLat;
+                    if ($newLon !== null) $newLon = (float) $newLon;
+                }
+            }
+
+            if ($newLat !== null && $newLon !== null) {
+                $oldLat = $toilet->lat;
+                $oldLon = $toilet->lon;
+
+                if ($oldLat != $newLat || $oldLon != $newLon) {
+                    $toilet->lat = $newLat;
+                    $toilet->lon = $newLon;
+                    $toilet->markUserOverridden('lat');
+                    $toilet->markUserOverridden('lon');
+                    $diff['lat'] = ['old' => $oldLat, 'new' => $newLat];
+                    $diff['lon'] = ['old' => $oldLon, 'new' => $newLon];
+                    $updates['lat'] = $newLat;
+                    $updates['lon'] = $newLon;
+                }
+            }
+        }
+
+        // Handle public_accessible flag
+        if ($request->has('set_public_accessible') || $request->has('public_accessible')) {
+            $setPublicAccessible = $request->boolean('set_public_accessible') || $request->boolean('public_accessible');
+            $this->saveFlagProperty($toilet->id, 'public_accessible', $setPublicAccessible, $diff);
+        }
+
+        if (! empty($diff)) {
+            $updates['email_sent'] = 2;
+            $updates['last_diff'] = json_encode($diff);
+            $toilet->update($updates);
 
             $this->revisionService->recordRevision(
                 $toilet,
                 'admin_place_assign',
-                ['place_id' => ['old' => $oldPlaceId, 'new' => $newPlaceId]],
-                'Place assigned via admin'
+                $diff,
+                'Place assigned via admin' . ($applyCoordinates ? ' (with coordinates)' : '')
             );
         }
 
@@ -683,8 +750,12 @@ class AdminToiletController extends Controller
                 'toilet_id' => $toilet->id,
                 'place_id' => $toilet->place_id,
                 'place_name' => $placeName ?: ($toilet->place_id ?? '-'),
+                'lat' => $toilet->lat,
+                'lon' => $toilet->lon,
                 'emoji' => $placeEmoji,
                 'is_public_bathroom' => $isPublicBathroom,
+                'public_accessible' => $toilet->isFlagSet('public_accessible'),
+                'coordinates_updated' => $applyCoordinates && isset($diff['lat']),
                 'message' => 'Place assigned successfully.',
             ]);
         }
@@ -980,11 +1051,11 @@ class AdminToiletController extends Controller
     }
 
     /**
-     * Fetch Google Places and local places within ~40 meters around the toilet.
+     * Fetch Google Places and local places around the given coordinates.
      *
      * @return array<int, array{place_id: string, name: string, address: string, distance_m: float|null}>
      */
-    private function fetchNearbyPlaces(Toilet $toilet): array
+    private function fetchNearbyPlaces(Toilet $toilet, ?float $searchLat = null, ?float $searchLon = null, float $distanceKm = 0.1): array
     {
         $places = [];
         $seenPlaceIds = [];
@@ -1065,16 +1136,21 @@ class AdminToiletController extends Controller
                 'is_public_bathroom' => $isPublicBathroom,
                 'lat' => $currentPlaceLat !== null ? (float) $currentPlaceLat : null,
                 'lon' => $currentPlaceLon !== null ? (float) $currentPlaceLon : null,
-                'distance_m' => 0.0,
+                'distance_m' => ($toilet->lat !== null && $toilet->lon !== null && $currentPlaceLat !== null && $currentPlaceLon !== null)
+                    ? round($this->calculateDistanceMeters($toilet->lat, $toilet->lon, (float) $currentPlaceLat, (float) $currentPlaceLon), 1)
+                    : 0.0,
                 'is_current' => true,
             ];
             $seenPlaceIds[$toilet->place_id] = true;
         }
 
-        // 2. If lat/lon are set, query Google Places around 100m (0.1 km)
-        if ($toilet->lat !== null && $toilet->lon !== null) {
+        // 2. Query Google Places around search coordinates
+        $targetLat = $searchLat ?? $toilet->lat;
+        $targetLon = $searchLon ?? $toilet->lon;
+
+        if ($targetLat !== null && $targetLon !== null) {
             try {
-                $rawPlaces = $this->placesService->nearbySearchRaw($toilet->lat, $toilet->lon, 0.1);
+                $rawPlaces = $this->placesService->nearbySearchRaw($targetLat, $targetLon, $distanceKm);
 
                 foreach ($rawPlaces as $item) {
                     $pid = $item['id'] ?? $item['place_id'] ?? null;
@@ -1102,13 +1178,13 @@ class AdminToiletController extends Controller
                     $pLon = $item['location']['longitude'] ?? $item['location']['lng'] ?? $item['geometry']['location']['lng'] ?? null;
 
                     $dist = null;
-                    if ($pLat !== null && $pLon !== null) {
-                        $dist = $this->calculateDistanceMeters(
+                    if ($toilet->lat !== null && $toilet->lon !== null && $pLat !== null && $pLon !== null) {
+                        $dist = round($this->calculateDistanceMeters(
                             $toilet->lat,
                             $toilet->lon,
                             (float) $pLat,
                             (float) $pLon
-                        );
+                        ), 1);
                     }
 
                     $places[] = [

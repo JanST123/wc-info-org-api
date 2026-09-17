@@ -552,6 +552,42 @@
                         </label>
                     </div>
 
+                    <span id="map-pois-loading-badge" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #fde047; font-weight: 600; background: rgba(0,0,0,0.4); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm);">
+                        <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(253,224,71,0.3); border-top-color: #fde047; border-radius: 50%; animation: spin 0.8s infinite linear;"></span>
+                        <span>Loading view...</span>
+                    </span>
+
+                    <!-- View Mode Switcher -->
+                    <div style="display: flex; align-items: center; gap: 0.2rem; background: rgba(0,0,0,0.4); padding: 0.2rem; border-radius: var(--radius-sm);">
+                        <button
+                            type="button"
+                            id="map-mode-map-btn"
+                            onclick="setMapDisplayMode('map')"
+                            style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: #4f46e5; color: #ffffff; border: none; font-weight: 600; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease;"
+                            title="Full Satellite Map"
+                        >
+                            🛰️ Map
+                        </button>
+                        <button
+                            type="button"
+                            id="map-mode-split-btn"
+                            onclick="setMapDisplayMode('split')"
+                            style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: transparent; color: #e0e7ff; border: none; font-weight: 500; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease;"
+                            title="Side-by-side Map & Street View"
+                        >
+                            🌓 Split
+                        </button>
+                        <button
+                            type="button"
+                            id="map-mode-streetview-btn"
+                            onclick="setMapDisplayMode('streetview')"
+                            style="font-size: 0.75rem; padding: 0.2rem 0.5rem; background: transparent; color: #e0e7ff; border: none; font-weight: 500; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease;"
+                            title="Full Google Street View"
+                        >
+                            🚶 Street View
+                        </button>
+                    </div>
+
                     <button type="button" class="btn btn-sm" onclick="recenterMapTarget()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); font-size: 0.75rem; padding: 0.25rem 0.625rem;" title="Recenter on target toilet">
                         🎯 Recenter
                     </button>
@@ -559,15 +595,121 @@
                 </div>
             </div>
 
-            <!-- Main Content Area: Map + Sidebar -->
+            <!-- Main Content Area: Map + Street View + Sidebar -->
             <div style="display: flex; flex: 1; overflow: hidden; position: relative;">
                 <!-- Map Container -->
                 <div id="toilet-leaflet-map" style="flex: 1; height: 100%; min-height: 400px; z-index: 1;"></div>
+
+                <!-- Google Street View Container -->
+                <div id="toilet-streetview-wrapper" style="display: none; flex: 1; height: 100%; position: relative; background: #0f172a; flex-direction: column; border-left: 2px solid var(--border-main); z-index: 2;">
+                    <div style="padding: 0.4rem 0.75rem; background: rgba(15, 23, 42, 0.95); color: #ffffff; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 0.75rem; z-index: 10; gap: 0.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span style="font-size: 0.9rem;">🚶</span>
+                            <span id="streetview-location-label" style="font-weight: 600; color: #e0e7ff;">Target Toilet Viewpoint</span>
+                            <span id="streetview-coords-label" style="font-family: monospace; color: #94a3b8; font-size: 0.6875rem;"></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button type="button" class="btn btn-sm" onclick="syncStreetViewTarget()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.2); font-size: 0.6875rem; padding: 0.15rem 0.5rem;" title="Reset Street View to target toilet coordinates">
+                                🎯 Target Coords
+                            </button>
+                            <a id="streetview-external-link" href="#" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size: 0.6875rem; padding: 0.15rem 0.5rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                Google Maps ↗
+                            </a>
+                        </div>
+                    </div>
+                    <iframe
+                        id="streetview-iframe"
+                        src=""
+                        style="width: 100%; height: 100%; border: none; flex: 1; background: #000000;"
+                        allowfullscreen
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"
+                    ></iframe>
+                </div>
 
                 <!-- Loading overlay -->
                 <div id="map-loading-overlay" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; color: #ffffff; font-weight: 600; font-size: 1rem; gap: 0.75rem;">
                     <div style="width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #ffffff; border-radius: 50%; animation: spin 1s infinite linear;"></div>
                     <span>Loading satellite map & POI data...</span>
+                </div>
+
+                <!-- Assign Place & Apply Coordinates Confirmation Dialog -->
+                <div id="map-assign-confirm-dialog" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 2500; align-items: center; justify-content: center; padding: 1rem;">
+                    <div class="card" style="max-width: 480px; width: 100%; box-shadow: var(--shadow-lg); border: 1px solid var(--border-main); background: var(--bg-card); padding: 0; overflow: hidden; border-radius: var(--radius-lg); margin: auto;">
+                        <!-- Dialog Header -->
+                        <div style="padding: 0.875rem 1.25rem; background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff; display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 0.9375rem;">
+                                <span>📍</span>
+                                <span>Assign Place to Toilet</span>
+                            </div>
+                            <button type="button" onclick="closeMapAssignDialog()" style="background: none; border: none; color: #ffffff; font-size: 1.25rem; line-height: 1; cursor: pointer; opacity: 0.8;" title="Cancel">&times;</button>
+                        </div>
+
+                        <!-- Dialog Body -->
+                        <div style="padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Selected Google Place:</div>
+                                <div id="map-dialog-place-name" style="font-size: 1rem; font-weight: 700; color: var(--text-heading); display: flex; align-items: center; gap: 0.35rem;"></div>
+                            </div>
+
+                            <!-- Coordinate Comparison Box -->
+                            <div style="background: var(--bg-subtle); border: 1px solid var(--border-main); border-radius: var(--radius-md); padding: 0.875rem; font-size: 0.8125rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                    <span style="font-weight: 600; color: var(--text-muted);">Current Toilet Coords:</span>
+                                    <span id="map-dialog-toilet-coords" style="font-family: monospace; font-weight: 600;"></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                    <span style="font-weight: 600; color: var(--text-muted);">Place Coords:</span>
+                                    <span id="map-dialog-place-coords" style="font-family: monospace; font-weight: 600; color: #4338ca;"></span>
+                                </div>
+                                <div id="map-dialog-distance-row" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-main); padding-top: 0.4rem; margin-top: 0.25rem;">
+                                    <span style="font-weight: 600; color: var(--text-muted);">Distance Difference:</span>
+                                    <span id="map-dialog-distance" class="badge"></span>
+                                </div>
+                            </div>
+
+                            <div style="font-size: 0.875rem; color: var(--text-body); line-height: 1.4;">
+                                Would you also like to update the toilet's coordinates to match this place?
+                            </div>
+
+                            <!-- Public accessibility checkbox -->
+                            <div id="map-dialog-public-container" class="ai-public-box" style="margin-top: 0.25rem;">
+                                <input type="checkbox" id="map-dialog-public-checkbox" style="margin-top: 0.2rem; cursor: pointer; width: 1.1rem; height: 1.1rem; accent-color: var(--success);">
+                                <label for="map-dialog-public-checkbox" style="cursor: pointer;">
+                                    <strong>Set "public_accessible" property to Yes</strong>
+                                    <div class="ai-public-desc" style="font-size: 0.75rem; color: var(--text-muted);">The selected place belongs to public transport, parks, civic buildings, or public amenities.</div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Dialog Actions -->
+                        <div style="padding: 0.875rem 1.25rem; background: var(--bg-subtle); border-top: 1px solid var(--border-main); display: flex; flex-direction: column; gap: 0.5rem;">
+                            <button
+                                type="button"
+                                id="map-dialog-assign-apply-btn"
+                                class="btn btn-primary"
+                                style="width: 100%; justify-content: center; font-weight: 700; background: linear-gradient(135deg, #16a34a, #15803d); border: none; padding: 0.6rem 1rem;"
+                            >
+                                ✓ Assign Place & Apply Coordinates
+                            </button>
+                            <button
+                                type="button"
+                                id="map-dialog-assign-only-btn"
+                                class="btn btn-secondary"
+                                style="width: 100%; justify-content: center; font-weight: 600; padding: 0.5rem 1rem;"
+                            >
+                                Assign Place Only (Keep Coords)
+                            </button>
+                            <button
+                                type="button"
+                                onclick="closeMapAssignDialog()"
+                                class="btn btn-sm"
+                                style="background: none; border: none; color: var(--text-muted); cursor: pointer; text-decoration: underline; margin-top: 0.125rem; font-size: 0.75rem;"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right Sidebar (Places & Nearby Toilets list) -->
@@ -1553,7 +1695,7 @@
     }
 
     // ==========================================
-    // SATELLITE & POI MAP MODAL LOGIC
+    // SATELLITE & POI MAP & STREET VIEW LOGIC
     // ==========================================
     let toiletMap = null;
     let mapTargetMarker = null;
@@ -1561,12 +1703,114 @@
     let mapToiletMarkers = [];
     let currentMapContext = null;
     let mapLayerControl = null;
+    let mapMoveTimeout = null;
+    let isMapFetching = false;
+    let mapDisplayMode = 'map'; // 'map', 'split', 'streetview'
+    let streetViewCoords = { lat: null, lon: null, label: '' };
 
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>"']/g, function(m) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
         });
+    }
+
+    function setMapDisplayMode(mode) {
+        mapDisplayMode = mode;
+
+        const mapBtn = document.getElementById('map-mode-map-btn');
+        const splitBtn = document.getElementById('map-mode-split-btn');
+        const svBtn = document.getElementById('map-mode-streetview-btn');
+
+        const mapEl = document.getElementById('toilet-leaflet-map');
+        const svWrapper = document.getElementById('toilet-streetview-wrapper');
+
+        const activeStyle = 'background: rgba(255, 255, 255, 0.25); color: #ffffff; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.2);';
+        const inactiveStyle = 'background: transparent; color: #e0e7ff; font-weight: 500; box-shadow: none;';
+
+        if (mapBtn) mapBtn.style.cssText = `font-size: 0.75rem; padding: 0.2rem 0.5rem; border: none; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease; ${mode === 'map' ? activeStyle : inactiveStyle}`;
+        if (splitBtn) splitBtn.style.cssText = `font-size: 0.75rem; padding: 0.2rem 0.5rem; border: none; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease; ${mode === 'split' ? activeStyle : inactiveStyle}`;
+        if (svBtn) svBtn.style.cssText = `font-size: 0.75rem; padding: 0.2rem 0.5rem; border: none; border-radius: var(--radius-xs); cursor: pointer; transition: all 0.15s ease; ${mode === 'streetview' ? activeStyle : inactiveStyle}`;
+
+        if (mode === 'map') {
+            if (mapEl) {
+                mapEl.style.display = 'block';
+                mapEl.style.flex = '1';
+            }
+            if (svWrapper) {
+                svWrapper.style.display = 'none';
+            }
+        } else if (mode === 'split') {
+            if (mapEl) {
+                mapEl.style.display = 'block';
+                mapEl.style.flex = '1';
+            }
+            if (svWrapper) {
+                svWrapper.style.display = 'flex';
+                svWrapper.style.flex = '1';
+            }
+        } else if (mode === 'streetview') {
+            if (mapEl) {
+                mapEl.style.display = 'none';
+            }
+            if (svWrapper) {
+                svWrapper.style.display = 'flex';
+                svWrapper.style.flex = '1';
+            }
+        }
+
+        if (toiletMap && (mode === 'map' || mode === 'split')) {
+            setTimeout(() => {
+                toiletMap.invalidateSize();
+            }, 100);
+        }
+
+        // If switching to street view or split, make sure Street View has coordinates loaded
+        if (mode === 'split' || mode === 'streetview') {
+            if (!streetViewCoords.lat && currentMapContext && currentMapContext.toilet) {
+                loadStreetView(
+                    currentMapContext.toilet.lat,
+                    currentMapContext.toilet.lon,
+                    `Target: Toilet #${currentMapContext.toilet.id}`
+                );
+            }
+        }
+    }
+
+    function loadStreetView(lat, lon, label) {
+        if (lat === null || lon === null || isNaN(lat) || isNaN(lon)) return;
+
+        streetViewCoords = { lat, lon, label: label || 'Street View' };
+
+        const iframe = document.getElementById('streetview-iframe');
+        const locLabel = document.getElementById('streetview-location-label');
+        const coordsLabel = document.getElementById('streetview-coords-label');
+        const extLink = document.getElementById('streetview-external-link');
+
+        if (locLabel) locLabel.textContent = label || 'Selected Location';
+        if (coordsLabel) coordsLabel.textContent = `(${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)})`;
+        if (extLink) extLink.href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
+
+        if (iframe) {
+            iframe.src = `https://maps.google.com/maps?layer=c&cbll=${lat},${lon}&cbp=12,0,,0,0&output=svembed`;
+        }
+    }
+
+    function syncStreetViewTarget() {
+        if (currentMapContext && currentMapContext.toilet) {
+            loadStreetView(
+                currentMapContext.toilet.lat,
+                currentMapContext.toilet.lon,
+                `Target: Toilet #${currentMapContext.toilet.id}`
+            );
+        }
+    }
+
+    function openStreetViewAt(lat, lon, label) {
+        if (mapDisplayMode === 'map') {
+            setMapDisplayMode('split');
+        }
+        loadStreetView(lat, lon, label);
     }
 
     async function openToiletMapModal(toiletId, lat, lon, name) {
@@ -1581,6 +1825,22 @@
         titleName.textContent = name ? `— ${name}` : '';
         sub.textContent = `Target coordinates: ${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`;
         coords.textContent = `Lat: ${Number(lat).toFixed(5)}, Lon: ${Number(lon).toFixed(5)}`;
+
+        // Default mode is Map
+        setMapDisplayMode('map');
+        streetViewCoords = { lat, lon, label: `Target: Toilet #${toiletId}` };
+
+        // Preload Street View iframe in background
+        const iframe = document.getElementById('streetview-iframe');
+        if (iframe) {
+            iframe.src = `https://maps.google.com/maps?layer=c&cbll=${lat},${lon}&cbp=12,0,,0,0&output=svembed`;
+        }
+        const locLabel = document.getElementById('streetview-location-label');
+        const coordsLabel = document.getElementById('streetview-coords-label');
+        const extLink = document.getElementById('streetview-external-link');
+        if (locLabel) locLabel.textContent = `Target: Toilet #${toiletId}`;
+        if (coordsLabel) coordsLabel.textContent = `(${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)})`;
+        if (extLink) extLink.href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
 
         overlay.style.display = 'flex';
         loading.style.display = 'flex';
@@ -1616,6 +1876,21 @@
             };
 
             mapLayerControl = L.control.layers(baseLayers, null, { position: 'topright' }).addTo(toiletMap);
+
+            toiletMap.on('moveend', () => {
+                if (!currentMapContext || !currentMapContext.toilet) return;
+                const mapOverlay = document.getElementById('toilet-map-modal-overlay');
+                if (!mapOverlay || mapOverlay.style.display === 'none') return;
+
+                if (mapMoveTimeout) clearTimeout(mapMoveTimeout);
+                mapMoveTimeout = setTimeout(() => {
+                    fetchViewportPois();
+                }, 450);
+            });
+
+            toiletMap.on('contextmenu', (e) => {
+                openStreetViewAt(e.latlng.lat, e.latlng.lng, `Map Point (${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)})`);
+            });
         } else {
             toiletMap.setView([lat, lon], 18);
         }
@@ -1651,6 +1926,71 @@
         }
     }
 
+    async function fetchViewportPois() {
+        if (!toiletMap || !currentMapContext || !currentMapContext.toilet || isMapFetching) return;
+
+        const toiletId = currentMapContext.toilet.id;
+        const bounds = toiletMap.getBounds();
+        const south = bounds.getSouth();
+        const west = bounds.getWest();
+        const north = bounds.getNorth();
+        const east = bounds.getEast();
+
+        const indicator = document.getElementById('map-pois-loading-badge');
+        if (indicator) indicator.style.display = 'inline-flex';
+        isMapFetching = true;
+
+        try {
+            const url = `/admin/toilets/${toiletId}/map-context?south=${south}&west=${west}&north=${north}&east=${east}`;
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                }
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            mergeMapContextData(data);
+        } catch (err) {
+            console.warn('Failed to load viewport POIs:', err);
+        } finally {
+            isMapFetching = false;
+            if (indicator) indicator.style.display = 'none';
+        }
+    }
+
+    function mergeMapContextData(newData) {
+        if (!currentMapContext || !newData) return;
+
+        const existingPois = currentMapContext.google_places || [];
+        const newPois = newData.google_places || [];
+        const seenPois = new Set(existingPois.map(p => p.place_id));
+
+        newPois.forEach(p => {
+            if (!seenPois.has(p.place_id)) {
+                existingPois.push(p);
+                seenPois.add(p.place_id);
+            }
+        });
+        currentMapContext.google_places = existingPois;
+
+        const existingToilets = currentMapContext.nearby_toilets || [];
+        const newToilets = newData.nearby_toilets || [];
+        const seenToilets = new Set(existingToilets.map(t => t.id));
+
+        newToilets.forEach(t => {
+            if (!seenToilets.has(t.id)) {
+                existingToilets.push(t);
+                seenToilets.add(t.id);
+            }
+        });
+        currentMapContext.nearby_toilets = existingToilets;
+
+        renderMapContext(currentMapContext);
+    }
+
     function clearMapMarkers() {
         if (mapTargetMarker && toiletMap) {
             toiletMap.removeLayer(mapTargetMarker);
@@ -1673,37 +2013,49 @@
         const targetLat = data.toilet.lat;
         const targetLon = data.toilet.lon;
 
-        // 1. Target Toilet Marker
-        const targetCustomIcon = L.divIcon({
-            className: 'map-target-icon-wrapper',
-            html: `
-                <div style="position: relative; width: 32px; height: 32px;">
-                    <div class="map-pulse-ring"></div>
-                    <div class="map-pin-target-icon">🚽</div>
-                </div>
-            `,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popupAnchor: [0, -18]
-        });
+        const showTarget = document.getElementById('map-filter-target')?.checked ?? true;
+        const showPois = document.getElementById('map-filter-pois')?.checked ?? true;
+        const showToilets = document.getElementById('map-filter-toilets')?.checked ?? true;
 
-        mapTargetMarker = L.marker([targetLat, targetLon], { icon: targetCustomIcon, zIndexOffset: 1000 })
-            .addTo(toiletMap)
-            .bindPopup(`
-                <div style="padding: 0.25rem;">
-                    <div style="font-weight: 700; font-size: 0.9375rem; color: #dc2626;">🚩 Target: Toilet #${data.toilet.id}</div>
-                    <div style="font-weight: 600; font-size: 0.8125rem; margin-top: 0.125rem;">${escapeHtml(data.toilet.name)}</div>
-                    ${data.toilet.owner ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(data.toilet.owner)}</div>` : ''}
-                    ${data.toilet.address ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">📍 ${escapeHtml(data.toilet.address)}</div>` : ''}
-                    <div style="font-size: 0.75rem; margin-top: 0.35rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;">
-                        <span class="badge badge-${data.toilet.status}">${data.toilet.status}</span>
-                        ${data.toilet.place_name ? `<span class="badge" style="background: #e0e7ff; color: #4338ca;">⭐ ${escapeHtml(data.toilet.place_name)}</span>` : ''}
+        // 1. Target Toilet Marker
+        if (!mapTargetMarker) {
+            const targetCustomIcon = L.divIcon({
+                className: 'map-target-icon-wrapper',
+                html: `
+                    <div style="position: relative; width: 32px; height: 32px;">
+                        <div class="map-pulse-ring"></div>
+                        <div class="map-pin-target-icon">🚽</div>
                     </div>
-                    <div style="margin-top: 0.6rem;">
-                        <a href="/admin/toilets/${data.toilet.id}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" target="_blank">Open Details ↗</a>
+                `,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -18]
+            });
+
+            mapTargetMarker = L.marker([targetLat, targetLon], { icon: targetCustomIcon, zIndexOffset: 1000 })
+                .bindPopup(`
+                    <div style="padding: 0.25rem;">
+                        <div style="font-weight: 700; font-size: 0.9375rem; color: #dc2626;">🚩 Target: Toilet #${data.toilet.id}</div>
+                        <div style="font-weight: 600; font-size: 0.8125rem; margin-top: 0.125rem;">${escapeHtml(data.toilet.name)}</div>
+                        ${data.toilet.owner ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(data.toilet.owner)}</div>` : ''}
+                        ${data.toilet.address ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">📍 ${escapeHtml(data.toilet.address)}</div>` : ''}
+                        <div style="font-size: 0.75rem; margin-top: 0.35rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;">
+                            <span class="badge badge-${data.toilet.status}">${data.toilet.status}</span>
+                            ${data.toilet.place_name ? `<span class="badge" style="background: #e0e7ff; color: #4338ca;">⭐ ${escapeHtml(data.toilet.place_name)}</span>` : ''}
+                        </div>
+                        <div style="margin-top: 0.6rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openStreetViewAt(${targetLat}, ${targetLon}, 'Target: Toilet #${data.toilet.id}')" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                                🚶 Street View
+                            </button>
+                            <a href="/admin/toilets/${data.toilet.id}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" target="_blank">Open Details ↗</a>
+                        </div>
                     </div>
-                </div>
-            `);
+                `);
+
+            if (showTarget) {
+                mapTargetMarker.addTo(toiletMap);
+            }
+        }
 
         // 2. Google Places POIs
         const pois = data.google_places || [];
@@ -1711,6 +2063,9 @@
 
         pois.forEach((p) => {
             if (p.lat === null || p.lon === null) return;
+            if (mapPoiMarkers.some(m => m._poiData && m._poiData.place_id === p.place_id)) {
+                return;
+            }
 
             const emoji = p.emoji || (p.is_public_bathroom ? '🚽' : '⭐');
             const isCurrent = p.is_current || p.place_id === data.toilet.place_id;
@@ -1732,7 +2087,6 @@
             });
 
             const marker = L.marker([p.lat, p.lon], { icon: poiCustomIcon, zIndexOffset: isCurrent ? 900 : 500 })
-                .addTo(toiletMap)
                 .bindPopup(`
                     <div style="padding: 0.25rem; min-width: 220px;">
                         <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; font-size: 0.875rem; color: #4338ca;">
@@ -1745,8 +2099,11 @@
                             ${isCurrent ? `<span class="badge badge-active">Current Assigned</span>` : ''}
                         </div>
                         <div style="margin-top: 0.6rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-primary btn-sm" onclick="assignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}')" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="promptAssignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}', ${p.lat !== null ? p.lat : 'null'}, ${p.lon !== null ? p.lon : 'null'}, ${p.distance_m !== null ? p.distance_m : 'null'}, ${p.is_public_bathroom ? 'true' : 'false'})" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
                                 ✓ Assign this Place
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openStreetViewAt(${p.lat}, ${p.lon}, '${escapeHtml(p.name)}')" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                                🚶 Street View
                             </button>
                             <a href="https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(p.place_id)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
                                 Maps ↗
@@ -1754,6 +2111,10 @@
                         </div>
                     </div>
                 `);
+
+            if (showPois) {
+                marker.addTo(toiletMap);
+            }
 
             marker._poiData = p;
             mapPoiMarkers.push(marker);
@@ -1765,6 +2126,9 @@
 
         toilets.forEach((t) => {
             if (t.lat === null || t.lon === null) return;
+            if (mapToiletMarkers.some(m => m._toiletData && m._toiletData.id === t.id)) {
+                return;
+            }
 
             const toiletIcon = L.divIcon({
                 className: 'map-db-toilet-wrapper',
@@ -1779,7 +2143,6 @@
             });
 
             const marker = L.marker([t.lat, t.lon], { icon: toiletIcon, zIndexOffset: 200 })
-                .addTo(toiletMap)
                 .bindPopup(`
                     <div style="padding: 0.25rem; min-width: 180px;">
                         <div style="font-weight: 700; font-size: 0.875rem; color: #2563eb;">Toilet #${t.id}</div>
@@ -1789,13 +2152,20 @@
                             <span class="badge badge-${t.status}">${t.status}</span>
                             <span class="badge" style="background: var(--bg-subtle); color: var(--text-muted);">~${t.distance_m}m away</span>
                         </div>
-                        <div style="margin-top: 0.5rem;">
+                        <div style="margin-top: 0.5rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openStreetViewAt(${t.lat}, ${t.lon}, 'Toilet #${t.id}: ${escapeHtml(t.name)}')" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                                🚶 Street View
+                            </button>
                             <a href="/admin/toilets/${t.id}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" target="_blank">
                                 Open Toilet #${t.id} ↗
                             </a>
                         </div>
                     </div>
                 `);
+
+            if (showToilets) {
+                marker.addTo(toiletMap);
+            }
 
             marker._toiletData = t;
             mapToiletMarkers.push(marker);
@@ -1810,8 +2180,12 @@
         const sidebarTotal = document.getElementById('map-sidebar-total');
         sidebarContainer.innerHTML = '';
 
-        const pois = data.google_places || [];
-        const toilets = data.nearby_toilets || [];
+        const pois = [...(data.google_places || [])];
+        const toilets = [...(data.nearby_toilets || [])];
+
+        pois.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
+        toilets.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
+
         sidebarTotal.textContent = `${pois.length} POIs / ${toilets.length} WCs`;
 
         // Section: Google POIs
@@ -1859,7 +2233,12 @@
                     </div>
                     ${p.address ? `<div style="font-size: 0.6875rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.address)}</div>` : ''}
                     <div style="display: flex; justify-content: flex-end; gap: 0.25rem; margin-top: 0.125rem;">
-                        <button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation(); assignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}')" style="font-size: 0.6875rem; padding: 0.125rem 0.375rem; height: 22px;">
+                        ${p.lat !== null && p.lon !== null ? `
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openStreetViewAt(${p.lat}, ${p.lon}, '${escapeHtml(p.name)}')" style="font-size: 0.6875rem; padding: 0.125rem 0.375rem; height: 22px;" title="View in Street View">
+                                🚶 SV
+                            </button>
+                        ` : ''}
+                        <button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation(); promptAssignPlaceFromMap(${data.toilet.id}, '${escapeHtml(p.place_id)}', '${escapeHtml(p.name)}', ${p.lat !== null ? p.lat : 'null'}, ${p.lon !== null ? p.lon : 'null'}, ${p.distance_m !== null ? p.distance_m : 'null'}, ${p.is_public_bathroom ? 'true' : 'false'})" style="font-size: 0.6875rem; padding: 0.125rem 0.375rem; height: 22px;">
                             Assign
                         </button>
                     </div>
@@ -1909,7 +2288,14 @@
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.6875rem; color: var(--text-muted);">
                         <span>${t.owner ? escapeHtml(t.owner) : ''}</span>
-                        <span>~${t.distance_m}m away</span>
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <span>~${t.distance_m}m away</span>
+                            ${t.lat !== null && t.lon !== null ? `
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openStreetViewAt(${t.lat}, ${t.lon}, 'Toilet #${t.id}: ${escapeHtml(t.name)}')" style="font-size: 0.6875rem; padding: 0.125rem 0.375rem; height: 20px;" title="View in Street View">
+                                    🚶 SV
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 `;
 
@@ -1952,10 +2338,99 @@
         if (overlay) {
             overlay.style.display = 'none';
         }
+        const iframe = document.getElementById('streetview-iframe');
+        if (iframe) {
+            iframe.src = '';
+        }
     }
 
-    async function assignPlaceFromMap(toiletId, placeId, placeName) {
+    function closeMapAssignDialog() {
+        const dialog = document.getElementById('map-assign-confirm-dialog');
+        if (dialog) {
+            dialog.style.display = 'none';
+        }
+    }
+
+    function promptAssignPlaceFromMap(toiletId, placeId, placeName, placeLat, placeLon, distanceM, isPublicBathroom) {
+        if (placeLat === null || placeLon === null || typeof placeLat === 'undefined' || typeof placeLon === 'undefined') {
+            // No coordinates available for place, assign directly without coords
+            executeAssignPlaceFromMap(toiletId, placeId, placeName, false, null, null);
+            return;
+        }
+
+        const dialog = document.getElementById('map-assign-confirm-dialog');
+        const nameElem = document.getElementById('map-dialog-place-name');
+        const toiletCoordsElem = document.getElementById('map-dialog-toilet-coords');
+        const placeCoordsElem = document.getElementById('map-dialog-place-coords');
+        const distElem = document.getElementById('map-dialog-distance');
+        const publicCheckbox = document.getElementById('map-dialog-public-checkbox');
+        const applyBtn = document.getElementById('map-dialog-assign-apply-btn');
+        const onlyBtn = document.getElementById('map-dialog-assign-only-btn');
+
+        if (!dialog) {
+            const applyCoords = confirm(`Assign "${placeName}" to Toilet #${toiletId}?\n\nClick OK to also apply the place's coordinates, or Cancel to only assign the place.`);
+            executeAssignPlaceFromMap(toiletId, placeId, placeName, applyCoords, placeLat, placeLon);
+            return;
+        }
+
+        nameElem.textContent = placeName;
+        const currentLat = currentMapContext && currentMapContext.toilet ? currentMapContext.toilet.lat : null;
+        const currentLon = currentMapContext && currentMapContext.toilet ? currentMapContext.toilet.lon : null;
+        const currentPublic = currentMapContext && currentMapContext.toilet ? !!currentMapContext.toilet.public_accessible : false;
+
+        toiletCoordsElem.textContent = (currentLat !== null && currentLon !== null)
+            ? `${Number(currentLat).toFixed(5)}, ${Number(currentLon).toFixed(5)}`
+            : 'None';
+
+        placeCoordsElem.textContent = `${Number(placeLat).toFixed(5)}, ${Number(placeLon).toFixed(5)}`;
+
+        if (distanceM !== null && !isNaN(distanceM)) {
+            const dist = Math.round(distanceM);
+            distElem.textContent = `~${dist}m away`;
+            distElem.className = 'badge ' + (dist > 100 ? 'badge-distance-far' : 'badge-distance-near');
+        } else {
+            distElem.textContent = 'Unknown distance';
+            distElem.className = 'badge';
+        }
+
+        if (publicCheckbox) {
+            publicCheckbox.checked = currentPublic || !!isPublicBathroom;
+        }
+
+        applyBtn.disabled = false;
+        applyBtn.textContent = '✓ Assign Place & Apply Coordinates';
+        applyBtn.onclick = () => {
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Saving...';
+            executeAssignPlaceFromMap(toiletId, placeId, placeName, true, placeLat, placeLon);
+        };
+
+        onlyBtn.disabled = false;
+        onlyBtn.textContent = 'Assign Place Only (Keep Coords)';
+        onlyBtn.onclick = () => {
+            onlyBtn.disabled = true;
+            onlyBtn.textContent = 'Saving...';
+            executeAssignPlaceFromMap(toiletId, placeId, placeName, false, null, null);
+        };
+
+        dialog.style.display = 'flex';
+    }
+
+    async function executeAssignPlaceFromMap(toiletId, placeId, placeName, applyCoordinates, placeLat, placeLon) {
         try {
+            const publicCheckbox = document.getElementById('map-dialog-public-checkbox');
+            const setPublicAccessible = publicCheckbox ? publicCheckbox.checked : false;
+
+            const payload = {
+                place_id: placeId,
+                apply_coordinates: applyCoordinates,
+                set_public_accessible: setPublicAccessible
+            };
+            if (applyCoordinates && placeLat !== null && placeLon !== null) {
+                payload.lat = placeLat;
+                payload.lon = placeLon;
+            }
+
             const response = await fetch(`/admin/toilets/${toiletId}/assign-place`, {
                 method: 'POST',
                 headers: {
@@ -1963,12 +2438,15 @@
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': getCsrfToken()
                 },
-                body: JSON.stringify({ place_id: placeId })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);
             }
+
+            const data = await response.json();
+            closeMapAssignDialog();
 
             // Update dropdown in main table
             const dropdown = document.getElementById(`places-dropdown-${toiletId}`);
@@ -1993,24 +2471,69 @@
             // Update current place name cell in table
             const currentPlaceElem = document.getElementById(`current-place-name-${toiletId}`);
             if (currentPlaceElem) {
-                currentPlaceElem.textContent = placeName;
+                const prefix = data.emoji ? `${data.emoji} ` : '';
+                currentPlaceElem.textContent = `${prefix}${placeName}`;
             }
 
-            alert(`✓ Successfully assigned "${placeName}" to Toilet #${toiletId}!`);
+            // Update public accessibility checkbox in main table
+            const tablePublicCheckbox = document.getElementById(`public-accessible-checkbox-${toiletId}`);
+            const tablePublicLabel = document.getElementById(`public-accessible-label-${toiletId}`);
+            if (tablePublicCheckbox) {
+                tablePublicCheckbox.checked = !!data.public_accessible;
+            }
+            if (tablePublicLabel) {
+                tablePublicLabel.textContent = data.public_accessible ? 'Yes' : 'No';
+                tablePublicLabel.style.color = data.public_accessible ? '#166534' : '#64748b';
+            }
+
+            // Update map context for public_accessible
+            if (currentMapContext && currentMapContext.toilet && currentMapContext.toilet.id === toiletId) {
+                currentMapContext.toilet.public_accessible = !!data.public_accessible;
+            }
+
+            // If coordinates were updated, update main table maps links & map context
+            if (data.coordinates_updated && data.lat !== null && data.lon !== null) {
+                const mapsLink = document.getElementById(`maps-link-${toiletId}`);
+                if (mapsLink) {
+                    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lon}`;
+                }
+
+                if (currentMapContext && currentMapContext.toilet) {
+                    currentMapContext.toilet.lat = data.lat;
+                    currentMapContext.toilet.lon = data.lon;
+
+                    const sub = document.getElementById('map-modal-target-sub');
+                    const coords = document.getElementById('map-modal-coords');
+                    if (sub) sub.textContent = `Target coordinates: ${Number(data.lat).toFixed(5)}, ${Number(data.lon).toFixed(5)}`;
+                    if (coords) coords.textContent = `Lat: ${Number(data.lat).toFixed(5)}, Lon: ${Number(data.lon).toFixed(5)}`;
+
+                    if (mapTargetMarker) {
+                        mapTargetMarker.setLatLng([data.lat, data.lon]);
+                    }
+                }
+            }
 
             // Refresh map context
             if (currentMapContext && currentMapContext.toilet && currentMapContext.toilet.id === toiletId) {
                 openToiletMapModal(toiletId, currentMapContext.toilet.lat, currentMapContext.toilet.lon, currentMapContext.toilet.name);
             }
+
+            alert(`✓ Successfully assigned "${placeName}" to Toilet #${toiletId}${data.coordinates_updated ? ' and updated coordinates' : ''}!`);
         } catch (err) {
             console.error('Failed to assign place from map:', err);
             alert('Failed to assign place: ' + err.message);
+            closeMapAssignDialog();
         }
     }
 
-    // ESC key closes both modals
+    // ESC key closes modals (inner dialog first, then outer modals)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            const confirmDialog = document.getElementById('map-assign-confirm-dialog');
+            if (confirmDialog && confirmDialog.style.display !== 'none') {
+                closeMapAssignDialog();
+                return;
+            }
             closeAiModal();
             closeToiletMapModal();
         }
