@@ -92,20 +92,22 @@ class GoogleCostService
         string $endpoint = '',
         ?float $costUsd = null,
         int $statusCode = 200,
-        array $context = []
+        array $context = [],
+        bool $isCacheHit = false
     ): GoogleApiLog {
-        $cost = $costUsd ?? (self::PRICING[$service] ?? 0.0);
+        $cost = $isCacheHit ? 0.0 : ($costUsd ?? (self::PRICING[$service] ?? 0.0));
 
         $log = GoogleApiLog::create([
             'service' => $service,
             'endpoint' => $endpoint,
             'cost_usd' => $cost,
+            'is_cache_hit' => $isCacheHit,
             'status_code' => $statusCode,
             'context' => ! empty($context) ? $context : null,
             'created_at' => now(),
         ]);
 
-        if (! $this->hasBudget()) {
+        if (! $isCacheHit && ! $this->hasBudget()) {
             $this->checkBudgetAndNotify();
         }
 
@@ -175,30 +177,46 @@ class GoogleCostService
 
         $totalCost = (float) $logs->sum('cost_usd');
         $totalRequests = $logs->count();
+        $cacheHits = $logs->where('is_cache_hit', true)->count();
+        $apiCalls = $totalRequests - $cacheHits;
+        $cacheHitRate = $totalRequests > 0 ? round(($cacheHits / $totalRequests) * 100, 1) : 0.0;
+        $savedCost = 0.0;
 
         $services = [
             self::SERVICE_PLACES_NEARBY => [
                 'name' => 'Places Nearby Search',
                 'count' => 0,
+                'api_calls' => 0,
+                'cache_hits' => 0,
                 'cost' => 0.0,
+                'saved_cost' => 0.0,
                 'unit_cost' => self::COST_PLACES_NEARBY_USD,
             ],
             self::SERVICE_PLACES_DETAILS => [
                 'name' => 'Place Details',
                 'count' => 0,
+                'api_calls' => 0,
+                'cache_hits' => 0,
                 'cost' => 0.0,
+                'saved_cost' => 0.0,
                 'unit_cost' => self::COST_PLACES_DETAILS_USD,
             ],
             self::SERVICE_CUSTOM_SEARCH => [
                 'name' => 'Website Crawl (Custom Search)',
                 'count' => 0,
+                'api_calls' => 0,
+                'cache_hits' => 0,
                 'cost' => 0.0,
+                'saved_cost' => 0.0,
                 'unit_cost' => self::COST_CUSTOM_SEARCH_USD,
             ],
             self::SERVICE_GEOCODING => [
                 'name' => 'Geocoding (Photo GPS)',
                 'count' => 0,
+                'api_calls' => 0,
+                'cache_hits' => 0,
                 'cost' => 0.0,
+                'saved_cost' => 0.0,
                 'unit_cost' => self::COST_GEOCODING_USD,
             ],
         ];
@@ -207,7 +225,15 @@ class GoogleCostService
             $svc = $log->service;
             if (isset($services[$svc])) {
                 $services[$svc]['count']++;
-                $services[$svc]['cost'] += (float) $log->cost_usd;
+                if ($log->is_cache_hit) {
+                    $services[$svc]['cache_hits']++;
+                    $saved = (float) ($services[$svc]['unit_cost'] ?? 0.0);
+                    $services[$svc]['saved_cost'] += $saved;
+                    $savedCost += $saved;
+                } else {
+                    $services[$svc]['api_calls']++;
+                    $services[$svc]['cost'] += (float) $log->cost_usd;
+                }
             }
         }
 
@@ -220,6 +246,10 @@ class GoogleCostService
             'budget' => $budget,
             'total_cost' => $totalCost,
             'total_requests' => $totalRequests,
+            'api_calls' => $apiCalls,
+            'cache_hits' => $cacheHits,
+            'cache_hit_rate' => $cacheHitRate,
+            'saved_cost' => $savedCost,
             'remaining_budget' => $remainingBudget,
             'percentage_used' => $percentageUsed,
             'is_exceeded' => $totalCost >= $budget,

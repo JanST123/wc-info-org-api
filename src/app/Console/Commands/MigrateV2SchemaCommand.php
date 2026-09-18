@@ -511,16 +511,45 @@ class MigrateV2SchemaCommand extends Command
                     service VARCHAR(50) NOT NULL,
                     endpoint VARCHAR(255) NOT NULL,
                     cost_usd DECIMAL(8, 4) NOT NULL DEFAULT 0.0000,
+                    is_cache_hit TINYINT(1) NOT NULL DEFAULT 0,
                     status_code SMALLINT UNSIGNED NOT NULL DEFAULT 200,
                     context JSON NULL DEFAULT NULL,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_service_created (service, created_at),
-                    INDEX idx_created (created_at)
+                    INDEX idx_created (created_at),
+                    INDEX idx_cache_created (is_cache_hit, created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
         } else {
             $this->runStatement('ALTER TABLE google_api_logs MODIFY COLUMN service VARCHAR(50) NOT NULL');
-            $this->info('Table google_api_logs updated service column to VARCHAR(50).');
+            if (! $this->columnExists('google_api_logs', 'is_cache_hit')) {
+                $this->runStatement('ALTER TABLE google_api_logs ADD COLUMN is_cache_hit TINYINT(1) NOT NULL DEFAULT 0 AFTER cost_usd');
+                $this->runStatement('ALTER TABLE google_api_logs ADD INDEX idx_cache_created (is_cache_hit, created_at)');
+                $this->info('Added is_cache_hit column and index to google_api_logs.');
+            }
+            $this->info('Table google_api_logs verified.');
+        }
+
+        if (! $this->tableExists('google_nearby_search_cache')) {
+            $this->runStatement("
+                CREATE TABLE google_nearby_search_cache (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    lat DECIMAL(10, 7) NOT NULL,
+                    lon DECIMAL(10, 7) NOT NULL,
+                    radius_meters DOUBLE NOT NULL,
+                    query_params JSON NULL DEFAULT NULL,
+                    response_places LONGTEXT NOT NULL,
+                    result_count INT UNSIGNED NOT NULL DEFAULT 0,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_created_at (created_at),
+                    INDEX idx_lat_lon (lat, lon),
+                    INDEX idx_radius (radius_meters)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $this->info('Created table google_nearby_search_cache.');
+        } else {
+            $this->info('Table google_nearby_search_cache already exists, skipping.');
         }
 
         if (! $this->tableExists('app_settings')) {

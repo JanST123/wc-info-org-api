@@ -19,6 +19,7 @@ class GoogleApiLog extends Model
         'service',
         'endpoint',
         'cost_usd',
+        'is_cache_hit',
         'status_code',
         'context',
         'created_at',
@@ -26,6 +27,7 @@ class GoogleApiLog extends Model
 
     protected $casts = [
         'cost_usd' => 'float',
+        'is_cache_hit' => 'boolean',
         'status_code' => 'integer',
         'context' => 'array',
         'created_at' => 'datetime',

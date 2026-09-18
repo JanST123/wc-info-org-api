@@ -14,6 +14,7 @@ return [
     'google' => [
         'api_key' => env('GOOGLE_API_KEY'),
         'monthly_budget' => (float) env('GOOGLE_MONTHLY_BUDGET', 20.0),
+        'nearby_cache_days' => (int) env('GOOGLE_NEARBY_CACHE_DAYS', 30),
     ],
 
     'gemini' => [

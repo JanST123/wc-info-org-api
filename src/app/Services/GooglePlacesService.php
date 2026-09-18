@@ -13,12 +13,15 @@ class GooglePlacesService
 {
     private string $apiKey;
     private GoogleCostService $costService;
+    private GoogleNearbyCacheService $cacheService;
 
     public function __construct(
         ?GoogleCostService $costService = null,
+        ?GoogleNearbyCacheService $cacheService = null,
     ) {
         $this->apiKey = (string) config('wcinfo.google.api_key');
         $this->costService = $costService ?? app(GoogleCostService::class);
+        $this->cacheService = $cacheService ?? app(GoogleNearbyCacheService::class);
 
         if (empty($this->apiKey)) {
             throw new RuntimeException('Google API key is not configured.');
@@ -251,10 +254,54 @@ class GooglePlacesService
     /**
      * Fetch raw results from Google Places Nearby Search.
      *
+     * Checks intelligent geometric spatial cache before calling the Google Places API.
+     * If a fresh (default <=30 days) cached search circle fully encloses the requested
+     * query circle, results are served directly from cache without incurring API costs.
+     *
      * @return array<int, array>
      */
-    public function nearbySearchRaw(float $lat, float $lon, float $distanceKm): array
+    public function nearbySearchRaw(float $lat, float $lon, float $distanceKm, bool $forceRefresh = false): array
     {
+        $radius = (float) min(round($distanceKm * 1000, 1), 50000);
+        $freshnessDays = (int) config('wcinfo.google.nearby_cache_days', 30);
+        $endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
+
+        // 1. Check intelligent geometric spatial cache
+        if (! $forceRefresh) {
+            $cached = $this->cacheService->findEnclosingCache($lat, $lon, $radius, $freshnessDays);
+
+            if ($cached !== null) {
+                $filteredPlaces = $this->cacheService->filterCachedPlaces(
+                    $cached->response_places ?? [],
+                    $lat,
+                    $lon,
+                    $radius,
+                    10
+                );
+
+                // Log cache hit ($0.00 cost, is_cache_hit = true)
+                $this->costService->logApiCall(
+                    GoogleCostService::SERVICE_PLACES_NEARBY,
+                    $endpoint,
+                    0.0,
+                    200,
+                    [
+                        'lat' => $lat,
+                        'lon' => $lon,
+                        'distance_km' => $distanceKm,
+                        'cached' => true,
+                        'cache_id' => $cached->id,
+                        'cached_radius_m' => $cached->radius_meters,
+                        'results_count' => count($filteredPlaces),
+                    ],
+                    true
+                );
+
+                return $filteredPlaces;
+            }
+        }
+
+        // 2. Cache miss -> check monthly budget before external API call
         if (! $this->costService->hasBudget()) {
             Log::warning('Google API call blocked: Monthly budget exceeded', [
                 'service' => GoogleCostService::SERVICE_PLACES_NEARBY,
@@ -265,9 +312,6 @@ class GooglePlacesService
 
             return [];
         }
-
-        $radius = (float) min(round($distanceKm * 1000, 1), 50000);
-        $endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
 
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
@@ -292,7 +336,8 @@ class GooglePlacesService
             $endpoint,
             GoogleCostService::COST_PLACES_NEARBY_USD,
             $response->status(),
-            ['lat' => $lat, 'lon' => $lon, 'distance_km' => $distanceKm]
+            ['lat' => $lat, 'lon' => $lon, 'distance_km' => $distanceKm, 'cached' => false],
+            false
         );
 
         if ($response->failed()) {
@@ -308,8 +353,16 @@ class GooglePlacesService
         }
 
         $json = $response->json();
+        $places = $json['places'] ?? [];
 
-        return $json['places'] ?? [];
+        // 3. Store result in cache table
+        $this->cacheService->store($lat, $lon, $radius, $places, [
+            'languageCode' => 'de',
+            'rankPreference' => 'DISTANCE',
+            'maxResultCount' => 10,
+        ]);
+
+        return $places;
     }
 
     /**
