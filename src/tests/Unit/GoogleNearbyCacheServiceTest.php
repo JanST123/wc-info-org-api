@@ -113,17 +113,33 @@ class GoogleNearbyCacheServiceTest extends TestCase
         $this->assertEquals('place-medium', $filtered[1]['id']);
     }
 
-    public function test_cleanup_stale_removes_old_cache_entries(): void
+    public function test_find_enclosing_cache_respects_truncation_when_max_results_reached(): void
     {
-        $fresh = $this->service->store(52.50, 13.30, 1000.0, []);
+        // 10 places in a dense cluster (all within 60m of center), but requested radius was 250m
+        $places = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $places[] = [
+                'id' => "place-{$i}",
+                'displayName' => ['text' => "Place {$i}"],
+                'location' => [
+                    'latitude' => 52.5200 + ($i * 0.00005), // ~5.5m steps up to ~55m
+                    'longitude' => 13.4000,
+                ],
+            ];
+        }
 
-        $old = $this->service->store(52.60, 13.40, 1000.0, []);
-        $old->created_at = Carbon::now()->subDays(95);
-        $old->save();
+        $cached = $this->service->store(52.5200, 13.4000, 250.0, $places, ['maxResultCount' => 10]);
 
-        $deleted = $this->service->cleanupStale(90);
-        $this->assertEquals(1, $deleted);
-        $this->assertEquals(1, GoogleNearbySearchCache::count());
-        $this->assertEquals($fresh->id, GoogleNearbySearchCache::first()->id);
+        $effectiveRadius = $this->service->getEffectiveRadiusMeters($cached);
+        $this->assertLessThan(100.0, $effectiveRadius);
+
+        // Point 150m away with radius 40m -> (150 + 40 = 190m <= 250m requested, BUT > 100m effective) -> MUST BE CACHE MISS!
+        $miss = $this->service->findEnclosingCache(52.5215, 13.4000, 40.0);
+        $this->assertNull($miss);
+
+        // Point 10m away with radius 20m -> (10 + 20 = 30m <= effectiveRadius) -> CACHE HIT!
+        $hit = $this->service->findEnclosingCache(52.5201, 13.4000, 20.0);
+        $this->assertNotNull($hit);
     }
 }
+

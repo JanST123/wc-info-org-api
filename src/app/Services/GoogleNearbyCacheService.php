@@ -43,11 +43,18 @@ class GoogleNearbyCacheService
             ->get();
 
         foreach ($candidates as $candidate) {
+            $effectiveRadius = $this->getEffectiveRadiusMeters($candidate);
+
+            // If effective covered radius is smaller than requested radius, it cannot enclose the query
+            if ($effectiveRadius < $radiusMeters) {
+                continue;
+            }
+
             $centerDistance = $this->haversineDistanceMeters($lat, $lon, (float) $candidate->lat, (float) $candidate->lon);
 
-            // Check if requested circle falls completely inside cached circle
+            // Check if requested circle falls completely inside the effective cached circle
             // Allow 1.0 meter floating-point tolerance
-            if (($centerDistance + $radiusMeters) <= ($candidate->radius_meters + 1.0)) {
+            if (($centerDistance + $radiusMeters) <= ($effectiveRadius + 1.0)) {
                 Log::debug('Google Nearby Search cache HIT (spatial enclosure)', [
                     'requested_lat' => $lat,
                     'requested_lon' => $lon,
@@ -56,6 +63,7 @@ class GoogleNearbyCacheService
                     'cached_lat' => $candidate->lat,
                     'cached_lon' => $candidate->lon,
                     'cached_radius_m' => $candidate->radius_meters,
+                    'effective_radius_m' => round($effectiveRadius, 2),
                     'center_distance_m' => round($centerDistance, 2),
                 ]);
 
@@ -64,6 +72,40 @@ class GoogleNearbyCacheService
         }
 
         return null;
+    }
+
+    /**
+     * Compute the effective radius in meters that is guaranteed to be completely covered by the cached results.
+     *
+     * If the API returned fewer results than maxResultCount (or 0 results), the entire requested radius
+     * was exhaustively searched without truncation.
+     * If the API returned results up to maxResultCount, Google stopped scanning and truncated results
+     * at the distance of the farthest place returned.
+     */
+    public function getEffectiveRadiusMeters(GoogleNearbySearchCache $cache): float
+    {
+        $places = $cache->response_places ?? [];
+        $count = count($places);
+        $maxLimit = (int) ($cache->query_params['maxResultCount'] ?? 10);
+
+        // If fewer results than the API limit, the search was exhaustively complete
+        if ($count < $maxLimit) {
+            return (float) $cache->radius_meters;
+        }
+
+        // If limit was reached, find distance of farthest place from cache center
+        $maxDist = 0.0;
+        foreach ($places as $place) {
+            $coords = $this->extractPlaceCoordinates($place);
+            if ($coords !== null) {
+                $dist = $this->haversineDistanceMeters((float) $cache->lat, (float) $cache->lon, $coords['lat'], $coords['lon']);
+                if ($dist > $maxDist) {
+                    $maxDist = $dist;
+                }
+            }
+        }
+
+        return $maxDist > 0.0 ? $maxDist : (float) $cache->radius_meters;
     }
 
     /**
