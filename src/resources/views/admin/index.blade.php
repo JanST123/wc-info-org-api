@@ -1890,7 +1890,33 @@
             });
 
             toiletMap.on('contextmenu', (e) => {
-                openStreetViewAt(e.latlng.lat, e.latlng.lng, `Map Point (${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)})`);
+                const clickLat = e.latlng.lat;
+                const clickLng = e.latlng.lng;
+                const targetToiletId = currentMapContext && currentMapContext.toilet ? currentMapContext.toilet.id : null;
+
+                const popupContent = `
+                    <div style="padding: 0.25rem; font-family: inherit; min-width: 170px;">
+                        <div style="font-weight: 700; font-size: 0.8125rem; margin-bottom: 0.25rem; color: #1e293b;">📍 Selected Point</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; font-family: monospace;">
+                            ${clickLat.toFixed(5)}, ${clickLng.toFixed(5)}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                            ${targetToiletId ? `
+                            <button type="button" class="btn btn-primary btn-sm" onclick="setTargetToiletCoordinates(${targetToiletId}, ${clickLat}, ${clickLng})" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; text-align: left; display: flex; align-items: center; gap: 0.35rem;">
+                                <span>🎯</span> <strong>Set this coordinates</strong>
+                            </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="toiletMap.closePopup(); openStreetViewAt(${clickLat}, ${clickLng}, 'Map Point (${clickLat.toFixed(5)}, ${clickLng.toFixed(5)})')" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; text-align: left; display: flex; align-items: center; gap: 0.35rem;">
+                                <span>🚶</span> <span>Street View</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                L.popup()
+                    .setLatLng(e.latlng)
+                    .setContent(popupContent)
+                    .openOn(toiletMap);
             });
         } else {
             toiletMap.setView([lat, lon], 18);
@@ -2536,7 +2562,74 @@
         } catch (err) {
             console.error('Failed to assign place from map:', err);
             alert('Failed to assign place: ' + err.message);
-            closeMapAssignDialog();
+        }
+    }
+
+    async function setTargetToiletCoordinates(toiletId, lat, lon) {
+        if (!confirm(`Are you sure you want to update the coordinates of Toilet #${toiletId} to (${lat.toFixed(5)}, ${lon.toFixed(5)})?`)) {
+            return;
+        }
+
+        try {
+            if (toiletMap) toiletMap.closePopup();
+
+            const response = await fetch(`/admin/toilets/${toiletId}/coordinates`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ lat, lon })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Update main table maps link
+            const mapsLink = document.getElementById(`maps-link-${toiletId}`);
+            if (mapsLink) {
+                mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lon}`;
+            }
+
+            // Update map context & markers
+            if (currentMapContext && currentMapContext.toilet && currentMapContext.toilet.id === toiletId) {
+                currentMapContext.toilet.lat = data.lat;
+                currentMapContext.toilet.lon = data.lon;
+
+                const sub = document.getElementById('map-modal-target-sub');
+                const coords = document.getElementById('map-modal-coords');
+                if (sub) sub.textContent = `Target coordinates: ${Number(data.lat).toFixed(5)}, ${Number(data.lon).toFixed(5)}`;
+                if (coords) coords.textContent = `Lat: ${Number(data.lat).toFixed(5)}, Lon: ${Number(data.lon).toFixed(5)}`;
+
+                if (mapTargetMarker) {
+                    mapTargetMarker.setLatLng([data.lat, data.lon]);
+                }
+            }
+
+            // Status message feedback
+            const statusMsg = document.getElementById(`status-msg-${toiletId}`);
+            if (statusMsg) {
+                statusMsg.style.display = 'block';
+                statusMsg.textContent = `✓ Coordinates updated to (${Number(data.lat).toFixed(5)}, ${Number(data.lon).toFixed(5)})!`;
+                statusMsg.style.color = 'var(--success)';
+                setTimeout(() => { statusMsg.style.display = 'none'; }, 3000);
+            }
+
+            // Visual highlight row
+            const row = document.getElementById(`flagged-row-${toiletId}`);
+            if (row) {
+                row.style.transition = 'background-color 0.5s ease';
+                row.style.backgroundColor = '#dcfce7';
+                setTimeout(() => { row.style.backgroundColor = ''; }, 2000);
+            }
+        } catch (err) {
+            console.error('Failed to update coordinates:', err);
+            alert('Failed to update coordinates: ' + err.message);
         }
     }
 

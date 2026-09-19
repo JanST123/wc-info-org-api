@@ -969,5 +969,36 @@ class AdminToiletTest extends TestCase
         $nearbyToilets = $response->json('nearby_toilets');
         $this->assertContains($inViewToilet->id, array_column($nearbyToilets, 'id'));
     }
+
+    public function test_update_coordinates_from_admin_map(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Coordinate Update Test Toilet',
+            'status' => 'active',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/coordinates", [
+                'lat' => 52.52555,
+                'lon' => 13.41234,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'lat' => 52.52555,
+            'lon' => 13.41234,
+        ]);
+
+        $toilet->refresh();
+        $this->assertEquals(52.52555, (float) $toilet->lat);
+        $this->assertEquals(13.41234, (float) $toilet->lon);
+        $this->assertTrue($toilet->isUserOverridden('lat'));
+        $this->assertTrue($toilet->isUserOverridden('lon'));
+    }
 }
 

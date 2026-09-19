@@ -49,6 +49,7 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
     Route::get('toilets/{id}/nearby-places', [AdminToiletController::class, 'getNearbyPlaces'])->name('toilets.nearby-places');
     Route::get('toilets/{id}/map-context', [AdminToiletController::class, 'mapContext'])->name('toilets.map-context');
     Route::post('toilets/{id}/assign-place', [AdminToiletController::class, 'assignPlace'])->name('toilets.assign-place');
+    Route::post('toilets/{id}/coordinates', [AdminToiletController::class, 'updateCoordinates'])->name('toilets.coordinates');
     Route::post('toilets/{id}/status', [AdminToiletController::class, 'updateStatus'])->name('toilets.status');
     Route::post('toilets/{id}/name', [AdminToiletController::class, 'updateName'])->name('toilets.name');
     Route::post('toilets/{id}/public-accessible', [AdminToiletController::class, 'updatePublicAccessible'])->name('toilets.public-accessible');

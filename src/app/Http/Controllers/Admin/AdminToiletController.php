@@ -909,6 +909,60 @@ class AdminToiletController extends Controller
     }
 
     /**
+     * Update toilet coordinates directly from the admin satellite map.
+     */
+    public function updateCoordinates(int $id, Request $request): JsonResponse|RedirectResponse
+    {
+        $toilet = Toilet::findOrFail($id);
+        $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lon' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $newLat = (float) $request->input('lat');
+        $newLon = (float) $request->input('lon');
+        $oldLat = $toilet->lat !== null ? (float) $toilet->lat : null;
+        $oldLon = $toilet->lon !== null ? (float) $toilet->lon : null;
+
+        $diff = [];
+        if ($oldLat !== $newLat) {
+            $diff['lat'] = ['old' => $oldLat, 'new' => $newLat];
+        }
+        if ($oldLon !== $newLon) {
+            $diff['lon'] = ['old' => $oldLon, 'new' => $newLon];
+        }
+
+        if (! empty($diff)) {
+            $toilet->lat = $newLat;
+            $toilet->lon = $newLon;
+            $toilet->markUserOverridden('lat');
+            $toilet->markUserOverridden('lon');
+            $toilet->email_sent = 2;
+            $toilet->last_diff = json_encode($diff);
+            $toilet->save();
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'admin_coordinate_change',
+                $diff,
+                "Coordinates updated to ({$newLat}, {$newLon}) via admin map"
+            );
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'toilet_id' => $toilet->id,
+                'lat' => (float) $toilet->lat,
+                'lon' => (float) $toilet->lon,
+                'message' => 'Coordinates updated successfully.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', "Toilet #{$toilet->id} coordinates updated.");
+    }
+
+    /**
      * Inline update toilet name.
      */
     public function updateName(int $id, Request $request): JsonResponse|RedirectResponse
