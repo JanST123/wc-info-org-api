@@ -722,6 +722,26 @@
                         <span id="map-sidebar-total" class="badge" style="background: var(--primary-light); color: var(--primary); font-size: 0.6875rem;">0</span>
                     </div>
 
+                    <!-- Search / Filter input -->
+                    <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-main); background: var(--bg-card);">
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input
+                                type="text"
+                                id="map-sidebar-filter-input"
+                                placeholder="Filter places & toilets..."
+                                oninput="handleMapSidebarFilter()"
+                                style="width: 100%; font-size: 0.75rem; padding: 0.35rem 1.75rem 0.35rem 0.6rem; border: 1px solid var(--border-main); border-radius: var(--radius-sm); outline: none; background: var(--bg-input); color: var(--text-body);"
+                            >
+                            <button
+                                type="button"
+                                id="map-sidebar-filter-clear"
+                                onclick="clearMapSidebarFilter()"
+                                style="display: none; position: absolute; right: 6px; background: none; border: none; font-size: 0.875rem; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 2px;"
+                                title="Clear filter"
+                            >&times;</button>
+                        </div>
+                    </div>
+
                     <div id="map-sidebar-items" style="flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
                         <!-- Items rendered dynamically -->
                     </div>
@@ -1831,6 +1851,12 @@
         setMapDisplayMode('map');
         streetViewCoords = { lat, lon, label: `Target: Toilet #${toiletId}` };
 
+        // Reset sidebar filter
+        const sidebarFilterInput = document.getElementById('map-sidebar-filter-input');
+        const sidebarFilterClear = document.getElementById('map-sidebar-filter-clear');
+        if (sidebarFilterInput) sidebarFilterInput.value = '';
+        if (sidebarFilterClear) sidebarFilterClear.style.display = 'none';
+
         // Preload Street View iframe in background
         const iframe = document.getElementById('streetview-iframe');
         if (iframe) {
@@ -2202,24 +2228,95 @@
         renderMapSidebar(data);
     }
 
+    function handleMapSidebarFilter() {
+        const filterInput = document.getElementById('map-sidebar-filter-input');
+        const clearBtn = document.getElementById('map-sidebar-filter-clear');
+        if (clearBtn && filterInput) {
+            clearBtn.style.display = filterInput.value ? 'block' : 'none';
+        }
+        if (currentMapContext) {
+            renderMapSidebar(currentMapContext);
+        }
+    }
+
+    function clearMapSidebarFilter() {
+        const filterInput = document.getElementById('map-sidebar-filter-input');
+        const clearBtn = document.getElementById('map-sidebar-filter-clear');
+        if (filterInput) {
+            filterInput.value = '';
+            filterInput.focus();
+        }
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (currentMapContext) {
+            renderMapSidebar(currentMapContext);
+        }
+    }
+
     function renderMapSidebar(data) {
         const sidebarContainer = document.getElementById('map-sidebar-items');
         const sidebarTotal = document.getElementById('map-sidebar-total');
+        if (!sidebarContainer || !sidebarTotal) return;
         sidebarContainer.innerHTML = '';
 
-        const pois = [...(data.google_places || [])];
-        const toilets = [...(data.nearby_toilets || [])];
+        const filterInput = document.getElementById('map-sidebar-filter-input');
+        const query = filterInput ? filterInput.value.trim().toLowerCase() : '';
 
-        pois.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
-        toilets.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
+        const allPois = [...(data.google_places || [])];
+        const allToilets = [...(data.nearby_toilets || [])];
 
-        sidebarTotal.textContent = `${pois.length} POIs / ${toilets.length} WCs`;
+        allPois.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
+        allToilets.sort((a, b) => (a.distance_m ?? 999999) - (b.distance_m ?? 999999));
+
+        let pois = allPois;
+        let toilets = allToilets;
+
+        if (query) {
+            pois = allPois.filter(p => {
+                const name = (p.name || '').toLowerCase();
+                const addr = (p.address || '').toLowerCase();
+                const types = Array.isArray(p.types) ? p.types.join(' ').toLowerCase() : (p.types || '').toLowerCase();
+                const pid = (p.place_id || '').toLowerCase();
+                return name.includes(query) || addr.includes(query) || types.includes(query) || pid.includes(query);
+            });
+
+            toilets = allToilets.filter(t => {
+                const name = (t.name || '').toLowerCase();
+                const owner = (t.owner || '').toLowerCase();
+                const addr = (t.address || '').toLowerCase();
+                const status = (t.status || '').toLowerCase();
+                const idStr = String(t.id);
+                return name.includes(query) || owner.includes(query) || addr.includes(query) || status.includes(query) || idStr.includes(query) || (`#${idStr}`).includes(query);
+            });
+
+            sidebarTotal.textContent = `${pois.length + toilets.length} of ${allPois.length + allToilets.length}`;
+        } else {
+            sidebarTotal.textContent = `${pois.length} POIs / ${toilets.length} WCs`;
+        }
+
+        if (pois.length === 0 && toilets.length === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.style.cssText = 'text-align: center; padding: 2rem 0.5rem; color: var(--text-muted); font-size: 0.8125rem;';
+            if (query) {
+                emptyMsg.innerHTML = `
+                    <div style="font-size: 1.25rem; margin-bottom: 0.35rem;">🔍</div>
+                    <div style="font-weight: 600; color: var(--text-heading); margin-bottom: 0.25rem;">No results found</div>
+                    <div style="font-size: 0.75rem;">No places or toilets match "<strong>${escapeHtml(query)}</strong>"</div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearMapSidebarFilter()" style="margin-top: 0.625rem; font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+                        Clear Filter
+                    </button>
+                `;
+            } else {
+                emptyMsg.textContent = 'No POIs or toilets found in this view.';
+            }
+            sidebarContainer.appendChild(emptyMsg);
+            return;
+        }
 
         // Section: Google POIs
         if (pois.length > 0) {
             const sectionTitle = document.createElement('div');
             sectionTitle.style.cssText = 'font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 0.25rem; margin-bottom: 0.25rem; padding-left: 0.25rem;';
-            sectionTitle.textContent = `⭐ Google Places POIs (${pois.length})`;
+            sectionTitle.textContent = `⭐ Google Places POIs (${pois.length}${query ? ` / ${allPois.length}` : ''})`;
             sidebarContainer.appendChild(sectionTitle);
 
             pois.forEach(p => {
@@ -2279,7 +2376,7 @@
         if (toilets.length > 0) {
             const sectionTitle = document.createElement('div');
             sectionTitle.style.cssText = 'font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 0.75rem; margin-bottom: 0.25rem; padding-left: 0.25rem;';
-            sectionTitle.textContent = `🚽 Database Toilets (${toilets.length})`;
+            sectionTitle.textContent = `🚽 Database Toilets (${toilets.length}${query ? ` / ${allToilets.length}` : ''})`;
             sidebarContainer.appendChild(sectionTitle);
 
             toilets.forEach(t => {
