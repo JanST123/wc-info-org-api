@@ -328,7 +328,7 @@ class GooglePlacesService
                 ],
             ],
             'rankPreference' => 'DISTANCE',
-            'maxResultCount' => 10,
+            'maxResultCount' => 20,
         ]);
 
         $this->costService->logApiCall(
@@ -359,7 +359,7 @@ class GooglePlacesService
         $this->cacheService->store($lat, $lon, $radius, $places, [
             'languageCode' => 'de',
             'rankPreference' => 'DISTANCE',
-            'maxResultCount' => 10,
+            'maxResultCount' => 20,
         ]);
 
         return $places;
@@ -387,7 +387,7 @@ class GooglePlacesService
         $payload = [
             'textQuery' => $query,
             'languageCode' => 'de',
-            'maxResultCount' => 10,
+            'maxResultCount' => 20,
         ];
 
         if ($lat !== null && $lon !== null) {

@@ -86,7 +86,7 @@ class GoogleNearbyCacheService
     {
         $places = $cache->response_places ?? [];
         $count = count($places);
-        $maxLimit = (int) ($cache->query_params['maxResultCount'] ?? 10);
+        $maxLimit = (int) ($cache->query_params['maxResultCount'] ?? 20);
 
         // If fewer results than the API limit, the search was exhaustively complete
         if ($count < $maxLimit) {
