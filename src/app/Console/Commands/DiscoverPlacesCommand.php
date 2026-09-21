@@ -7,6 +7,7 @@ use App\Models\Toilet;
 use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -17,7 +18,8 @@ class DiscoverPlacesCommand extends Command
                             {--lon= : Optional override: longitude of the search center}
                             {--radius= : Search radius in meters when lat/lon is provided (default from config)}
                             {--limit= : Maximum number of toilets to process}
-                            {--prefer-cache : Always use existing data from the places table if available instead of querying Google Places API}
+                            {--prefer-cache= : Prefer cached data from places table instead of querying Google Places API. Optionally specify max cache age (e.g. --prefer-cache=30d, --prefer-cache=6m, --prefer-cache=1y)}
+                            {--max-cache-age= : Max allowed cache age when preferring cache (e.g. 30d, 6m, 1y)}
                             {--dry-run : Show what would be changed without writing anything}';
 
     protected $description = 'Update places for toilets that have been requested by API clients';
@@ -25,6 +27,10 @@ class DiscoverPlacesCommand extends Command
     private bool $dryRun;
 
     private bool $preferCache;
+
+    private ?string $maxCacheAgeString = null;
+
+    private ?Carbon $cacheCutoff = null;
 
     private int $limit;
 
@@ -63,7 +69,28 @@ class DiscoverPlacesCommand extends Command
     public function handle(GooglePlacesService $placesService, PlaceToiletService $placeToiletService): int
     {
         $this->dryRun = (bool) $this->option('dry-run');
-        $this->preferCache = (bool) $this->option('prefer-cache');
+
+        $preferCacheOption = $this->option('prefer-cache');
+        $maxCacheAgeOption = $this->option('max-cache-age');
+
+        $hasPreferCacheFlag = $this->input->hasParameterOption('--prefer-cache') || $preferCacheOption !== null;
+        $this->preferCache = $hasPreferCacheFlag || $maxCacheAgeOption !== null;
+
+        $ageString = null;
+        if (is_string($preferCacheOption) && ! in_array(strtolower($preferCacheOption), ['true', 'false', '1', '0'], true)) {
+            $ageString = $preferCacheOption;
+        } elseif ($maxCacheAgeOption !== null) {
+            $ageString = (string) $maxCacheAgeOption;
+        }
+
+        if ($preferCacheOption === false || $preferCacheOption === 'false' || $preferCacheOption === '0') {
+            $this->preferCache = false;
+            $ageString = null;
+        }
+
+        $this->maxCacheAgeString = $ageString;
+        $this->cacheCutoff = $this->parseCacheMaxAgeCutoff($ageString);
+
         $this->limit = (int) $this->option('limit') ?: (int) config('wcinfo.discover.limit', 500);
         $this->radius = (int) $this->option('radius') ?: (int) config('wcinfo.discover.radius', 2000);
 
@@ -140,9 +167,7 @@ class DiscoverPlacesCommand extends Command
                     ->whereNotNull('data')
                     ->get()
                     ->filter(fn (Place $p) => ! empty($p->data))
-                    ->pluck('place_id')
-                    ->flip()
-                    ->all();
+                    ->keyBy('place_id');
             }
 
             $seenPlaceIdsInRun = [];
@@ -161,7 +186,11 @@ class DiscoverPlacesCommand extends Command
 
                 $isCached = false;
                 if ($this->preferCache) {
-                    if (isset($cachedPlaces[$placeId]) || isset($seenPlaceIdsInRun[$placeId])) {
+                    if (isset($cachedPlaces[$placeId])) {
+                        if ($this->isCacheFresh($cachedPlaces[$placeId], $toilet)) {
+                            $isCached = true;
+                        }
+                    } elseif (isset($seenPlaceIdsInRun[$placeId])) {
                         $isCached = true;
                     }
                 }
@@ -172,7 +201,10 @@ class DiscoverPlacesCommand extends Command
                 } else {
                     $this->predictedApiCalls++;
                     $seenPlaceIdsInRun[$placeId] = true;
-                    $statusTag = '<info>[API CALL]</info>';
+                    $staleNotice = (isset($cachedPlaces[$placeId]) && ! $this->isCacheFresh($cachedPlaces[$placeId], $toilet))
+                        ? ' (stale cache)'
+                        : '';
+                    $statusTag = "<info>[API CALL{$staleNotice}]</info>";
                 }
 
                 $this->line("[DRY-RUN] toilet_id={$toilet->id} place_id={$toilet->place_id} last_included={$toilet->last_included} last_discovered={$toilet->last_discovered} {$statusTag}");
@@ -184,8 +216,14 @@ class DiscoverPlacesCommand extends Command
             if ($this->totalNeedingDiscoveryCount > $toilets->count()) {
                 if ($this->preferCache) {
                     $allPlaceIds = (clone $query)->pluck('place_id')->filter()->unique()->values()->all();
-                    $totalCachedCount = Place::whereIn('place_id', $allPlaceIds)
-                        ->whereNotNull('data')
+                    $placesQuery = Place::whereIn('place_id', $allPlaceIds)
+                        ->whereNotNull('data');
+
+                    if ($this->cacheCutoff !== null) {
+                        $placesQuery->where('updated', '>=', $this->cacheCutoff);
+                    }
+
+                    $totalCachedCount = $placesQuery
                         ->get()
                         ->filter(fn (Place $p) => ! empty($p->data))
                         ->count();
@@ -254,7 +292,7 @@ class DiscoverPlacesCommand extends Command
         $details = null;
         $fromCache = false;
 
-        if ($this->preferCache && $place && ! empty($place->data)) {
+        if ($this->preferCache && $place && ! empty($place->data) && $this->isCacheFresh($place, $toilet)) {
             $details = is_array($place->data) ? $place->data : json_decode((string) $place->data, true);
             $fromCache = true;
         }
@@ -274,12 +312,16 @@ class DiscoverPlacesCommand extends Command
             $this->cachedPlaces++;
         } else {
             if ($place) {
-                $place->update(['data' => $details]);
+                $place->update([
+                    'data' => $details,
+                    'updated' => now(),
+                ]);
                 $this->updatedPlaces++;
             } else {
                 Place::create([
                     'place_id' => $toilet->place_id,
                     'data' => $details,
+                    'updated' => now(),
                 ]);
                 $this->insertedPlaces++;
             }
@@ -321,6 +363,7 @@ class DiscoverPlacesCommand extends Command
             'action' => 'discover-places',
             'dry_run' => $this->dryRun,
             'prefer_cache' => $this->preferCache,
+            'max_cache_age' => $this->maxCacheAgeString ?? 'none',
             'limit' => $this->limit,
             'processed' => $this->processed,
         ];
@@ -349,7 +392,8 @@ class DiscoverPlacesCommand extends Command
         $this->newLine();
         $this->info('Discovery summary:');
         foreach ($summary as $key => $value) {
-            $this->line("  {$key}: {$value}");
+            $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : $value;
+            $this->line("  {$key}: {$displayValue}");
         }
 
         if ($this->dryRun) {
@@ -360,14 +404,76 @@ class DiscoverPlacesCommand extends Command
                 number_format($this->predictedCostUsd, 3)
             ));
             if ($this->preferCache) {
+                $ageInfo = $this->maxCacheAgeString ? " with max cache age: {$this->maxCacheAgeString}" : '';
                 $this->comment(sprintf(
-                    '   (Prefer-cache saved %d API call(s) ~$%s USD)',
+                    '   (Prefer-cache saved %d API call(s) ~$%s USD%s)',
                     $this->predictedCachedPlaces,
-                    number_format($this->predictedCachedPlaces * GoogleCostService::COST_PLACES_DETAILS_USD, 3)
+                    number_format($this->predictedCachedPlaces * GoogleCostService::COST_PLACES_DETAILS_USD, 3),
+                    $ageInfo
                 ));
             }
         }
 
         Log::info('DiscoverPlaces completed', $summary);
+    }
+
+    /**
+     * Check if cached place data satisfies the maximum allowed cache age.
+     */
+    private function isCacheFresh(Place $place, ?Toilet $toilet = null): bool
+    {
+        if ($this->cacheCutoff === null) {
+            return true;
+        }
+
+        $timestamp = $place->updated ?? ($toilet?->last_places_fetch ? Carbon::parse($toilet->last_places_fetch) : null);
+
+        if ($timestamp === null) {
+            return false;
+        }
+
+        $carbon = $timestamp instanceof Carbon ? $timestamp : Carbon::parse($timestamp);
+
+        return $carbon->gte($this->cacheCutoff);
+    }
+
+    /**
+     * Parse a human-readable duration string into a Carbon cutoff date.
+     * Supported formats:
+     * - 30d, 30days, 30day, 30 -> 30 days ago
+     * - 2w, 2weeks, 2week     -> 2 weeks ago
+     * - 1m, 1month, 1months, 6m -> 1 or 6 months ago
+     * - 1y, 1year, 1years     -> 1 year ago
+     * - 24h, 24hours          -> 24 hours ago
+     */
+    private function parseCacheMaxAgeCutoff(?string $ageString): ?Carbon
+    {
+        if ($ageString === null || $ageString === '' || in_array(strtolower($ageString), ['true', '1', 'all', 'infinite'], true)) {
+            return null;
+        }
+
+        $trimmed = trim(strtolower($ageString));
+
+        if (preg_match('/^(\d+)\s*(d|day|days)?$/', $trimmed, $m)) {
+            return Carbon::now()->subDays((int) $m[1]);
+        }
+
+        if (preg_match('/^(\d+)\s*(w|week|weeks)$/', $trimmed, $m)) {
+            return Carbon::now()->subWeeks((int) $m[1]);
+        }
+
+        if (preg_match('/^(\d+)\s*(m|month|months)$/', $trimmed, $m)) {
+            return Carbon::now()->subMonths((int) $m[1]);
+        }
+
+        if (preg_match('/^(\d+)\s*(y|year|years)$/', $trimmed, $m)) {
+            return Carbon::now()->subYears((int) $m[1]);
+        }
+
+        if (preg_match('/^(\d+)\s*(h|hour|hours)$/', $trimmed, $m)) {
+            return Carbon::now()->subHours((int) $m[1]);
+        }
+
+        throw new \InvalidArgumentException("Invalid cache max age format: '{$ageString}'. Use formats like '30d', '2w', '6m', or '1y'.");
     }
 }

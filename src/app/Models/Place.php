@@ -22,10 +22,12 @@ class Place extends Model
     protected $fillable = [
         'place_id',
         'data',
+        'updated',
     ];
 
     protected $casts = [
         'data' => 'array',
+        'updated' => 'datetime',
     ];
 
     public function getName(): ?string

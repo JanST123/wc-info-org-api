@@ -386,5 +386,168 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertStringContainsString('predicted_cached_places: 1', $output);
         $this->assertStringContainsString('predicted_cost_usd: 0.017', $output);
     }
+
+    public function test_prefer_cache_with_max_age_uses_fresh_cache(): void
+    {
+        $placeId = 'place_fresh_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        Place::create([
+            'place_id' => $placeId,
+            'data' => [
+                'id' => $placeId,
+                'displayName' => ['text' => 'Fresh Cached Name'],
+                'location' => ['latitude' => 52.0, 'longitude' => 13.0],
+            ],
+            'updated' => now()->subDays(10), // 10 days old < 30 days
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('fetchPlaceDetails');
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $toilet = Toilet::create([
+            'name' => 'WC Fresh Test',
+            'owner' => 'Old Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--prefer-cache' => '30d', '--limit' => 1]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('max_cache_age: 30d', $output);
+        $toilet->refresh();
+        $this->assertSame('Fresh Cached Name', $toilet->owner);
+    }
+
+    public function test_prefer_cache_with_max_age_refreshes_stale_cache_from_google_api(): void
+    {
+        $placeId = 'place_stale_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        Place::create([
+            'place_id' => $placeId,
+            'data' => [
+                'id' => $placeId,
+                'displayName' => ['text' => 'Old Stale Name'],
+                'location' => ['latitude' => 52.0, 'longitude' => 13.0],
+            ],
+            'updated' => now()->subDays(45), // 45 days old > 30 days cutoff
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->once())
+            ->method('fetchPlaceDetails')
+            ->with($placeId)
+            ->willReturn([
+                'id' => $placeId,
+                'displayName' => ['text' => 'Refreshed Fresh Name'],
+                'location' => ['latitude' => 52.0, 'longitude' => 13.0],
+            ]);
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $toilet = Toilet::create([
+            'name' => 'WC Stale Test',
+            'owner' => 'Initial Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--prefer-cache' => '30d', '--limit' => 1]);
+        $this->assertSame(0, $status);
+
+        $toilet->refresh();
+        $this->assertSame('Refreshed Fresh Name', $toilet->owner);
+
+        $place = Place::where('place_id', $placeId)->first();
+        $this->assertNotNull($place);
+        $this->assertTrue($place->updated->gte(now()->subMinute()));
+    }
+
+    public function test_dry_run_cost_prediction_identifies_stale_cache_and_reports_in_prediction(): void
+    {
+        $freshPlaceId = 'place_fresh_pred_'.uniqid();
+        $stalePlaceId = 'place_stale_pred_'.uniqid();
+        $this->createdPlaceIds[] = $freshPlaceId;
+        $this->createdPlaceIds[] = $stalePlaceId;
+
+        Place::create([
+            'place_id' => $freshPlaceId,
+            'data' => ['id' => $freshPlaceId, 'displayName' => ['text' => 'Fresh Place']],
+            'updated' => now()->subDays(5),
+        ]);
+
+        Place::create([
+            'place_id' => $stalePlaceId,
+            'data' => ['id' => $stalePlaceId, 'displayName' => ['text' => 'Stale Place']],
+            'updated' => now()->subDays(60), // older than 30d
+        ]);
+
+        $t1 = Toilet::create([
+            'name' => 'WC Fresh',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $freshPlaceId,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+        ]);
+        $this->createdToiletIds[] = $t1->id;
+
+        $t2 = Toilet::create([
+            'name' => 'WC Stale',
+            'lat' => 52.1,
+            'lon' => 13.1,
+            'place_id' => $stalePlaceId,
+            'status' => 'active',
+            'last_included' => now()->addDays(99),
+            'last_discovered' => null,
+        ]);
+        $this->createdToiletIds[] = $t2->id;
+
+        $status = Artisan::call('app:discover-places', [
+            '--dry-run' => true,
+            '--prefer-cache' => '30d',
+            '--limit' => 2,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('max_cache_age: 30d', $output);
+        $this->assertStringContainsString('predicted_api_calls: 1', $output);
+        $this->assertStringContainsString('predicted_cached_places: 1', $output);
+        $this->assertStringContainsString('predicted_cost_usd: 0.017', $output);
+        $this->assertStringContainsString('[CACHED]', $output);
+        $this->assertStringContainsString('[API CALL (stale cache)]', $output);
+        $this->assertStringContainsString('with max cache age: 30d', $output);
+    }
+
+    public function test_prefer_cache_with_max_cache_age_companion_option(): void
+    {
+        $status = Artisan::call('app:discover-places', [
+            '--dry-run' => true,
+            '--max-cache-age' => '2w',
+            '--limit' => 1,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('prefer_cache: true', $output);
+        $this->assertStringContainsString('max_cache_age: 2w', $output);
+    }
 }
 
