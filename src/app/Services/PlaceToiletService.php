@@ -154,6 +154,11 @@ class PlaceToiletService
         $crawlResult = null;
         $needsCrawl = empty($toilet->last_crawled) || $toilet->last_crawled->lte(now()->subMonths(3));
 
+        // also toilets do not need a crawl if they have toilet type flags set, as those are derived from the crawl result.
+        if ($toilet->isFlagSet('is_unisex') || $toilet->isFlagSet('is_gender_separated') || $toilet->isFlagSet('has_wheelchair_access') || $toilet->isFlagSet('has_changing_table')) {
+            $needsCrawl = false;
+        }
+
         if (! empty($details['website'])) {
             if ($needsCrawl) {
                 $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
