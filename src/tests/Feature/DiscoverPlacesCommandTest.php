@@ -247,5 +247,144 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertSame('Cached Age Test', $toilet->owner);
         $this->assertNotNull($toilet->last_discovered);
     }
+
+    public function test_dry_run_cost_prediction_without_prefer_cache(): void
+    {
+        $placeId1 = 'place_pred_1_'.uniqid();
+        $placeId2 = 'place_pred_2_'.uniqid();
+        $this->createdPlaceIds[] = $placeId1;
+        $this->createdPlaceIds[] = $placeId2;
+
+        $t1 = Toilet::create([
+            'name' => 'WC Pred #1',
+            'owner' => 'Owner 1',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId1,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t1->id;
+
+        $t2 = Toilet::create([
+            'name' => 'WC Pred #2',
+            'owner' => 'Owner 2',
+            'lat' => 52.1,
+            'lon' => 13.1,
+            'place_id' => $placeId2,
+            'status' => 'active',
+            'last_included' => now()->addDays(99),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t2->id;
+
+        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--limit' => 2]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('predicted_api_calls: 2', $output);
+        $this->assertStringContainsString('predicted_cached_places: 0', $output);
+        $this->assertStringContainsString('predicted_cost_usd: 0.034', $output);
+        $this->assertStringContainsString('Cost Prediction: 2 Google API call(s) required (~$0.034 USD)', $output);
+        $this->assertStringContainsString('[API CALL]', $output);
+    }
+
+    public function test_dry_run_cost_prediction_with_prefer_cache(): void
+    {
+        $placeIdCached = 'place_cached_'.uniqid();
+        $placeIdUncached = 'place_uncached_'.uniqid();
+        $this->createdPlaceIds[] = $placeIdCached;
+        $this->createdPlaceIds[] = $placeIdUncached;
+
+        Place::create([
+            'place_id' => $placeIdCached,
+            'data' => [
+                'id' => $placeIdCached,
+                'displayName' => ['text' => 'Cached Name'],
+                'location' => ['latitude' => 52.0, 'longitude' => 13.0],
+            ],
+        ]);
+
+        $t1 = Toilet::create([
+            'name' => 'WC Cached',
+            'owner' => 'Owner Cached',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeIdCached,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t1->id;
+
+        $t2 = Toilet::create([
+            'name' => 'WC Uncached',
+            'owner' => 'Owner Uncached',
+            'lat' => 52.1,
+            'lon' => 13.1,
+            'place_id' => $placeIdUncached,
+            'status' => 'active',
+            'last_included' => now()->addDays(99),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t2->id;
+
+        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--prefer-cache' => true, '--limit' => 2]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('predicted_api_calls: 1', $output);
+        $this->assertStringContainsString('predicted_cached_places: 1', $output);
+        $this->assertStringContainsString('predicted_cost_usd: 0.017', $output);
+        $this->assertStringContainsString('Cost Prediction: 1 Google API call(s) required (~$0.017 USD)', $output);
+        $this->assertStringContainsString('Prefer-cache saved 1 API call(s)', $output);
+        $this->assertStringContainsString('[CACHED]', $output);
+        $this->assertStringContainsString('[API CALL]', $output);
+    }
+
+    public function test_dry_run_cost_prediction_reuses_cache_for_duplicate_places_with_prefer_cache(): void
+    {
+        $sharedPlaceId = 'place_shared_'.uniqid();
+        $this->createdPlaceIds[] = $sharedPlaceId;
+
+        $t1 = Toilet::create([
+            'name' => 'WC Shared 1',
+            'owner' => 'Owner 1',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $sharedPlaceId,
+            'status' => 'active',
+            'last_included' => now()->addDays(100),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t1->id;
+
+        $t2 = Toilet::create([
+            'name' => 'WC Shared 2',
+            'owner' => 'Owner 2',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $sharedPlaceId,
+            'status' => 'active',
+            'last_included' => now()->addDays(99),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $t2->id;
+
+        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--prefer-cache' => true, '--limit' => 2]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('predicted_api_calls: 1', $output);
+        $this->assertStringContainsString('predicted_cached_places: 1', $output);
+        $this->assertStringContainsString('predicted_cost_usd: 0.017', $output);
+    }
 }
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Place;
 use App\Models\Toilet;
+use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use Illuminate\Console\Command;
@@ -30,6 +31,20 @@ class DiscoverPlacesCommand extends Command
     private int $radius;
 
     private int $processed = 0;
+
+    private int $toiletsNeedingDiscoveryCount = 0;
+
+    private int $totalNeedingDiscoveryCount = 0;
+
+    private int $predictedApiCalls = 0;
+
+    private int $predictedCachedPlaces = 0;
+
+    private float $predictedCostUsd = 0.0;
+
+    private int $totalPredictedApiCalls = 0;
+
+    private float $totalPredictedCostUsd = 0.0;
 
     private int $cachedPlaces = 0;
 
@@ -108,12 +123,81 @@ class DiscoverPlacesCommand extends Command
         $query = $this->toiletsNeedingDiscovery();
 
         if ($this->dryRun) {
+            $this->totalNeedingDiscoveryCount = (clone $query)->count();
             $toilets = (clone $query)->limit($this->limit)->get(['id', 'place_id', 'last_included', 'last_discovered']);
-            $this->info("Found {$toilets->count()} toilets to discover.");
+            $this->toiletsNeedingDiscoveryCount = $this->totalNeedingDiscoveryCount;
+
+            $this->info("Found {$toilets->count()} toilets to discover." . ($this->totalNeedingDiscoveryCount > $toilets->count() ? " ({$this->totalNeedingDiscoveryCount} total in database needing discovery)" : ''));
+
+            if ($toilets->isEmpty()) {
+                return;
+            }
+
+            $placeIds = $toilets->pluck('place_id')->filter()->unique()->values()->all();
+            $cachedPlaces = [];
+            if ($this->preferCache && ! empty($placeIds)) {
+                $cachedPlaces = Place::whereIn('place_id', $placeIds)
+                    ->whereNotNull('data')
+                    ->get()
+                    ->filter(fn (Place $p) => ! empty($p->data))
+                    ->pluck('place_id')
+                    ->flip()
+                    ->all();
+            }
+
+            $seenPlaceIdsInRun = [];
 
             foreach ($toilets as $toilet) {
-                $this->line("[DRY-RUN] toilet_id={$toilet->id} place_id={$toilet->place_id} last_included={$toilet->last_included} last_discovered={$toilet->last_discovered}");
+                $placeId = $toilet->place_id;
+
+                if (empty($placeId)) {
+                    $this->errors++;
+                    $this->line("[DRY-RUN] toilet_id={$toilet->id} (missing place_id)");
+
+                    continue;
+                }
+
                 $this->processed++;
+
+                $isCached = false;
+                if ($this->preferCache) {
+                    if (isset($cachedPlaces[$placeId]) || isset($seenPlaceIdsInRun[$placeId])) {
+                        $isCached = true;
+                    }
+                }
+
+                if ($isCached) {
+                    $this->predictedCachedPlaces++;
+                    $statusTag = '<comment>[CACHED]</comment>';
+                } else {
+                    $this->predictedApiCalls++;
+                    $seenPlaceIdsInRun[$placeId] = true;
+                    $statusTag = '<info>[API CALL]</info>';
+                }
+
+                $this->line("[DRY-RUN] toilet_id={$toilet->id} place_id={$toilet->place_id} last_included={$toilet->last_included} last_discovered={$toilet->last_discovered} {$statusTag}");
+            }
+
+            $costPerCall = GoogleCostService::COST_PLACES_DETAILS_USD;
+            $this->predictedCostUsd = $this->predictedApiCalls * $costPerCall;
+
+            if ($this->totalNeedingDiscoveryCount > $toilets->count()) {
+                if ($this->preferCache) {
+                    $allPlaceIds = (clone $query)->pluck('place_id')->filter()->unique()->values()->all();
+                    $totalCachedCount = Place::whereIn('place_id', $allPlaceIds)
+                        ->whereNotNull('data')
+                        ->get()
+                        ->filter(fn (Place $p) => ! empty($p->data))
+                        ->count();
+                    $this->totalPredictedApiCalls = count($allPlaceIds) - $totalCachedCount;
+                    $this->totalPredictedCostUsd = $this->totalPredictedApiCalls * $costPerCall;
+                } else {
+                    $this->totalPredictedApiCalls = $this->totalNeedingDiscoveryCount;
+                    $this->totalPredictedCostUsd = $this->totalPredictedApiCalls * $costPerCall;
+                }
+            } else {
+                $this->totalPredictedApiCalls = $this->predictedApiCalls;
+                $this->totalPredictedCostUsd = $this->predictedCostUsd;
             }
 
             return;
@@ -154,9 +238,11 @@ class DiscoverPlacesCommand extends Command
                 $query->whereNull('last_discovered')
                     ->orWhereColumn('last_included', '>', 'last_discovered');
             })
-            ->where(function ($query) {
-                $query->whereNull('last_places_fetch')
-                    ->orWhere('last_places_fetch', '<=', now()->subMonth());
+            ->when(! $this->preferCache, function ($query) {
+                $query->where(function ($q) {
+                    $q->whereNull('last_places_fetch')
+                        ->orWhere('last_places_fetch', '<=', now()->subMonth());
+                });
             })
             ->whereNotNull('place_id')
             ->orderBy('last_included', 'desc');
@@ -237,19 +323,49 @@ class DiscoverPlacesCommand extends Command
             'prefer_cache' => $this->preferCache,
             'limit' => $this->limit,
             'processed' => $this->processed,
-            'cached_places' => $this->cachedPlaces,
-            'inserted_places' => $this->insertedPlaces,
-            'updated_places' => $this->updatedPlaces,
-            'inserted_toilets' => $this->insertedToilets,
-            'updated_toilets' => $this->updatedToilets,
-            'skipped_cached' => $this->skippedCached,
-            'errors' => $this->errors,
         ];
+
+        if ($this->dryRun) {
+            $summary['toilets_needing_discovery'] = $this->toiletsNeedingDiscoveryCount;
+            $summary['predicted_api_calls'] = $this->predictedApiCalls;
+            $summary['predicted_cached_places'] = $this->predictedCachedPlaces;
+            $summary['predicted_cost_usd'] = round($this->predictedCostUsd, 4);
+
+            if ($this->totalNeedingDiscoveryCount > $this->processed) {
+                $summary['total_toilets_needing_discovery'] = $this->totalNeedingDiscoveryCount;
+                $summary['total_predicted_api_calls'] = $this->totalPredictedApiCalls;
+                $summary['total_predicted_cost_usd'] = round($this->totalPredictedCostUsd, 4);
+            }
+        }
+
+        $summary['cached_places'] = $this->cachedPlaces;
+        $summary['inserted_places'] = $this->insertedPlaces;
+        $summary['updated_places'] = $this->updatedPlaces;
+        $summary['inserted_toilets'] = $this->insertedToilets;
+        $summary['updated_toilets'] = $this->updatedToilets;
+        $summary['skipped_cached'] = $this->skippedCached;
+        $summary['errors'] = $this->errors;
 
         $this->newLine();
         $this->info('Discovery summary:');
         foreach ($summary as $key => $value) {
             $this->line("  {$key}: {$value}");
+        }
+
+        if ($this->dryRun) {
+            $this->newLine();
+            $this->info(sprintf(
+                '💰 Cost Prediction: %d Google API call(s) required (~$%s USD)',
+                $this->predictedApiCalls,
+                number_format($this->predictedCostUsd, 3)
+            ));
+            if ($this->preferCache) {
+                $this->comment(sprintf(
+                    '   (Prefer-cache saved %d API call(s) ~$%s USD)',
+                    $this->predictedCachedPlaces,
+                    number_format($this->predictedCachedPlaces * GoogleCostService::COST_PLACES_DETAILS_USD, 3)
+                ));
+            }
         }
 
         Log::info('DiscoverPlaces completed', $summary);
