@@ -6,14 +6,20 @@ use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\Type;
 use App\Models\TypeXPlace;
+use App\Services\ToiletRevisionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PlaceToiletService
 {
+    private ToiletRevisionService $revisionService;
+
     public function __construct(
         private GooglePlacesService $placesService,
-    ) {}
+        ?ToiletRevisionService $revisionService = null,
+    ) {
+        $this->revisionService = $revisionService ?? app(ToiletRevisionService::class);
+    }
 
     /**
      * Create or update a toilet for the given place data.
@@ -204,7 +210,6 @@ class PlaceToiletService
 
         if ($toilet->isDirty()) {
             $toilet->save();
-            $updated = true;
         }
 
         // Update website/address/opening_hours properties unless the user set them manually.
@@ -222,7 +227,18 @@ class PlaceToiletService
         if (! $toilet->isUserOverridden('public_accessible') && self::isPublicAccessibleType($placeTypes)) {
             $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
         }
-        
+
+        if (! empty($changes)) {
+            $toilet->last_diff = json_encode($changes);
+            $toilet->save();
+
+            $this->revisionService->recordRevision(
+                $toilet,
+                'update-from-place',
+                $changes,
+                "Updated from place ({$placeId})"
+            );
+        }
 
         return $updated || $crawlResult !== null || count($changes) > 0;
     }

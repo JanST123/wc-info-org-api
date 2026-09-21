@@ -3,13 +3,28 @@
 namespace Tests\Unit;
 
 use App\Models\Toilet;
+use App\Models\ToiletProperty;
+use App\Models\ToiletRevision;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
+use App\Services\ToiletRevisionService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PlaceToiletServiceTest extends TestCase
 {
+    private array $createdToiletIds = [];
+
+    protected function tearDown(): void
+    {
+        if (! empty($this->createdToiletIds)) {
+            ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
+            ToiletProperty::whereIn('fk_toiletId', $this->createdToiletIds)->delete();
+            Toilet::whereIn('id', $this->createdToiletIds)->delete();
+        }
+
+        parent::tearDown();
+    }
     public function test_update_respects_user_overridden_properties(): void
     {
         $toilet = Toilet::create([
@@ -195,5 +210,106 @@ class PlaceToiletServiceTest extends TestCase
         DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->delete();
         DB::table('type_x_place')->where('place_id', 'place_restaurant_test')->delete();
         $toilet->delete();
+    }
+
+    public function test_update_toilet_from_place_generates_revision_with_source_update_from_place(): void
+    {
+        $placeId = 'place_rev_test_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'Original Name',
+            'owner' => 'Original Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        /** @var ToiletRevisionService $revisionService */
+        $revisionService = app(ToiletRevisionService::class);
+        $revisionService->recordRevision($toilet, 'initial');
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Updated Place Owner',
+            'location' => ['lat' => 52.5, 'lng' => 13.5],
+            'formatted_address' => 'New Place Address 123',
+            'types' => ['point_of_interest'],
+        ], null, $changes);
+
+        $this->assertTrue($result);
+        $this->assertNotEmpty($changes);
+
+        // Check revisions: 1 initial + 1 update-from-place
+        $revisions = ToiletRevision::where('toilet_id', $toilet->id)->orderBy('version')->get();
+        $this->assertCount(2, $revisions);
+
+        $revision = $revisions[1];
+        $this->assertSame('update-from-place', $revision->source);
+        $this->assertSame(2, $revision->version);
+        $this->assertStringContainsString($placeId, $revision->summary);
+        $this->assertArrayHasKey('owner', $revision->diff);
+        $this->assertSame(['old' => 'Original Owner', 'new' => 'Updated Place Owner'], $revision->diff['owner']);
+        $this->assertArrayHasKey('lat', $revision->diff);
+        $this->assertEquals(['old' => 52.0, 'new' => 52.5], $revision->diff['lat']);
+        $this->assertArrayHasKey('lon', $revision->diff);
+        $this->assertEquals(['old' => 13.0, 'new' => 13.5], $revision->diff['lon']);
+        $this->assertArrayHasKey('address', $revision->diff);
+
+        // Verify toilet version and last_diff
+        $toilet->refresh();
+        $this->assertSame(2, $toilet->version);
+        $this->assertNotEmpty($toilet->last_diff);
+    }
+
+    public function test_update_toilet_from_place_does_not_generate_revision_when_no_changes(): void
+    {
+        $placeId = 'place_no_change_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'Same Name',
+            'owner' => 'Same Owner',
+            'lat' => 52.5,
+            'lon' => 13.5,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        DB::table('toilet_properties')->insert([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'address',
+            'value' => 'Same Address',
+            'user_overridden' => 0,
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Same Owner',
+            'location' => ['lat' => 52.5, 'lng' => 13.5],
+            'formatted_address' => 'Same Address',
+            'types' => ['point_of_interest'],
+        ], null, $changes);
+
+        $this->assertFalse($result);
+        $this->assertEmpty($changes);
+
+        // No revision should be recorded
+        $revisions = ToiletRevision::where('toilet_id', $toilet->id)->get();
+        $this->assertCount(0, $revisions);
+
+        $toilet->refresh();
+        $this->assertSame(1, $toilet->version);
     }
 }
