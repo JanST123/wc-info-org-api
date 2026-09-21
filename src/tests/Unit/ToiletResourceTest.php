@@ -43,7 +43,8 @@ class ToiletResourceTest extends TestCase
         $this->assertSame('https://example.com', $array['properties']['website']);
         $this->assertTrue($array['flags']['is_unisex']);
 
-        // Legacy fields must be absent.
+        // Internal and legacy fields must be absent.
+        $this->assertArrayNotHasKey('source', $array);
         $this->assertArrayNotHasKey('type', $array);
         $this->assertArrayNotHasKey('nr', $array);
     }
@@ -58,6 +59,7 @@ class ToiletResourceTest extends TestCase
             'is_qualified' => false,
             'lat' => 52.5200,
             'lon' => 13.4050,
+            'source' => 'auto_crawl',
         ]);
 
         $toilet->setRelation('properties', collect([
@@ -77,5 +79,6 @@ class ToiletResourceTest extends TestCase
         $this->assertSame('https://station-wc.example.com', $array['website']);
         $this->assertSame('yes', $array['euro_key']);
         $this->assertSame('little', $array['storage_space']);
+        $this->assertArrayNotHasKey('source', $array);
     }
 }

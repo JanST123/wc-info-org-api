@@ -60,6 +60,14 @@ class Toilet extends Model
         'last_diff' => 'array',
     ];
 
+    protected $hidden = [
+        'source',
+        'last_diff',
+        'user_overridden',
+        'email_sent',
+        'contact_email',
+    ];
+
     public function revisions(): HasMany
     {
         return $this->hasMany(ToiletRevision::class, 'toilet_id')->orderByDesc('version');

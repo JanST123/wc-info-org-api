@@ -241,4 +241,47 @@ class ToiletAddValidationTest extends TestCase
         $res3->assertStatus(400);
         $this->assertArrayHasKey('source', $res3->json('errors'));
     }
+
+    public function test_public_api_never_exposes_source_column(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Secret Source Toilet',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'place_id' => 'ChIJsecretsource',
+            'status' => 'active',
+            'source' => 'confidential_source_name',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // 1. GET /toilet/{id} (Detail)
+        $detailRes = $this->getJson("/toilet/{$toilet->id}");
+        $detailRes->assertStatus(200);
+        $this->assertArrayNotHasKey('source', $detailRes->json());
+        $this->assertStringNotContainsString('confidential_source_name', $detailRes->getContent());
+
+        // 2. GET /toilets/bounds/... (List)
+        $boundsRes = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0');
+        $boundsRes->assertStatus(200);
+        $item = collect($boundsRes->json())->firstWhere('id', $toilet->id);
+        $this->assertNotNull($item);
+        $this->assertArrayNotHasKey('source', $item);
+        $this->assertStringNotContainsString('confidential_source_name', $boundsRes->getContent());
+
+        // 3. GET /toilets/nearby/... (Nearby)
+        $nearbyRes = $this->getJson('/toilets/nearby/52.5200/13.4050');
+        $nearbyRes->assertStatus(200);
+        $nearbyItem = collect($nearbyRes->json())->firstWhere('id', $toilet->id);
+        $this->assertNotNull($nearbyItem);
+        $this->assertArrayNotHasKey('source', $nearbyItem);
+        $this->assertStringNotContainsString('confidential_source_name', $nearbyRes->getContent());
+
+        // 4. GET /toilets/place/... (Place)
+        $placeRes = $this->getJson('/toilets/place/ChIJsecretsource');
+        $placeRes->assertStatus(200);
+        $placeItem = collect($placeRes->json())->firstWhere('id', $toilet->id);
+        $this->assertNotNull($placeItem);
+        $this->assertArrayNotHasKey('source', $placeItem);
+        $this->assertStringNotContainsString('confidential_source_name', $placeRes->getContent());
+    }
 }

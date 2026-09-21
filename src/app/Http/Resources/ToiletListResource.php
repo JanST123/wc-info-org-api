@@ -49,7 +49,6 @@ class ToiletListResource extends JsonResource
             'place_id' => $this->place_id,
             'status' => $this->status,
             'is_qualified' => (bool) $this->is_qualified,
-            'source' => $this->source,
             'address' => $this->propertyValue('address'),
             'comment' => $this->propertyValue('comment'),
             'website' => $this->propertyValue('website'),
