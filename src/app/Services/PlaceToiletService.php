@@ -209,6 +209,7 @@ class PlaceToiletService
         }
 
         if ($toilet->isDirty()) {
+            $toilet->flagged = true; // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
             $toilet->save();
         }
 
@@ -230,6 +231,7 @@ class PlaceToiletService
 
         if (! empty($changes)) {
             $toilet->last_diff = json_encode($changes);
+            $toilet->flagged = true; // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
             $toilet->save();
 
             $this->revisionService->recordRevision(
