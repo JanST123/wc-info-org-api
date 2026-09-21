@@ -97,7 +97,7 @@
                         <th style="width: 180px;">Name & Owner</th>
                         <th style="width: 180px;">Comment</th>
                         <th style="width: 180px;">Address</th>
-                        <th style="width: 180px;">Current Place</th>
+                        <th style="min-width: 220px; max-width: 320px;">Last Revision Diff</th>
                         <th style="width: 100px; text-align: center;">Public Acc.</th>
                         <th style="min-width: 250px;">Assign Google Place (~40m)</th>
                         <th style="width: 220px; text-align: right;">Action</th>
@@ -209,17 +209,58 @@
                                 {{ $toilet->propertyValue('address') ?: '-' }}
                             </td>
                             <td style="font-size: 0.8125rem;">
-                                <div id="current-place-name-{{ $toilet->id }}" style="font-weight: 600; color: var(--gray-900);">
-                                    @php
-                                        $placeEmoji = $toilet->place?->getEmoji() ?? '';
-                                        $prefix = $placeEmoji ? $placeEmoji . ' ' : '';
-                                    @endphp
-                                    {{ $toilet->place?->getName() ? $prefix . $toilet->place->getName() : ($toilet->place_id ?: '-') }}
-                                </div>
-                                @if (!empty($toilet->place_id))
-                                    <div style="font-family: monospace; font-size: 0.6875rem; color: var(--gray-400);">
-                                        {{ \Illuminate\Support\Str::limit($toilet->place_id, 16) }}
+                                @php
+                                    $latestRev = $toilet->latestRevision;
+                                    $diff = null;
+                                    $source = null;
+                                    if ($latestRev) {
+                                        $diff = $latestRev->diff;
+                                        $source = $latestRev->source;
+                                    }
+                                    if (empty($diff) && !empty($toilet->last_diff)) {
+                                        $diff = is_string($toilet->last_diff) ? json_decode($toilet->last_diff, true) : $toilet->last_diff;
+                                    }
+                                    if (empty($source) && !empty($toilet->source)) {
+                                        $source = $toilet->source;
+                                    }
+                                @endphp
+
+                                @if (!empty($source))
+                                    <div style="margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem;">
+                                        <span class="badge" style="background: #ede9fe; color: #5b21b6; font-size: 0.6875rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.03em;">
+                                            {{ strtoupper(str_replace('_', ' ', $source)) }}
+                                        </span>
+                                        @if ($latestRev && $latestRev->version)
+                                            <span style="font-size: 0.6875rem; color: var(--gray-400); font-family: monospace;" title="Revision Version">v{{ $latestRev->version }}</span>
+                                        @endif
                                     </div>
+                                @endif
+
+                                @if (!empty($diff) && is_array($diff))
+                                    <div class="diff-container" style="font-size: 0.6875rem; padding: 0.35rem 0.5rem; border-radius: 4px; max-width: 280px; max-height: 140px; overflow-y: auto; line-height: 1.35;">
+                                        @foreach ($diff as $field => $change)
+                                            <div class="diff-row" style="padding: 0.1rem 0; font-size: 0.6875rem; gap: 0.35rem;">
+                                                <span class="diff-field" style="min-width: 75px;">{{ $field }}:</span>
+                                                @if (is_array($change) && (array_key_exists('old', $change) || array_key_exists('new', $change)))
+                                                    <span class="diff-old">
+                                                        {{ is_array($change['old'] ?? null) ? json_encode($change['old']) : (string)($change['old'] ?? 'null') }}
+                                                    </span>
+                                                    <span style="color: var(--gray-400); margin: 0 0.15rem;">→</span>
+                                                    <span class="diff-new">
+                                                        {{ is_array($change['new'] ?? null) ? json_encode($change['new']) : (string)($change['new'] ?? 'null') }}
+                                                    </span>
+                                                @else
+                                                    <span class="diff-new">{{ is_array($change) ? json_encode($change) : (string)$change }}</span>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @elseif (!empty($latestRev) || !empty($source))
+                                    <div style="font-size: 0.75rem; color: var(--gray-400); font-style: italic;">
+                                        No diff recorded
+                                    </div>
+                                @else
+                                    <span style="color: var(--gray-400); font-size: 0.75rem; font-style: italic;">-</span>
                                 @endif
                             </td>
                             <td style="text-align: center; vertical-align: middle;">

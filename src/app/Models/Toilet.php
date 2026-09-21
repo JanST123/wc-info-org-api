@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Toilet extends Model
 {
@@ -56,11 +57,17 @@ class Toilet extends Model
         'last_places_fetch' => 'datetime',
         'last_crawled' => 'datetime',
         'user_overridden' => 'array',
+        'last_diff' => 'array',
     ];
 
     public function revisions(): HasMany
     {
         return $this->hasMany(ToiletRevision::class, 'toilet_id')->orderByDesc('version');
+    }
+
+    public function latestRevision(): HasOne
+    {
+        return $this->hasOne(ToiletRevision::class, 'toilet_id')->latestOfMany('version');
     }
 
     public function properties(): HasMany

@@ -8,6 +8,7 @@ use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\ToiletPhoto;
 use App\Models\ToiletProperty;
+use App\Models\ToiletRevision;
 use App\Services\GooglePlacesService;
 use App\Services\S3PhotoStorageService;
 use Carbon\Carbon;
@@ -22,6 +23,7 @@ class AdminToiletTest extends TestCase
     protected function tearDown(): void
     {
         if (! empty($this->createdToiletIds)) {
+            ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
             ToiletPhoto::whereIn('fk_toiletId', $this->createdToiletIds)->delete();
             ToiletProperty::whereIn('fk_toiletId', $this->createdToiletIds)->delete();
             Toilet::whereIn('id', $this->createdToiletIds)->delete();
@@ -385,6 +387,86 @@ class AdminToiletTest extends TestCase
         $response->assertSee('Alexanderplatz 5, 10178 Berlin');
         $response->assertSee('Flagged Cafe Place');
         $response->assertSee('https://www.google.com/maps/search/?api=1&query=52.52,13.405', false);
+    }
+
+    public function test_flagged_toilets_display_latest_revision_diff_and_source(): void
+    {
+        // 1. Flagged toilet with a ToiletRevision (source + diff)
+        $toiletWithRev = Toilet::create([
+            'name' => 'Toilet With Revision',
+            'status' => 'active',
+            'flagged' => 1,
+            'version' => 2,
+        ]);
+        $this->createdToiletIds[] = $toiletWithRev->id;
+
+        ToiletRevision::create([
+            'toilet_id' => $toiletWithRev->id,
+            'version' => 1,
+            'source' => 'api_add',
+            'toilet_data' => ['name' => 'Initial Name'],
+            'properties_data' => [],
+            'diff' => null,
+            'summary' => 'Initial',
+            'created_at' => now()->subDay(),
+        ]);
+
+        ToiletRevision::create([
+            'toilet_id' => $toiletWithRev->id,
+            'version' => 2,
+            'source' => 'update_from_place',
+            'toilet_data' => ['name' => 'New Place Name'],
+            'properties_data' => [],
+            'diff' => [
+                'name' => ['old' => 'Old Cafe Name', 'new' => 'New Place Name'],
+                'has_wheelchair_access' => ['old' => null, 'new' => '1'],
+            ],
+            'summary' => 'Updated from Google Place',
+            'created_at' => now(),
+        ]);
+
+        // 2. Flagged toilet with fallback last_diff on Toilet model
+        $toiletWithLastDiff = Toilet::create([
+            'name' => 'Toilet With Last Diff',
+            'status' => 'active',
+            'flagged' => 1,
+            'source' => 'cron_discovery',
+            'last_diff' => [
+                'status' => ['old' => 'active', 'new' => 'hidden'],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletWithLastDiff->id;
+
+        // 3. Flagged toilet without any diff
+        $toiletWithoutDiff = Toilet::create([
+            'name' => 'Toilet Without Any Diff',
+            'status' => 'active',
+            'flagged' => 1,
+        ]);
+        $this->createdToiletIds[] = $toiletWithoutDiff->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->get('/admin');
+
+        $response->assertStatus(200);
+
+        // Header check
+        $response->assertSee('Last Revision Diff');
+
+        // Toilet 1: source badge and diff content
+        $response->assertSee('UPDATE FROM PLACE');
+        $response->assertSee('v2');
+        $response->assertSee('Old Cafe Name');
+        $response->assertSee('New Place Name');
+        $response->assertSee('has_wheelchair_access:');
+
+        // Toilet 2: fallback source and last_diff
+        $response->assertSee('CRON DISCOVERY');
+        $response->assertSee('status:');
+        $response->assertSee('hidden');
+
+        // Toilet 3: no diff fallback
+        $response->assertSee('Toilet Without Any Diff');
     }
 
     public function test_get_nearby_places_returns_places_json(): void

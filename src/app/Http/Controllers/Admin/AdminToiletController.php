@@ -51,7 +51,7 @@ class AdminToiletController extends Controller
             ->get();
 
         $flaggedToilets = Toilet::where('flagged', 1)
-            ->with(['properties', 'place'])
+            ->with(['properties', 'place', 'latestRevision'])
             ->orderByDesc('id')
             ->paginate(15, ['*'], 'flagged_page');
 
