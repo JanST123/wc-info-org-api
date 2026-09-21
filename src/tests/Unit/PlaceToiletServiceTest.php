@@ -312,4 +312,45 @@ class PlaceToiletServiceTest extends TestCase
         $toilet->refresh();
         $this->assertSame(1, $toilet->version);
     }
+
+    public function test_update_toilet_from_place_with_flags_set_and_null_last_crawled_does_not_throw(): void
+    {
+        $placeId = 'place_null_crawl_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'WC With Flag',
+            'owner' => 'Owner',
+            'lat' => 52.5,
+            'lon' => 13.5,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_crawled' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // Set type flag so $needsCrawl is false
+        DB::table('toilet_properties')->insert([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'has_wheelchair_access',
+            'value' => '1',
+            'user_overridden' => 0,
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('crawlWebsite');
+
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Owner',
+            'website' => 'https://example.com',
+            'location' => ['lat' => 52.5, 'lng' => 13.5],
+            'formatted_address' => 'Test Address',
+            'types' => ['point_of_interest'],
+        ], null, $changes);
+
+        $this->assertNull($toilet->last_crawled);
+    }
 }

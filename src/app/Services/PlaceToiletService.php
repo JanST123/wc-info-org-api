@@ -195,10 +195,15 @@ class PlaceToiletService
                 // Update boolean flags unless the user set them manually.
                 $this->applyTypeFlagsWithOverrideCheck($toilet->id, $toiletType, $changes);
             } else {
-                Log::info('Skipping website crawl for toilet: crawled recently (<3 months)', [
+                $reason = (! empty($toilet->last_crawled) && $toilet->last_crawled->gt(now()->subMonths(3)))
+                    ? 'crawled recently (<3 months)'
+                    : 'toilet type flags already set';
+
+                Log::info("Skipping website crawl for toilet: {$reason}", [
                     'toilet_id' => $toilet->id,
                     'place_id' => $placeId,
-                    'last_crawled' => $toilet->last_crawled->toIso8601String(),
+                    'reason' => $reason,
+                    'last_crawled' => $toilet->last_crawled?->toIso8601String(),
                 ]);
             }
         } else {
