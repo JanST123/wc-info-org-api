@@ -16,17 +16,22 @@ class DiscoverPlacesCommand extends Command
                             {--lon= : Optional override: longitude of the search center}
                             {--radius= : Search radius in meters when lat/lon is provided (default from config)}
                             {--limit= : Maximum number of toilets to process}
+                            {--prefer-cache : Always use existing data from the places table if available instead of querying Google Places API}
                             {--dry-run : Show what would be changed without writing anything}';
 
     protected $description = 'Update places for toilets that have been requested by API clients';
 
     private bool $dryRun;
 
+    private bool $preferCache;
+
     private int $limit;
 
     private int $radius;
 
     private int $processed = 0;
+
+    private int $cachedPlaces = 0;
 
     private int $insertedPlaces = 0;
 
@@ -43,6 +48,7 @@ class DiscoverPlacesCommand extends Command
     public function handle(GooglePlacesService $placesService, PlaceToiletService $placeToiletService): int
     {
         $this->dryRun = (bool) $this->option('dry-run');
+        $this->preferCache = (bool) $this->option('prefer-cache');
         $this->limit = (int) $this->option('limit') ?: (int) config('wcinfo.discover.limit', 500);
         $this->radius = (int) $this->option('radius') ?: (int) config('wcinfo.discover.radius', 2000);
 
@@ -158,7 +164,18 @@ class DiscoverPlacesCommand extends Command
 
     private function processToilet(GooglePlacesService $placesService, PlaceToiletService $placeToiletService, Toilet $toilet): void
     {
-        $details = $placesService->fetchPlaceDetails($toilet->place_id);
+        $place = Place::where('place_id', $toilet->place_id)->first();
+        $details = null;
+        $fromCache = false;
+
+        if ($this->preferCache && $place && ! empty($place->data)) {
+            $details = is_array($place->data) ? $place->data : json_decode((string) $place->data, true);
+            $fromCache = true;
+        }
+
+        if (! $details) {
+            $details = $placesService->fetchPlaceDetails($toilet->place_id);
+        }
 
         if (! $details) {
             $this->errors++;
@@ -167,17 +184,19 @@ class DiscoverPlacesCommand extends Command
             return;
         }
 
-        $place = Place::where('place_id', $toilet->place_id)->first();
-
-        if ($place) {
-            $place->update(['data' => $details]);
-            $this->updatedPlaces++;
+        if ($fromCache) {
+            $this->cachedPlaces++;
         } else {
-            Place::create([
-                'place_id' => $toilet->place_id,
-                'data' => $details,
-            ]);
-            $this->insertedPlaces++;
+            if ($place) {
+                $place->update(['data' => $details]);
+                $this->updatedPlaces++;
+            } else {
+                Place::create([
+                    'place_id' => $toilet->place_id,
+                    'data' => $details,
+                ]);
+                $this->insertedPlaces++;
+            }
         }
 
         $existingToilet = Toilet::where('place_id', $toilet->place_id)->first();
@@ -215,8 +234,10 @@ class DiscoverPlacesCommand extends Command
         $summary = [
             'action' => 'discover-places',
             'dry_run' => $this->dryRun,
+            'prefer_cache' => $this->preferCache,
             'limit' => $this->limit,
             'processed' => $this->processed,
+            'cached_places' => $this->cachedPlaces,
             'inserted_places' => $this->insertedPlaces,
             'updated_places' => $this->updatedPlaces,
             'inserted_toilets' => $this->insertedToilets,

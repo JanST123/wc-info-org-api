@@ -197,7 +197,10 @@ class PlaceToiletService
             ]);
         }
 
-
+        if ($toilet->isDirty()) {
+            $toilet->save();
+            $updated = true;
+        }
 
         // Update website/address/opening_hours properties unless the user set them manually.
         $this->setPropertyWithOverrideCheck($toilet->id, 'website', $details['website'] ?? null, $changes);
@@ -512,8 +515,13 @@ class PlaceToiletService
                 return $existing;
             }
 
-            $details = $this->placesService->fetchPlaceDetails($placeId);
-            $types = $details['types'] ?? [];
+            $cachedPlace = Place::where('place_id', $placeId)->first();
+            if ($cachedPlace && is_array($cachedPlace->data)) {
+                $types = $cachedPlace->data['types'] ?? [];
+            } else {
+                $details = $this->placesService->fetchPlaceDetails($placeId);
+                $types = $details['types'] ?? [];
+            }
         }
 
         if (empty($types) || ! is_array($types)) {

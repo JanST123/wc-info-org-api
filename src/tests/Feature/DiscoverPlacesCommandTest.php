@@ -11,6 +11,23 @@ use Tests\TestCase;
 
 class DiscoverPlacesCommandTest extends TestCase
 {
+    private array $createdToiletIds = [];
+
+    private array $createdPlaceIds = [];
+
+    protected function tearDown(): void
+    {
+        if (! empty($this->createdToiletIds)) {
+            Toilet::whereIn('id', $this->createdToiletIds)->delete();
+        }
+
+        if (! empty($this->createdPlaceIds)) {
+            Place::whereIn('place_id', $this->createdPlaceIds)->delete();
+        }
+
+        parent::tearDown();
+    }
+
     public function test_discovers_only_toilets_that_were_included_but_not_yet_discovered(): void
     {
         $now = now();
@@ -25,8 +42,9 @@ class DiscoverPlacesCommandTest extends TestCase
             'last_included' => $now,
             'last_discovered' => null,
         ]);
+        $this->createdToiletIds[] = $includedButNotDiscovered->id;
 
-        Toilet::create([
+        $t2 = Toilet::create([
             'name' => 'WC #2',
             'owner' => 'Cafe B',
             'lat' => 52.0,
@@ -36,8 +54,9 @@ class DiscoverPlacesCommandTest extends TestCase
             'last_included' => $now,
             'last_discovered' => $now,
         ]);
+        $this->createdToiletIds[] = $t2->id;
 
-        Toilet::create([
+        $t3 = Toilet::create([
             'name' => 'WC #3',
             'owner' => 'Cafe C',
             'lat' => 52.0,
@@ -47,6 +66,7 @@ class DiscoverPlacesCommandTest extends TestCase
             'last_included' => $now,
             'last_discovered' => $now->copy()->subHour(),
         ]);
+        $this->createdToiletIds[] = $t3->id;
 
         $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--limit' => 500]);
         $output = Artisan::output();
@@ -57,8 +77,6 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertStringContainsString("toilet_id={$includedButNotDiscovered->id} place_id=place_a", $output);
         $this->assertStringContainsString('place_id=place_c', $output);
         $this->assertStringNotContainsString('place_id=place_b', $output);
-
-        Toilet::whereIn('place_id', ['place_a', 'place_b', 'place_c'])->delete();
     }
 
     public function test_logs_debug_details_when_existing_toilet_is_updated(): void
@@ -66,6 +84,7 @@ class DiscoverPlacesCommandTest extends TestCase
         Log::spy();
 
         $placeId = 'place_log_test_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
 
         $placesService = $this->createMock(GooglePlacesService::class);
         $placesService->method('fetchPlaceDetails')
@@ -88,6 +107,7 @@ class DiscoverPlacesCommandTest extends TestCase
             'last_included' => now()->addDays(10),
             'last_discovered' => null,
         ]);
+        $this->createdToiletIds[] = $toilet->id;
 
         $status = Artisan::call('app:discover-places', ['--limit' => 1]);
 
@@ -102,10 +122,130 @@ class DiscoverPlacesCommandTest extends TestCase
                         && $context['changes']['owner']['new'] === 'New Owner Name';
                 })
             );
+    }
 
-        $toilet->delete();
-        Place::where('place_id', $placeId)->delete();
-        Toilet::where('place_id', 'place_log_test')->delete();
-        Place::where('place_id', 'place_log_test')->delete();
+    public function test_prefer_cache_uses_existing_place_data_without_querying_google_api(): void
+    {
+        $placeId = 'place_cached_test_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        Place::create([
+            'place_id' => $placeId,
+            'data' => [
+                'id' => $placeId,
+                'displayName' => ['text' => 'Cached DB Owner Name'],
+                'location' => ['latitude' => 52.5, 'longitude' => 13.5],
+                'formattedAddress' => 'Cached Street 42',
+            ],
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('fetchPlaceDetails');
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $toilet = Toilet::create([
+            'name' => 'WC Prefer Cache',
+            'owner' => 'Initial Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_included' => now()->addDays(20),
+            'last_discovered' => null,
+            'last_places_fetch' => now(), // Cache age is recent (< 1 month)
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--prefer-cache' => true, '--limit' => 1]);
+        $this->assertSame(0, $status);
+
+        $toilet->refresh();
+        $this->assertSame('Cached DB Owner Name', $toilet->owner);
+        $this->assertNotNull($toilet->last_discovered);
+    }
+
+    public function test_prefer_cache_falls_back_to_google_api_when_place_not_in_database(): void
+    {
+        $placeId = 'place_fallback_test_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->once())
+            ->method('fetchPlaceDetails')
+            ->with($placeId)
+            ->willReturn([
+                'id' => $placeId,
+                'displayName' => ['text' => 'Fetched From Google'],
+                'location' => ['latitude' => 52.6, 'longitude' => 13.6],
+                'formattedAddress' => 'API Street 99',
+                'types' => ['point_of_interest'],
+            ]);
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $toilet = Toilet::create([
+            'name' => 'WC Fallback Test',
+            'owner' => 'Initial Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_included' => now()->addDays(30),
+            'last_discovered' => null,
+            'last_places_fetch' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--prefer-cache' => true, '--limit' => 1]);
+        $this->assertSame(0, $status);
+
+        $toilet->refresh();
+        $this->assertSame('Fetched From Google', $toilet->owner);
+        $this->assertNotNull(Place::where('place_id', $placeId)->first());
+    }
+
+    public function test_prefer_cache_processes_toilet_regardless_of_last_places_fetch_age(): void
+    {
+        $placeId = 'place_age_test_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        Place::create([
+            'place_id' => $placeId,
+            'data' => [
+                'id' => $placeId,
+                'displayName' => ['text' => 'Cached Age Test'],
+                'location' => ['latitude' => 52.7, 'longitude' => 13.7],
+            ],
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('fetchPlaceDetails');
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        // last_places_fetch is 5 days ago (less than a month, so normally excluded)
+        $toilet = Toilet::create([
+            'name' => 'WC Recent Fetch',
+            'owner' => 'Initial Owner',
+            'lat' => 52.0,
+            'lon' => 13.0,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'last_included' => now()->addDays(40),
+            'last_discovered' => null,
+            'last_places_fetch' => now()->subDays(5),
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // Without prefer-cache, dry run should NOT find this toilet
+        Artisan::call('app:discover-places', ['--dry-run' => true, '--limit' => 1]);
+        $this->assertStringNotContainsString("toilet_id={$toilet->id}", Artisan::output());
+
+        // With prefer-cache, it MUST find this toilet regardless of cache age
+        $status = Artisan::call('app:discover-places', ['--prefer-cache' => true, '--limit' => 1]);
+        $this->assertSame(0, $status);
+
+        $toilet->refresh();
+        $this->assertSame('Cached Age Test', $toilet->owner);
+        $this->assertNotNull($toilet->last_discovered);
     }
 }
+
