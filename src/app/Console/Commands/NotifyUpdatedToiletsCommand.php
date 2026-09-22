@@ -53,7 +53,7 @@ class NotifyUpdatedToiletsCommand extends Command
                     ->toArray();
 
                 $hash = $adminLink->hash($toilet->id, $toilet->place_id ?? '');
-                $diff = json_decode($toilet->last_diff, true) ?: [];
+                $diff = is_array($toilet->last_diff) ? $toilet->last_diff : (json_decode((string) $toilet->last_diff, true) ?: []);
 
                 $body .= '<hr>';
                 $body .= '<p><strong>Name:</strong> '.e($toilet->name).'<br>';
