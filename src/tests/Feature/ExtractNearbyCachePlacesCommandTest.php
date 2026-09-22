@@ -21,6 +21,7 @@ class ExtractNearbyCachePlacesCommandTest extends TestCase
     protected function tearDown(): void
     {
         if (! empty($this->createdToiletIds)) {
+            \App\Models\ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
             DB::table('toilet_properties')->whereIn('fk_toiletId', $this->createdToiletIds)->delete();
             Toilet::whereIn('id', $this->createdToiletIds)->delete();
         }
@@ -267,5 +268,18 @@ class ExtractNearbyCachePlacesCommandTest extends TestCase
 
         $this->assertNotNull($hoursProp);
         $this->assertStringContainsString('"day":1', $hoursProp->value);
+
+        // Verify revision was recorded
+        $revision = \App\Models\ToiletRevision::where('toilet_id', $toilet->id)->latest('id')->first();
+        $this->assertNotNull($revision);
+        $this->assertSame('extract-nearby-cache', $revision->source);
+        $this->assertNotNull($revision->diff);
+        $this->assertArrayHasKey('website', $revision->diff);
+        $this->assertArrayHasKey('place_opening_hours', $revision->diff);
+        $this->assertSame('https://hamburg-toilet-place.de', $revision->diff['website']['new']);
+
+        $toilet->refresh();
+        $this->assertNotNull($toilet->last_diff);
+        $this->assertArrayHasKey('website', $toilet->last_diff);
     }
 }

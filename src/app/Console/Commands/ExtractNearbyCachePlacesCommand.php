@@ -8,6 +8,7 @@ use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
 use App\Models\Toilet;
 use App\Services\PlaceToiletService;
+use App\Services\ToiletRevisionService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -28,8 +29,11 @@ class ExtractNearbyCachePlacesCommand extends Command
 
     private bool $updateToilets = false;
 
-    public function handle(): int
+    private ToiletRevisionService $revisionService;
+
+    public function handle(ToiletRevisionService $revisionService): int
     {
+        $this->revisionService = $revisionService;
         $this->dryRun = (bool) $this->option('dry-run');
         $this->force = (bool) $this->option('force');
         $this->updateToilets = (bool) $this->option('update-toilets');
@@ -464,7 +468,7 @@ class ExtractNearbyCachePlacesCommand extends Command
         $updated = 0;
 
         foreach ($toilets as $toilet) {
-            $changed = false;
+            $diff = [];
 
             if ($gainedOpeningHours && isset($placeData['regularOpeningHours']['periods'])) {
                 $hasHoursProp = DB::table('toilet_properties')
@@ -473,14 +477,16 @@ class ExtractNearbyCachePlacesCommand extends Command
                     ->exists();
 
                 if (! $hasHoursProp) {
+                    $encodedPeriods = json_encode($placeData['regularOpeningHours']['periods']);
+                    $diff['place_opening_hours'] = ['old' => null, 'new' => $encodedPeriods];
+
                     if (! $this->dryRun) {
                         DB::table('toilet_properties')->insert([
                             'fk_toiletId' => $toilet->id,
                             'type' => 'place_opening_hours',
-                            'value' => json_encode($placeData['regularOpeningHours']['periods']),
+                            'value' => $encodedPeriods,
                         ]);
                     }
-                    $changed = true;
                 }
             }
 
@@ -491,6 +497,8 @@ class ExtractNearbyCachePlacesCommand extends Command
                     ->exists();
 
                 if (! $hasWebsiteProp) {
+                    $diff['website'] = ['old' => null, 'new' => $placeData['websiteUri']];
+
                     if (! $this->dryRun) {
                         DB::table('toilet_properties')->insert([
                             'fk_toiletId' => $toilet->id,
@@ -498,12 +506,23 @@ class ExtractNearbyCachePlacesCommand extends Command
                             'value' => $placeData['websiteUri'],
                         ]);
                     }
-                    $changed = true;
                 }
             }
 
-            if ($changed) {
+            if (! empty($diff)) {
                 $updated++;
+
+                if (! $this->dryRun) {
+                    $toilet->last_diff = $diff;
+                    $toilet->save();
+
+                    $this->revisionService->recordRevision(
+                        $toilet,
+                        'extract-nearby-cache',
+                        $diff,
+                        "Synced missing properties from nearby search cache ({$placeId})"
+                    );
+                }
             }
         }
 
