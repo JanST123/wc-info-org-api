@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Place;
 use App\Models\Toilet;
+use App\Models\ToiletRevision;
 use App\Services\GooglePlacesService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,7 @@ class DiscoverPlacesCommandTest extends TestCase
     protected function tearDown(): void
     {
         if (! empty($this->createdToiletIds)) {
+            ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
             Toilet::whereIn('id', $this->createdToiletIds)->delete();
         }
 
@@ -548,6 +550,60 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertStringContainsString('prefer_cache: true', $output);
         $this->assertStringContainsString('max_cache_age: 2w', $output);
+    }
+
+    public function test_removes_place_id_and_flags_toilet_when_google_api_returns_no_result(): void
+    {
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->method('fetchPlaceDetails')
+            ->willReturn(null);
+
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $deadPlaceId = 'ChIJdeadplace_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet With Dead Place',
+            'owner' => 'Closed Cafe',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'place_id' => $deadPlaceId,
+            'status' => 'active',
+            'flagged' => 0,
+            'last_included' => now()->addDays(5),
+            'last_discovered' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--limit' => 1]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString("Google Place Details returned no result for toilet {$toilet->id}", $output);
+        $this->assertStringContainsString('removed place_id and flagged for review', $output);
+        $this->assertStringContainsString('unlinked_places: 1', $output);
+        $this->assertStringContainsString('errors: 0', $output);
+
+        // Check updated database state
+        $toilet->refresh();
+        $this->assertNull($toilet->place_id);
+        $this->assertTrue((bool) $toilet->flagged);
+        $this->assertNotNull($toilet->last_discovered);
+        $this->assertNotNull($toilet->last_places_fetch);
+
+        // Check last_diff
+        $this->assertIsArray($toilet->last_diff);
+        $this->assertSame($deadPlaceId, $toilet->last_diff['place_id']['old']);
+        $this->assertNull($toilet->last_diff['place_id']['new']);
+        $this->assertFalse($toilet->last_diff['flagged']['old']);
+        $this->assertTrue($toilet->last_diff['flagged']['new']);
+
+        // Check revision
+        $revision = ToiletRevision::where('toilet_id', $toilet->id)->orderByDesc('version')->first();
+        $this->assertNotNull($revision);
+        $this->assertSame('discover-places-not-found', $revision->source);
+        $this->assertNull($revision->toilet_data['place_id']);
+        $this->assertTrue((bool) $revision->toilet_data['flagged']);
     }
 }
 

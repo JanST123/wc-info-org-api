@@ -7,6 +7,7 @@ use App\Models\Toilet;
 use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
+use App\Services\ToiletRevisionService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -64,9 +65,15 @@ class DiscoverPlacesCommand extends Command
 
     private int $skippedCached = 0;
 
+    private int $unlinkedPlaces = 0;
+
     private int $errors = 0;
 
-    public function handle(GooglePlacesService $placesService, PlaceToiletService $placeToiletService): int
+    public function handle(
+        GooglePlacesService $placesService,
+        PlaceToiletService $placeToiletService,
+        ToiletRevisionService $revisionService
+    ): int
     {
         $this->dryRun = (bool) $this->option('dry-run');
 
@@ -107,7 +114,7 @@ class DiscoverPlacesCommand extends Command
                 $this->processArea($placesService, $placeToiletService, $lat, $lon);
             } else {
                 $this->info("Processing up to {$this->limit} toilets that were requested but not yet discovered");
-                $this->processRequestedToilets($placesService, $placeToiletService);
+                $this->processRequestedToilets($placesService, $placeToiletService, $revisionService);
             }
         } catch (\Throwable $e) {
             $this->error('Discovery failed: '.$e->getMessage());
@@ -145,8 +152,11 @@ class DiscoverPlacesCommand extends Command
         $this->insertedToilets += $activeToilets->count();
     }
 
-    private function processRequestedToilets(GooglePlacesService $placesService, PlaceToiletService $placeToiletService): void
-    {
+    private function processRequestedToilets(
+        GooglePlacesService $placesService,
+        PlaceToiletService $placeToiletService,
+        ToiletRevisionService $revisionService
+    ): void {
         $query = $this->toiletsNeedingDiscovery();
 
         if ($this->dryRun) {
@@ -254,7 +264,7 @@ class DiscoverPlacesCommand extends Command
             }
 
             try {
-                $this->processToilet($placesService, $placeToiletService, $toilet);
+                $this->processToilet($placesService, $placeToiletService, $revisionService, $toilet);
             } catch (\Throwable $e) {
                 $this->errors++;
                 $message = "Failed to process toilet {$toilet->id} (place_id={$toilet->place_id}): ".$e->getMessage();
@@ -287,8 +297,12 @@ class DiscoverPlacesCommand extends Command
             ->orderBy('last_included', 'desc');
     }
 
-    private function processToilet(GooglePlacesService $placesService, PlaceToiletService $placeToiletService, Toilet $toilet): void
-    {
+    private function processToilet(
+        GooglePlacesService $placesService,
+        PlaceToiletService $placeToiletService,
+        ToiletRevisionService $revisionService,
+        Toilet $toilet
+    ): void {
         $place = Place::where('place_id', $toilet->place_id)->first();
         $details = null;
         $fromCache = false;
@@ -303,8 +317,33 @@ class DiscoverPlacesCommand extends Command
         }
 
         if (! $details) {
-            $this->errors++;
-            $this->error("Google Place Details returned no result for toilet {$toilet->id} (place_id={$toilet->place_id})");
+            $oldPlaceId = $toilet->place_id;
+            $changes = [
+                'place_id' => ['old' => $oldPlaceId, 'new' => null],
+                'flagged' => ['old' => (bool) $toilet->flagged, 'new' => true],
+            ];
+
+            $toilet->update([
+                'place_id' => null,
+                'flagged' => true,
+                'last_diff' => $changes,
+                'last_discovered' => now(),
+                'last_places_fetch' => now(),
+            ]);
+
+            $revisionService->recordRevision(
+                $toilet,
+                'discover-places-not-found',
+                $changes,
+                "Place {$oldPlaceId} not found in Google Places API; removed place_id and flagged for review"
+            );
+
+            $this->unlinkedPlaces++;
+            $this->warn("Google Place Details returned no result for toilet {$toilet->id} (place_id={$oldPlaceId}): removed place_id and flagged for review");
+            Log::info("DiscoverPlaces: Place {$oldPlaceId} not found for toilet {$toilet->id}; removed place_id and flagged", [
+                'toilet_id' => $toilet->id,
+                'old_place_id' => $oldPlaceId,
+            ]);
 
             return;
         }
@@ -388,6 +427,7 @@ class DiscoverPlacesCommand extends Command
         $summary['inserted_toilets'] = $this->insertedToilets;
         $summary['updated_toilets'] = $this->updatedToilets;
         $summary['skipped_cached'] = $this->skippedCached;
+        $summary['unlinked_places'] = $this->unlinkedPlaces;
         $summary['errors'] = $this->errors;
 
         $this->newLine();
