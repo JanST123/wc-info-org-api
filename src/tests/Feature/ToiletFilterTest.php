@@ -228,25 +228,25 @@ class ToiletFilterTest extends TestCase
         ]);
         $this->createdToiletIds[] = $insideToilet->id;
 
-        // Toilet ~10 km outside north boundary (lat 52.69 is ~10 km north of 52.60):
+        // Toilet ~2 km outside north boundary (lat 52.618 is ~2 km north of 52.60):
         $bufferedToilet = Toilet::create([
             'name' => 'Buffered Outside Toilet',
-            'lat' => 52.69,
+            'lat' => 52.618,
             'lon' => 13.50,
             'status' => 'active',
         ]);
         $this->createdToiletIds[] = $bufferedToilet->id;
 
-        // Toilet ~100 km outside (lat 53.50):
+        // Toilet ~22 km outside (lat 52.80):
         $farToilet = Toilet::create([
             'name' => 'Far Outside Toilet',
-            'lat' => 53.50,
+            'lat' => 52.80,
             'lon' => 13.50,
             'status' => 'active',
         ]);
         $this->createdToiletIds[] = $farToilet->id;
 
-        // 1. With default distance (40 km), both inside and 10 km buffered toilet should be included
+        // 1. With default distance (4 km), both inside and 2 km buffered toilet should be included
         $defaultResponse = $this->getJson('/toilets/bounds/52.40/13.40/52.60/13.60');
         $defaultResponse->assertStatus(200);
         $defaultIds = collect($defaultResponse->json())->pluck('id')->all();
@@ -254,8 +254,8 @@ class ToiletFilterTest extends TestCase
         $this->assertContains($bufferedToilet->id, $defaultIds);
         $this->assertNotContains($farToilet->id, $defaultIds);
 
-        // 2. With distance=5 km, the 10 km buffered toilet should be excluded
-        $tightResponse = $this->getJson('/toilets/bounds/52.40/13.40/52.60/13.60?distance=5');
+        // 2. With distance=1 km, the 2 km buffered toilet should be excluded
+        $tightResponse = $this->getJson('/toilets/bounds/52.40/13.40/52.60/13.60?distance=1');
         $tightResponse->assertStatus(200);
         $tightIds = collect($tightResponse->json())->pluck('id')->all();
         $this->assertContains($insideToilet->id, $tightIds);
@@ -269,8 +269,33 @@ class ToiletFilterTest extends TestCase
         $response = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?distance=0');
         $response->assertStatus(400);
 
-        // Distance > 200
-        $response2 = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?distance=250');
+        // Distance > 10
+        $response2 = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?distance=10.1');
         $response2->assertStatus(400);
+
+        // Distance valid (4 and 10)
+        $response3 = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?distance=4');
+        $response3->assertStatus(200);
+
+        $response4 = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?distance=10');
+        $response4->assertStatus(200);
+    }
+
+    public function test_nearby_validates_distance_query_param(): void
+    {
+        // Distance < 0.1
+        $response = $this->getJson('/toilets/nearby/52.0/13.0?distance=0');
+        $response->assertStatus(400);
+
+        // Distance > 10
+        $response2 = $this->getJson('/toilets/nearby/52.0/13.0?distance=15');
+        $response2->assertStatus(400);
+
+        // Distance valid (4 and 10)
+        $response3 = $this->getJson('/toilets/nearby/52.0/13.0?distance=4');
+        $response3->assertStatus(200);
+
+        $response4 = $this->getJson('/toilets/nearby/52.0/13.0?distance=10');
+        $response4->assertStatus(200);
     }
 }

@@ -91,7 +91,7 @@ All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/toilets/nearby/{lat}/{lon}` | Find toilets near coordinates (`?distance=40&filter=...`) |
+| `GET` | `/toilets/nearby/{lat}/{lon}` | Find toilets near coordinates (`?distance=4&filter=...`) |
 | `GET` | `/toilets/bounds/{south}/{west}/{north}/{east}` | Find toilets in geographic bounding box |
 | `GET` | `/toilets/place/{placeId}` | Toilets associated with a Google Place ID |
 | `GET` | `/toilet/{id}` | Detailed toilet info |

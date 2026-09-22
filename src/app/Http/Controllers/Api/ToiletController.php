@@ -50,17 +50,17 @@ class ToiletController extends Controller
      * If no toilets are found in the database, the API performs a synchronous
      * Google Places Nearby Search for the bounding box area and returns any newly discovered toilets.
      *
-     * @queryParam distance float Distance buffer around the bounding box in kilometers (default: 40, min: 0.1, max: 200). Example: 40
+     * @queryParam distance float Distance buffer around the bounding box in kilometers (default: 4, min: 0.1, max: 10). Example: 4
      * @queryParam filter string Comma-separated key:value attribute filters (e.g. is_open:true,euro_key:yes). Example: is_open:true
      */
     public function forBounds(Request $request, float $south, float $west, float $north, float $east): JsonResponse
     {
         $validated = $request->validate([
-            'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:200'],
+            'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:10'],
             'filter' => ['sometimes', 'string'],
         ]);
 
-        $distance = (float) ($validated['distance'] ?? 40);
+        $distance = (float) ($validated['distance'] ?? 4);
         $filter = $this->parseFilter($validated['filter'] ?? null);
 
         $minLon = min($west, $east);
@@ -89,7 +89,7 @@ class ToiletController extends Controller
             $centerLat = ($minLat + $maxLat) / 2;
             $centerLon = ($minLon + $maxLon) / 2;
             $searchDistance = $this->haversineDistance($centerLat, $centerLon, $expandedMaxLat, $expandedMaxLon);
-            $searchDistance = max(0.1, min($searchDistance, 50.0));
+            $searchDistance = max(0.1, min($searchDistance, 10.0));
 
             $discovered = $this->placesService->discoverToiletsNearby($centerLat, $centerLon, $searchDistance);
 
@@ -119,17 +119,17 @@ class ToiletController extends Controller
      * If no toilets are found in the database, the API performs a synchronous
      * Google Places Nearby Search and returns any newly discovered toilets.
      *
-     * @queryParam distance float Search radius in kilometers (default: 40, min: 0.1, max: 200). Example: 40
+     * @queryParam distance float Search radius in kilometers (default: 4, min: 0.1, max: 10). Example: 4
      * @queryParam filter string Comma-separated key:value attribute filters (e.g. is_open:true,euro_key:yes). Example: is_open:true
      */
     public function nearby(Request $request, float $lat, float $lon): JsonResponse
     {
         $validated = $request->validate([
-            'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:200'],
+            'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:10'],
             'filter' => ['sometimes', 'string'],
         ]);
 
-        $distance = (float) ($validated['distance'] ?? 40);
+        $distance = (float) ($validated['distance'] ?? 4);
         $filter = $this->parseFilter($validated['filter'] ?? null);
 
         $toilets = Toilet::visible()
