@@ -90,6 +90,7 @@ class PlaceToiletService
             'source' => 'auto_crawl',
             'last_places_fetch' => now(),
             'last_crawled' => now(),
+            'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
         ]);
 
         if ($toiletType !== 'none') {
@@ -415,6 +416,8 @@ class PlaceToiletService
             'lon' => $placeLocation['lng'] ?? null,
             'place_id' => $placeId,
             'status' => 'hidden',
+            'source' => 'auto_crawl',
+            'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
         ]);
     }
 
