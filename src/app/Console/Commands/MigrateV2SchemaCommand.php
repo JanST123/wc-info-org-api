@@ -59,6 +59,7 @@ class MigrateV2SchemaCommand extends Command
         $this->info('Planned schema changes:');
         $this->line('  - RENAME TABLE places_cache TO places');
         $this->line('  - RENAME TABLE place_searchresults TO _archive_place_searchresults');
+        $this->line('  - CONVERT tables to utf8mb4 / utf8mb4_unicode_ci');
         $this->line('  - ALTER TABLE toilets: REMOVE PARTITIONING, ADD status, ADD is_qualified, ADD last_included, ADD last_discovered, ADD user_overridden, MODIFY lat/lon DECIMAL');
         $this->line('  - ALTER TABLE toilets: DROP INDEX id_2');
         $this->line('  - ALTER TABLE toilets: DROP COLUMN is_quailified, type, nr');
@@ -148,6 +149,7 @@ class MigrateV2SchemaCommand extends Command
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(REPLACE(@@sql_mode,'NO_ZERO_DATE',''),'NO_ZERO_IN_DATE',''))");
 
         $this->renameTables();
+        $this->convertTablesToUtf8mb4();
         $this->prepareToiletsTable();
         $this->migrateToiletData();
         $this->convertToiletCoordinates();
@@ -183,6 +185,81 @@ class MigrateV2SchemaCommand extends Command
             $this->runStatement('RENAME TABLE place_searchresults TO _archive_place_searchresults');
         } else {
             $this->info('place_searchresults already renamed or missing, skipping.');
+        }
+    }
+
+    private function convertTablesToUtf8mb4(): void
+    {
+        $this->info('Converting tables to utf8mb4 character set and utf8mb4_unicode_ci collation...');
+
+        // Fix zero dates on legacy tables before alter
+        $this->fixZeroDates();
+
+        $tables = DB::select('
+            SELECT TABLE_NAME, TABLE_COLLATION
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_TYPE = "BASE TABLE"
+              AND (TABLE_COLLATION IS NULL OR TABLE_COLLATION != "utf8mb4_unicode_ci")
+        ');
+
+        if (empty($tables)) {
+            $this->info('All tables are already utf8mb4_unicode_ci, skipping.');
+
+            return;
+        }
+
+        $fks = DB::select('
+            SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE CONSTRAINT_SCHEMA = DATABASE()
+              AND REFERENCED_TABLE_NAME IS NOT NULL
+        ');
+
+        $this->runStatement('SET FOREIGN_KEY_CHECKS = 0');
+
+        foreach ($fks as $fk) {
+            try {
+                $this->runStatement("ALTER TABLE `{$fk->TABLE_NAME}` DROP FOREIGN KEY `{$fk->CONSTRAINT_NAME}`");
+            } catch (\Throwable $e) {
+                // Already dropped or ignored
+            }
+        }
+
+        try {
+            foreach ($tables as $table) {
+                $tableName = $table->TABLE_NAME;
+                $this->info("Converting table `{$tableName}` to utf8mb4_unicode_ci...");
+                $this->runStatement("ALTER TABLE `{$tableName}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            }
+        } finally {
+            foreach ($fks as $fk) {
+                try {
+                    $this->runStatement("ALTER TABLE `{$fk->TABLE_NAME}` ADD CONSTRAINT `{$fk->CONSTRAINT_NAME}` FOREIGN KEY (`{$fk->COLUMN_NAME}`) REFERENCES `{$fk->REFERENCED_TABLE_NAME}` (`{$fk->REFERENCED_COLUMN_NAME}`)");
+                } catch (\Throwable $e) {
+                    Log::debug('Could not recreate legacy foreign key constraint', ['fk' => $fk->CONSTRAINT_NAME, 'error' => $e->getMessage()]);
+                }
+            }
+
+            $this->runStatement('SET FOREIGN_KEY_CHECKS = 1');
+        }
+    }
+
+    private function fixZeroDates(): void
+    {
+        $zeroDateUpdates = [
+            'toilet_properties' => 'updated',
+            'toilet_photos' => 'inserted',
+        ];
+
+        foreach ($zeroDateUpdates as $table => $column) {
+            if ($this->tableExists($table) && $this->columnExists($table, $column)) {
+                try {
+                    $this->runStatement("UPDATE `{$table}` SET `{$column}` = CURRENT_TIMESTAMP WHERE CAST(`{$column}` AS CHAR) = '0000-00-00 00:00:00'");
+                } catch (\Throwable $e) {
+                    // Ignore if column doesn't contain zero dates or cast fails
+                }
+            }
         }
     }
 
