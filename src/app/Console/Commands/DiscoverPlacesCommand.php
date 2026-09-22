@@ -276,13 +276,14 @@ class DiscoverPlacesCommand extends Command
                 $query->whereNull('last_discovered')
                     ->orWhereColumn('last_included', '>', 'last_discovered');
             })
-            ->when(! $this->preferCache, function ($query) {
+            ->when(function ($query) {
                 $query->where(function ($q) {
                     $q->whereNull('last_places_fetch')
                         ->orWhere('last_places_fetch', '<=', now()->subMonth());
                 });
             })
             ->whereNotNull('place_id')
+            ->where('status', 'active')
             ->orderBy('last_included', 'desc');
     }
 
