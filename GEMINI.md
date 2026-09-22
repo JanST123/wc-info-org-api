@@ -121,6 +121,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:detect-duplicate-toilets [--distance=10] [--dry-run] [--no-relink-photos]`: Detects duplicate toilets by identical place_id or coordinate proximity (<=10m) and marks duplicates as deleted and unflagged.
 - `php artisan app:convert-places-v2`: Converts legacy place cache records to Places API (New) format.
 - `php artisan app:extract-nearby-cache-places [--dry-run] [--force] [--update-toilets]`: Extracts places from `google_nearby_search_cache` and adds/updates them in the `places` table (enriching missing `regularOpeningHours`, `websiteUri`, etc.).
+- `php artisan app:create-initial-toilet-revisions [--dry-run] [--source=initial]`: Creates an initial snapshot revision for all toilets that currently do not have any revisions.
 - `php artisan app:repair-toilet-coordinates`: Fixes legacy scaled coordinates.
 
 ---
