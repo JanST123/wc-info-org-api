@@ -77,7 +77,7 @@ class DiscoverPlacesCommand extends Command
     {
         $this->dryRun = (bool) $this->option('dry-run');
 
-        $preferCacheOption = $this->option('prefer-cache');
+        $preferCacheOption = $this->option('prefer-cache') ?: '30d';
         $maxCacheAgeOption = $this->option('max-cache-age');
 
         $hasPreferCacheFlag = $this->input->hasParameterOption('--prefer-cache') || $preferCacheOption !== null;
@@ -286,10 +286,10 @@ class DiscoverPlacesCommand extends Command
                 $query->whereNull('last_discovered')
                     ->orWhereColumn('last_included', '>', 'last_discovered');
             })
-            ->where(function ($query) {
-                $query->whereNull('last_places_fetch')
-                    ->orWhere('last_places_fetch', '<=', now()->subMonth());
-            })
+            // ->where(function ($query) {
+            //     $query->whereNull('last_places_fetch')
+            //         ->orWhere('last_places_fetch', '<=', now()->subMonth());
+            // })
             ->whereNotNull('place_id')
             ->where('status', 'active')
             ->orderBy('last_included', 'desc');
