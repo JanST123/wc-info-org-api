@@ -62,14 +62,15 @@ class SitemapController extends Controller
             ->header('Content-Type', 'application/xml');
     }
 
-    private function slug(string $text): string
+    private function slug(?string $text): string
     {
+        $text = (string) $text;
         $text = str_replace(
             ['Ä', 'Ö', 'Ü', 'ä', 'ö', 'ü', 'ß'],
             ['Ae', 'Oe', 'Ue', 'ae', 'oe', 'ue', 'ss'],
             $text
         );
 
-        return preg_replace('/[^0-9a-zA-Z]+/', '-', $text);
+        return trim((string) preg_replace('/[^0-9a-zA-Z]+/', '-', $text), '-');
     }
 }

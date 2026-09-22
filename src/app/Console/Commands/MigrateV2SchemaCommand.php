@@ -162,6 +162,7 @@ class MigrateV2SchemaCommand extends Command
         $this->cleanupUnknownPlaces();
         $this->createCostTrackingTables();
         $this->createToiletRevisionsTable();
+        $this->createApiKeysTable();
         $this->optimizeIndexes();
     }
 
@@ -670,6 +671,78 @@ class MigrateV2SchemaCommand extends Command
             ");
         } else {
             $this->info('Table toilet_revisions already exists, skipping.');
+        }
+    }
+
+    private function createApiKeysTable(): void
+    {
+        $this->info('Creating api_keys table...');
+
+        if (! $this->tableExists('api_keys')) {
+            $this->runStatement("
+                CREATE TABLE api_keys (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    `key` VARCHAR(64) NOT NULL UNIQUE,
+                    `name` VARCHAR(100) NOT NULL,
+                    `description` VARCHAR(255) NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `rate_limit_per_minute` INT UNSIGNED NOT NULL DEFAULT 40,
+                    `rate_limit_penalty_period` INT UNSIGNED NOT NULL DEFAULT 300,
+                    `rate_limit_block_duration` INT UNSIGNED NOT NULL DEFAULT 120,
+                    `global_rate_limit_per_minute` INT UNSIGNED NOT NULL DEFAULT 800,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_api_keys_active (is_active)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $this->info('Created table api_keys.');
+        } else {
+            $this->info('Table api_keys already exists, skipping creation.');
+        }
+
+        // Seed default API keys if none exist
+        if (DB::table('api_keys')->count() === 0) {
+            $this->info('Seeding default API keys for iOS, Android, and Web clients...');
+            $now = now();
+            DB::table('api_keys')->insert([
+                [
+                    'key' => 'wc_ios_' . bin2hex(random_bytes(16)),
+                    'name' => 'iOS App',
+                    'description' => 'Official iOS mobile application',
+                    'is_active' => 1,
+                    'rate_limit_per_minute' => 40,
+                    'rate_limit_penalty_period' => 300,
+                    'rate_limit_block_duration' => 120,
+                    'global_rate_limit_per_minute' => 800,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'key' => 'wc_and_' . bin2hex(random_bytes(16)),
+                    'name' => 'Android App',
+                    'description' => 'Official Android mobile application',
+                    'is_active' => 1,
+                    'rate_limit_per_minute' => 40,
+                    'rate_limit_penalty_period' => 300,
+                    'rate_limit_block_duration' => 120,
+                    'global_rate_limit_per_minute' => 800,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'key' => 'wc_web_' . bin2hex(random_bytes(16)),
+                    'name' => 'Web App',
+                    'description' => 'Official Web application',
+                    'is_active' => 1,
+                    'rate_limit_per_minute' => 40,
+                    'rate_limit_penalty_period' => 300,
+                    'rate_limit_block_duration' => 120,
+                    'global_rate_limit_per_minute' => 800,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+            ]);
+            $this->info('Default API keys created successfully.');
         }
     }
 

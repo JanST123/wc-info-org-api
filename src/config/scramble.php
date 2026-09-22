@@ -50,7 +50,16 @@ return [
         /*
          * Description rendered on the home page of the API documentation (`/docs/api`).
          */
-        'description' => 'WC-Info API v2',
+        'description' => "Welcome to the **WC-Info REST API v2** documentation.\n\n"
+            ."### Authentication\n"
+            ."All public endpoints require a valid client API key. Pass your key using one of:\n"
+            ."- **Header (Recommended)**: `X-Api-Key: <key>`\n"
+            ."- **Bearer Token**: `Authorization: Bearer <key>`\n"
+            ."- **Query Parameter**: `?api_key=<key>`\n\n"
+            ."### Rate Limiting & Anti-Scraping\n"
+            ."- **Standard Quota**: 40 requests/minute per client IP.\n"
+            ."- **Exceeded Quota**: 120-second temporary hard block (`429 Too Many Requests` with `Retry-After`).\n"
+            ."- **Slowdown Penalty**: 300-second penalty phase with reduced quota (10 req/min) and artificial delay.",
     ],
 
     'ui' => [
@@ -169,6 +178,13 @@ return [
      *     ],
      * ],
      */
-    // 'security_strategy' => \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
-    'security_strategy' => null,
+    'security_strategy' => [
+        \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
+        [
+            'middleware' => ['api.key', \App\Http\Middleware\ApiKeyRateLimitMiddleware::class],
+            'scheme' => \Dedoc\Scramble\Support\Generator\SecurityScheme::apiKey('header', 'X-Api-Key')
+                ->as('ApiKeyAuth')
+                ->setDescription('API Key authentication required for all public endpoints. Pass via `X-Api-Key` header, `Authorization: Bearer <key>`, or `?api_key=<key>`.'),
+        ],
+    ],
 ];

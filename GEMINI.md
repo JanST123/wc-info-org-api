@@ -60,6 +60,7 @@ wc-info-org-api/
 - **`Place`** (`app/Models/Place.php`): Authoritative store for Google Places API (New) cached place metadata.
 - **`ToiletPhoto`** (`app/Models/ToiletPhoto.php`): S3-stored photo metadata supporting soft and permanent deletions.
 - **`ToiletProperty`** (`app/Models/ToiletProperty.php`): Key-value properties associated with toilets.
+- **`ApiKey`** (`app/Models/ApiKey.php`): Client application API keys with configurable per-IP rate limits, block/penalty periods, and global request limits.
 
 ---
 
@@ -68,6 +69,9 @@ wc-info-org-api/
 - **`GooglePlacesService`** (`app/Services/GooglePlacesService.php`):
   - Integrates with Google Places API (New REST v1).
   - Handles Nearby Search fallback when no toilets exist locally in bounds/nearby queries.
+- **`RateLimitService`** (`app/Services/RateLimitService.php`):
+  - Manages per-IP sliding rate limits (default 40 req/min), temporary 120s IP hard-blocks, and 300s slowdown penalty periods (10 req/min + 1.0s artificial delay).
+  - Enforces global safety ceiling (default 800 req/min across all IPs per key) and triggers throttled email alerts via `MailService`.
 - **`OpeningHoursService`** (`app/Services/OpeningHoursService.php`):
   - Parses opening hours `periods` and computes `is_open`, `open_timestamp`, and `close_timestamp`.
 - **`S3PhotoStorageService`** (`app/Services/S3PhotoStorageService.php`):
@@ -82,6 +86,8 @@ wc-info-org-api/
 ## API Routes & Endpoints
 
 All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
+
+### Public API Endpoints (Requires `X-Api-Key`, `Authorization: Bearer <key>`, or `?api_key=`)
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -98,12 +104,23 @@ All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
 | `POST` | `/upload` | Upload toilet photo |
 | `POST` | `/uploadSubmit/{toiletId}` | Finalize photo uploads & activate toilet |
 | `DELETE` | `/deletePhoto/{toiletId}/{filename}` | Soft (`soft=true`) or hard delete photo |
+
+### Public Utility & Admin Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
 | `GET` | `/sitemap` | XML sitemap |
 | `GET` | `/health` | Service health check |
 | `GET` | `/admin/login` | Admin login page |
 | `POST` | `/admin/login` | Admin authentication |
 | `POST` | `/admin/logout` | Admin logout |
 | `GET` | `/admin` | Admin dashboard (lists toilets added in last 24h & search) |
+| `GET` | `/admin/api-keys` | API keys management & live rate limit monitoring |
+| `POST` | `/admin/api-keys` | Create new client API key |
+| `POST` | `/admin/api-keys/{id}` | Update API key settings and limits |
+| `POST` | `/admin/api-keys/{id}/toggle` | Activate / Deactivate API key |
+| `POST` | `/admin/api-keys/{id}/regenerate` | Regenerate API key token |
+| `POST` | `/admin/api-keys/unblock` | Manually unblock a client IP |
 | `GET` | `/admin/toilets/{id}` | Admin toilet view/edit panel |
 | `POST` | `/admin/toilets/{id}` | Admin toilet update |
 | `POST` | `/admin/toilets/{id}/reschedule-discovery` | Reschedule discovery job (sets last_included to NOW()) |

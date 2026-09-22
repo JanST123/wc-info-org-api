@@ -2,6 +2,7 @@
 
 use App\Exceptions\Handler;
 use App\Http\Middleware\AdminAuthMiddleware;
+use App\Http\Middleware\ApiKeyRateLimitMiddleware;
 use App\Http\Middleware\CorsMiddleware;
 use App\Http\Middleware\RequestLogMiddleware;
 use App\Http\Middleware\ValidateJsonBodyMiddleware;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin.auth' => AdminAuthMiddleware::class,
+            'api.key' => ApiKeyRateLimitMiddleware::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [
