@@ -77,22 +77,24 @@ class DiscoverPlacesCommand extends Command
     {
         $this->dryRun = (bool) $this->option('dry-run');
 
-        $preferCacheOption = $this->option('prefer-cache') ?: '30d';
+        $preferCacheOption = $this->option('prefer-cache');
         $maxCacheAgeOption = $this->option('max-cache-age');
 
-        $hasPreferCacheFlag = $this->input->hasParameterOption('--prefer-cache') || $preferCacheOption !== null;
-        $this->preferCache = $hasPreferCacheFlag || $maxCacheAgeOption !== null;
-
-        $ageString = null;
-        if (is_string($preferCacheOption) && ! in_array(strtolower($preferCacheOption), ['true', 'false', '1', '0'], true)) {
-            $ageString = $preferCacheOption;
-        } elseif ($maxCacheAgeOption !== null) {
-            $ageString = (string) $maxCacheAgeOption;
-        }
-
+        // Defaults to 30d (prefer-cache enabled by default) unless explicitly disabled
+        $this->preferCache = true;
         if ($preferCacheOption === false || $preferCacheOption === 'false' || $preferCacheOption === '0') {
             $this->preferCache = false;
-            $ageString = null;
+        }
+
+        $ageString = null;
+        if ($this->preferCache) {
+            if ($maxCacheAgeOption !== null) {
+                $ageString = (string) $maxCacheAgeOption;
+            } elseif (is_string($preferCacheOption) && ! in_array(strtolower($preferCacheOption), ['true', '1'], true)) {
+                $ageString = $preferCacheOption;
+            } else {
+                $ageString = '30d';
+            }
         }
 
         $this->maxCacheAgeString = $ageString;
@@ -286,10 +288,6 @@ class DiscoverPlacesCommand extends Command
                 $query->whereNull('last_discovered')
                     ->orWhereColumn('last_included', '>', 'last_discovered');
             })
-            // ->where(function ($query) {
-            //     $query->whereNull('last_places_fetch')
-            //         ->orWhere('last_places_fetch', '<=', now()->subMonth());
-            // })
             ->whereNotNull('place_id')
             ->where('status', 'active')
             ->orderBy('last_included', 'desc');

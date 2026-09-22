@@ -205,7 +205,7 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertNotNull(Place::where('place_id', $placeId)->first());
     }
 
-    public function test_prefer_cache_does_not_select_toilet_when_last_places_fetch_is_less_than_a_month_ago(): void
+    public function test_prefer_cache_defaults_to_30d_and_uses_fresh_cache_without_api_call(): void
     {
         $placeId = 'place_age_test_'.uniqid();
         $this->createdPlaceIds[] = $placeId;
@@ -217,13 +217,14 @@ class DiscoverPlacesCommandTest extends TestCase
                 'displayName' => ['text' => 'Cached Age Test'],
                 'location' => ['latitude' => 52.7, 'longitude' => 13.7],
             ],
+            'updated' => now()->subDays(5),
         ]);
 
         $placesService = $this->createMock(GooglePlacesService::class);
         $placesService->expects($this->never())->method('fetchPlaceDetails');
         $this->app->instance(GooglePlacesService::class, $placesService);
 
-        // last_places_fetch is 5 days ago (less than a month, so excluded)
+        // Toilet rescheduled (last_included is now, last_discovered is null)
         $toilet = Toilet::create([
             'name' => 'WC Recent Fetch',
             'owner' => 'Initial Owner',
@@ -237,16 +238,13 @@ class DiscoverPlacesCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
-        // Even with prefer-cache, it must NOT select this toilet
-        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--prefer-cache' => true, '--limit' => 500]);
+        // By default without flags, prefer-cache defaults to 30d and processes the toilet using cache
+        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--limit' => 500]);
         $output = Artisan::output();
 
         $this->assertSame(0, $status);
-        $this->assertStringNotContainsString("toilet_id={$toilet->id}", $output);
-
-        $toilet->refresh();
-        $this->assertSame('Initial Owner', $toilet->owner);
-        $this->assertNull($toilet->last_discovered);
+        $this->assertStringContainsString("toilet_id={$toilet->id}", $output);
+        $this->assertStringContainsString('[CACHED]', $output);
     }
 
     public function test_dry_run_cost_prediction_without_prefer_cache(): void
