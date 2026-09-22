@@ -244,8 +244,6 @@ class PlaceToiletService
             $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
         }
 
-echo "MÖP";
-
 
         if (isset($details['businessStatus'])) {
             $isClosed = in_array($details['businessStatus'], ['CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'], true);
