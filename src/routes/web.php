@@ -17,6 +17,7 @@ Route::get('toilet/{id}', [ToiletController::class, 'byId']);
 Route::patch('toilet/{id}/update', [ToiletController::class, 'update']);
 Route::post('toilet/add', [ToiletController::class, 'add']);
 Route::post('toilet/add-properties/{toiletId}', [ToiletController::class, 'addProperties']);
+Route::post('toilet/feedback/{toiletId}', [ToiletController::class, 'feedback']);
 
 // Public Place cache routes
 Route::post('places/{placeId}', [PlaceController::class, 'store']);

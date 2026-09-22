@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SendToiletFeedbackRequest;
 use App\Http\Requests\StoreToiletPropertiesRequest;
 use App\Http\Requests\StoreToiletRequest;
 use App\Http\Requests\UpdateToiletRequest;
@@ -12,6 +13,7 @@ use App\Models\Toilet;
 use App\Models\Type;
 use App\Models\TypeXPlace;
 use App\Services\GooglePlacesService;
+use App\Services\MailService;
 use App\Services\OpeningHoursService;
 use App\Services\PlaceToiletService;
 use App\Services\ToiletRevisionService;
@@ -529,7 +531,58 @@ class ToiletController extends Controller
         ]);
     }
 
+    /**
+     * Send feedback email for a toilet.
+     */
+    public function feedback(int $toiletId, SendToiletFeedbackRequest $request, MailService $mailService): JsonResponse
+    {
+        $toilet = Toilet::with(['place', 'latestRevision'])->find($toiletId);
 
+        if (! $toilet) {
+            return response()->json([
+                'status' => 'not_found',
+                'message' => 'Toilet not found',
+            ], 404);
+        }
+
+        $input = $request->validated();
+        $userSubject = $input['subject'];
+        $userMessage = $input['message'];
+
+        $toEmail = (string) config('wcinfo.sender_mail');
+        $emailSubject = 'Feedback: '.$userSubject;
+
+        $placeName = $toilet->place?->getName() ?: '-';
+        $lastUpdateTimestamp = $toilet->latestRevision?->created_at
+            ?? $toilet->updated
+            ?? $toilet->created_at
+            ?? $toilet->last_discovered
+            ?? $toilet->last_included;
+        $lastUpdate = $lastUpdateTimestamp ? $lastUpdateTimestamp->format('Y-m-d H:i:s') : '-';
+
+        $adminUrl = url("/admin/toilets/{$toilet->id}");
+
+        $body = "<h2>Feedback Received</h2>\n"
+            ."<p><strong>Message:</strong></p>\n"
+            .'<blockquote>'.nl2br(e($userMessage))."</blockquote>\n"
+            ."<hr>\n"
+            ."<h3>Toilet Details</h3>\n"
+            ."<ul>\n"
+            ."<li><strong>ID:</strong> {$toilet->id}</li>\n"
+            .'<li><strong>Name:</strong> '.e($toilet->name ?? '-')."</li>\n"
+            .'<li><strong>Owner:</strong> '.e($toilet->owner ?: '-')."</li>\n"
+            .'<li><strong>Place Name:</strong> '.e($placeName)."</li>\n"
+            .'<li><strong>Last Update:</strong> '.e($lastUpdate)."</li>\n"
+            ."</ul>\n"
+            .'<p><a href="'.e($adminUrl).'">Edit Toilet in Admin Panel</a></p>';
+
+        $mailService->send($toEmail, $emailSubject, $body, true);
+
+        return response()->json([
+            'status' => 'okay',
+            'message' => 'Feedback sent successfully',
+        ]);
+    }
 
     private function setFlag(int $toiletId, string $flag, bool $value, array &$diff): void
     {

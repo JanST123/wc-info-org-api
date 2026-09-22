@@ -92,6 +92,7 @@ All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
 | `PATCH` | `/toilet/{id}/update` | Update toilet details |
 | `POST` | `/toilet/add` | Create new toilet manually |
 | `POST` | `/toilet/add-properties/{toiletId}` | Add key-value toilet properties |
+| `POST` | `/toilet/feedback/{toiletId}` | Send feedback email for a toilet |
 | `GET` | `/places/{placeId}` | Get cached Google Place details |
 | `POST` | `/places/{placeId}` | Store/update Google Place details |
 | `POST` | `/upload` | Upload toilet photo |
