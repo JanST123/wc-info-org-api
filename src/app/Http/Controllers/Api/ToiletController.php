@@ -246,9 +246,10 @@ class ToiletController extends Controller
                 $isFalsy = in_array($rawVal, ['0', 'false', 'no'], true);
 
                 if ($key === 'is_open') {
+                    $isTemporaryClosed = $toilet->isFlagSet('temporary_closed');
                     $isAccessibleOutside = $toilet->isFlagSet('accessible_outside_opening_times');
                     $hasNoOpeningTimes = ! $hasPeriods;
-                    $matchesOpen = $state['is_open'] || $isAccessibleOutside || $hasNoOpeningTimes;
+                    $matchesOpen = ! $isTemporaryClosed && ($state['is_open'] || $isAccessibleOutside || $hasNoOpeningTimes);
 
                     if ($isTruthy && ! $matchesOpen) {
                         return false;
@@ -366,7 +367,7 @@ class ToiletController extends Controller
             $this->checkAndUpdatePlaceType($input['place_id']);
         }
 
-        $flagFields = ['is_unisex', 'is_gender_separated', 'has_wheelchair_access', 'has_changing_table', 'accessible_outside_opening_times', 'public_accessible'];
+        $flagFields = ['is_unisex', 'is_gender_separated', 'has_wheelchair_access', 'has_changing_table', 'accessible_outside_opening_times', 'public_accessible', 'temporary_closed'];
         foreach ($flagFields as $field) {
             if (array_key_exists($field, $input)) {
                 $this->setFlag($toilet->id, $field, (bool) $input[$field], $diff);
@@ -462,7 +463,7 @@ class ToiletController extends Controller
             $toilet->markUserOverridden(...$userOverriddenFields);
         }
 
-        $flagFields = ['is_unisex', 'is_gender_separated', 'has_wheelchair_access', 'has_changing_table', 'accessible_outside_opening_times', 'public_accessible'];
+        $flagFields = ['is_unisex', 'is_gender_separated', 'has_wheelchair_access', 'has_changing_table', 'accessible_outside_opening_times', 'public_accessible', 'temporary_closed'];
         foreach ($flagFields as $field) {
             if (isset($input[$field]) && $input[$field]) {
                 $this->setFlag($toilet->id, $field, true, $diff);

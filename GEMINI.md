@@ -54,7 +54,7 @@ wc-info-org-api/
 ## Core Models & Database
 
 - **`Toilet`** (`app/Models/Toilet.php`): Represents a public toilet entity.
-  - Fields: `id`, `status` (`active`, `hidden`, `deleted`), `is_qualified`, `lat`, `lon`, `place_id`, `address`, `comment`, `website`, `is_unisex`, `is_gender_separated`, `has_wheelchair_access`, `has_changing_table`, `accessible_outside_opening_times`, `public_accessible`, `storage_space`, `euro_key`.
+  - Fields: `id`, `status` (`active`, `hidden`, `deleted`), `is_qualified`, `lat`, `lon`, `place_id`, `address`, `comment`, `website`, `is_unisex`, `is_gender_separated`, `has_wheelchair_access`, `has_changing_table`, `accessible_outside_opening_times`, `public_accessible`, `temporary_closed`, `storage_space`, `euro_key`.
   - Relationships: `properties()` (`ToiletProperty`), `photos()` (`ToiletPhoto`), `place()` (`Place`).
   - Protection rule: Fields manually edited by users (`POST /toilet/add`, `PATCH /toilet/{id}/update`, `POST /toilet/add-properties`) are protected against automated overwrite by background discovery.
 - **`Place`** (`app/Models/Place.php`): Authoritative store for Google Places API (New) cached place metadata.

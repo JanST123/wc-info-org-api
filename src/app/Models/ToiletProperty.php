@@ -38,6 +38,7 @@ class ToiletProperty extends Model
         'accessible_outside_opening_times',
         'public_accessible',
         'storage_space',
+        'temporary_closed',
     ];
 
     protected $fillable = [

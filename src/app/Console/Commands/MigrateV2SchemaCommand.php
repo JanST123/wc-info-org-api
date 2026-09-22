@@ -400,7 +400,8 @@ class MigrateV2SchemaCommand extends Command
                 "has_changing_table",
                 "accessible_outside_opening_times",
                 "public_accessible",
-                "storage_space"
+                "storage_space",
+                "temporary_closed"
             ) NOT NULL
         ');
     }
@@ -541,7 +542,8 @@ class MigrateV2SchemaCommand extends Command
                 "has_changing_table",
                 "accessible_outside_opening_times",
                 "public_accessible",
-                "storage_space"
+                "storage_space",
+                "temporary_closed"
             ) NOT NULL
         ');
     }

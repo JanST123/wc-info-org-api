@@ -15,7 +15,7 @@ class StoreToiletPropertiesRequest extends FormRequest
     {
         return [
             '*' => ['array'],
-            '*.type' => ['required', 'string', 'in:address,website,euro_key,comment,place_opening_hours,is_unisex,is_gender_separated,has_wheelchair_access,has_changing_table,accessible_outside_opening_times,public_accessible,storage_space'],
+            '*.type' => ['required', 'string', 'in:address,website,euro_key,comment,place_opening_hours,is_unisex,is_gender_separated,has_wheelchair_access,has_changing_table,accessible_outside_opening_times,public_accessible,storage_space,temporary_closed'],
             '*.value' => ['required', 'string'],
         ];
     }

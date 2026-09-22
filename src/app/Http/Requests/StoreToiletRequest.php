@@ -18,6 +18,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * @property bool|null $has_changing_table Whether the toilet has a baby changing table
  * @property bool|null $accessible_outside_opening_times Whether the toilet is accessible outside opening times
  * @property bool|null $public_accessible Whether the toilet is publicly accessible
+ * @property bool|null $temporary_closed Whether the toilet is temporarily closed
  * @property array<int, array{open: array{day: int, hour: int, minute: int}, close?: array{day: int, hour: int, minute: int}}>|null $place_opening_hours Opening hours periods array in Places API (New) format
  * @property string|null $address Address string
  * @property string|null $comment Comment or additional details
@@ -48,6 +49,7 @@ class StoreToiletRequest extends FormRequest
             'has_changing_table' => ['nullable', 'boolean'],
             'accessible_outside_opening_times' => ['nullable', 'boolean'],
             'public_accessible' => ['nullable', 'boolean'],
+            'temporary_closed' => ['nullable', 'boolean'],
             'place_opening_hours' => ['nullable', 'array'],
             'address' => ['nullable', 'string'],
             'comment' => ['nullable', 'string'],

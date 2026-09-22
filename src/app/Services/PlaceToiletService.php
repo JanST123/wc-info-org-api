@@ -40,10 +40,13 @@ class PlaceToiletService
 
         $existingToilet = Toilet::where('place_id', $placeId)->first();
 
+        // if ($existingToilet) {
+        //     return $existingToilet;
+        // }
         if ($existingToilet) {
+            $this->updateToiletFromPlace($existingToilet, $placeData, $fetchedDetails);
             return $existingToilet;
-        }
-
+        } 
         $details = $this->resolveDetails($placeData, $fetchedDetails);
 
         if (empty($details['website'])) {
@@ -79,6 +82,7 @@ class PlaceToiletService
             'result_count' => $crawlResult['resultCount'] ?? null,
         ]);
 
+        
         $toilet = Toilet::create([
             'name' => 'Toilette',
             'owner' => $details['name'] ?? null,
@@ -92,6 +96,7 @@ class PlaceToiletService
             'last_crawled' => now(),
             'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
         ]);
+    
 
         if ($toiletType !== 'none') {
             $toilet->update(['name' => 'WC #'.$toilet->id]);
@@ -111,6 +116,10 @@ class PlaceToiletService
 
             if (self::isPublicAccessibleType($placeTypes)) {
                 $this->insertProperty($toilet->id, 'public_accessible', '1');
+            }
+
+            if (in_array($details['businessStatus'] ?? null, ['CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'], true)) {
+                $this->insertProperty($toilet->id, 'temporary_closed', '1');
             }
         }
 
@@ -235,6 +244,14 @@ class PlaceToiletService
             $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
         }
 
+echo "MÖP";
+
+
+        if (isset($details['businessStatus'])) {
+            $isClosed = in_array($details['businessStatus'], ['CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'], true);
+            $this->setPropertyWithOverrideCheck($toilet->id, 'temporary_closed', $isClosed ? '1' : null, $changes);
+        }
+
         if (! empty($changes)) {
             $toilet->last_diff = json_encode($changes);
             $toilet->flagged = true; // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
@@ -258,6 +275,7 @@ class PlaceToiletService
             $name = $data['displayName']['text'] ?? (is_string($data['displayName'] ?? null) ? $data['displayName'] : null) ?? $data['name'] ?? null;
             $website = $data['websiteUri'] ?? $data['website'] ?? null;
             $address = $data['formattedAddress'] ?? $data['formatted_address'] ?? null;
+            $businessStatus = $data['business_status'] ?? $data['businessStatus'] ?? null;
 
             $lat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
             $lng = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
@@ -282,6 +300,7 @@ class PlaceToiletService
                 'openingHours' => $openingHours,
                 'formattedAddress' => $address,
                 'types' => $types,
+                'businessStatus' => $businessStatus,
             ];
         };
 
@@ -295,6 +314,7 @@ class PlaceToiletService
             $details['openingHours'] = $fetched['openingHours'] ?? $details['openingHours'];
             $details['formattedAddress'] = $fetched['formattedAddress'] ?? $details['formattedAddress'];
             $details['types'] = $fetched['types'] ?? $details['types'];
+            $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
         } elseif (empty($details['website']) || empty($details['name']) || empty($details['location'])) {
             $placeId = $details['place_id'] ?? $placeData['place_id'] ?? $placeData['id'] ?? null;
             if ($placeId) {
@@ -307,6 +327,7 @@ class PlaceToiletService
                     $details['openingHours'] = $fetched['openingHours'] ?? $details['openingHours'];
                     $details['formattedAddress'] = $fetched['formattedAddress'] ?? $details['formattedAddress'];
                     $details['types'] = $fetched['types'] ?? $details['types'];
+                    $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
                 }
             }
         }

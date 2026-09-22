@@ -29,6 +29,10 @@
                     <span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 0.8125rem;">🚩 Flagged for Review</span>
                 @endif
 
+                @if (($propertyValues['temporary_closed'] ?? '0') === '1')
+                    <span class="badge" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; font-size: 0.8125rem;">⛔ Temporarily Closed</span>
+                @endif
+
                 <span class="badge" style="background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; font-size: 0.8125rem; font-family: monospace;">
                     v{{ $toilet->version ?: 1 }}
                 </span>
@@ -456,6 +460,19 @@
                                 {{ old('public_accessible', ($propertyValues['public_accessible'] ?? '0') === '1') ? 'checked' : '' }}
                             >
                             <span>Publicly Accessible</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label class="checkbox-label" for="temporary_closed" style="color: #991b1b; font-weight: 600;">
+                            <input
+                                type="checkbox"
+                                id="temporary_closed"
+                                name="temporary_closed"
+                                value="1"
+                                {{ old('temporary_closed', ($propertyValues['temporary_closed'] ?? '0') === '1') ? 'checked' : '' }}
+                            >
+                            <span>⛔ Temporarily Closed</span>
                         </label>
                     </div>
                 </div>

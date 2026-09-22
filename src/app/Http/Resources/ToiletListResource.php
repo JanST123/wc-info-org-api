@@ -28,16 +28,17 @@ class ToiletListResource extends JsonResource
         }
 
         $periods = $this->propertyValue('place_opening_hours');
+        $isTemporaryClosed = $this->isFlagSet('temporary_closed');
 
         if (isset($this->resource->is_open)) {
-            $isOpen = $this->resource->is_open;
-            $openTimestamp = $this->resource->open_timestamp;
-            $closeTimestamp = $this->resource->close_timestamp;
+            $isOpen = $this->resource->is_open && ! $isTemporaryClosed;
+            $openTimestamp = $isTemporaryClosed ? null : $this->resource->open_timestamp;
+            $closeTimestamp = $isTemporaryClosed ? null : $this->resource->close_timestamp;
         } else {
             $state = $openingHours->getOpenState($periods);
-            $isOpen = $state['is_open'];
-            $openTimestamp = $state['open_timestamp'];
-            $closeTimestamp = $state['close_timestamp'];
+            $isOpen = $state['is_open'] && ! $isTemporaryClosed;
+            $openTimestamp = $isTemporaryClosed ? null : $state['open_timestamp'];
+            $closeTimestamp = $isTemporaryClosed ? null : $state['close_timestamp'];
         }
 
         return [
@@ -61,6 +62,7 @@ class ToiletListResource extends JsonResource
             'has_changing_table' => $this->isFlagSet('has_changing_table'),
             'accessible_outside_opening_times' => $this->isFlagSet('accessible_outside_opening_times'),
             'public_accessible' => $this->isFlagSet('public_accessible'),
+            'temporary_closed' => $isTemporaryClosed,
             'photos' => $photos,
             'is_open' => $isOpen,
             'open_timestamp' => $openTimestamp,

@@ -30,6 +30,7 @@ class PresetPublicAccessibleTypesCommandTest extends TestCase
         }
 
         if (! empty($this->createdTypeIds)) {
+            DB::table('type_x_place')->whereIn('type_id', $this->createdTypeIds)->delete();
             DB::table('types')->whereIn('id', $this->createdTypeIds)->delete();
         }
 

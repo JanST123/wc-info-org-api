@@ -188,6 +188,7 @@ class AdminToiletController extends Controller
             'has_changing_table' => ['nullable', 'boolean'],
             'accessible_outside_opening_times' => ['nullable', 'boolean'],
             'public_accessible' => ['nullable', 'boolean'],
+            'temporary_closed' => ['nullable', 'boolean'],
 
             // Value properties
             'euro_key' => ['nullable', 'string', 'in:,yes,no,euro_only,unknown'],
@@ -319,6 +320,7 @@ class AdminToiletController extends Controller
             'has_changing_table',
             'accessible_outside_opening_times',
             'public_accessible',
+            'temporary_closed',
         ];
 
         foreach ($flagFields as $flag) {
