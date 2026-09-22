@@ -154,7 +154,7 @@ class DiscoverPlacesCommandTest extends TestCase
             'status' => 'active',
             'last_included' => now()->addDays(20),
             'last_discovered' => null,
-            'last_places_fetch' => now(), // Cache age is recent (< 1 month)
+            'last_places_fetch' => now()->subMonths(2), // Cache age is older than 1 month
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
@@ -205,7 +205,7 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertNotNull(Place::where('place_id', $placeId)->first());
     }
 
-    public function test_prefer_cache_processes_toilet_regardless_of_last_places_fetch_age(): void
+    public function test_prefer_cache_does_not_select_toilet_when_last_places_fetch_is_less_than_a_month_ago(): void
     {
         $placeId = 'place_age_test_'.uniqid();
         $this->createdPlaceIds[] = $placeId;
@@ -223,7 +223,7 @@ class DiscoverPlacesCommandTest extends TestCase
         $placesService->expects($this->never())->method('fetchPlaceDetails');
         $this->app->instance(GooglePlacesService::class, $placesService);
 
-        // last_places_fetch is 5 days ago (less than a month, so normally excluded)
+        // last_places_fetch is 5 days ago (less than a month, so excluded)
         $toilet = Toilet::create([
             'name' => 'WC Recent Fetch',
             'owner' => 'Initial Owner',
@@ -237,17 +237,16 @@ class DiscoverPlacesCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
-        // Without prefer-cache, dry run should NOT find this toilet
-        Artisan::call('app:discover-places', ['--dry-run' => true, '--limit' => 1]);
-        $this->assertStringNotContainsString("toilet_id={$toilet->id}", Artisan::output());
+        // Even with prefer-cache, it must NOT select this toilet
+        $status = Artisan::call('app:discover-places', ['--dry-run' => true, '--prefer-cache' => true, '--limit' => 500]);
+        $output = Artisan::output();
 
-        // With prefer-cache, it MUST find this toilet regardless of cache age
-        $status = Artisan::call('app:discover-places', ['--prefer-cache' => true, '--limit' => 1]);
         $this->assertSame(0, $status);
+        $this->assertStringNotContainsString("toilet_id={$toilet->id}", $output);
 
         $toilet->refresh();
-        $this->assertSame('Cached Age Test', $toilet->owner);
-        $this->assertNotNull($toilet->last_discovered);
+        $this->assertSame('Initial Owner', $toilet->owner);
+        $this->assertNull($toilet->last_discovered);
     }
 
     public function test_dry_run_cost_prediction_without_prefer_cache(): void
