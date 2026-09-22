@@ -139,8 +139,8 @@ class DiscoverPlacesCommand extends Command
             $this->info('Google returned '.count($results).' raw results.');
 
             foreach (array_slice($results, 0, $this->limit) as $result) {
-                $placeId = $result['place_id'] ?? null;
-                $name = $result['name'] ?? '';
+                $placeId = $result['id'] ?? null;
+                $name = $result['displayName']['text'] ?? '';
                 $this->line("[DRY-RUN] place_id={$placeId} name=\"{$name}\"");
                 $this->processed++;
             }
