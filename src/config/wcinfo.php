@@ -22,6 +22,10 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
     ],
 
+    'cors' => [
+        'allowed_origins' => env('CORS_ALLOWED_ORIGINS', '*'),
+    ],
+
     'admin_notification_email' => env('ADMIN_NOTIFICATION_EMAIL', 'hi@wc-info.org'),
 
     'smtp' => [
