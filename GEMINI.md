@@ -180,3 +180,4 @@ php vendor/bin/phpunit
 - **Typing & Return Types**: Enforce strict typing (`declare(strict_types=1);`), typed properties, and explicit return types on methods and controller actions.
 - **Form Requests & Resources**: Keep controllers thin by using `FormRequest` classes for validation and `JsonResource` classes for response shaping.
 - **Coordinate Integrity**: Always treat coordinates as standard floating-point numbers in decimal degrees (e.g. `52.5200`), never integer-scaled.
+- **Production Environment & Breaking Changes**: The API is active in production. Any proposed breaking changes to existing public endpoints, request structures, or response schemas must be explicitly flagged to the user before implementation so API versioning can be introduced.
