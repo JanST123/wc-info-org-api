@@ -3,7 +3,7 @@
 declare(strict_types=1);
 namespace App\Console\Commands;
 
-ini_alter('memory_limit', '512M');
+ini_alter('memory_limit', '1512M');
 
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
