@@ -223,9 +223,14 @@ class PlaceToiletService
             ]);
         }
 
-        if ($toilet->isDirty()) {
-            $changes['flagged'] = ['old' => $toilet->flagged, 'new' => true];
+        if ($toilet->isDirty(['name', 'owner', 'lat', 'lon', 'status'])) {
+            if (! $toilet->flagged) {
+                $changes['flagged'] = ['old' => false, 'new' => true];
+            }
             $toilet->flagged = true; // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
+        }
+
+        if ($toilet->isDirty()) {
             $toilet->save();
         }
 
@@ -245,16 +250,17 @@ class PlaceToiletService
             $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
         }
 
-
         if (isset($details['businessStatus'])) {
             $isClosed = in_array($details['businessStatus'], ['CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'], true);
             $this->setPropertyWithOverrideCheck($toilet->id, 'temporary_closed', $isClosed ? '1' : null, $changes);
         }
 
         if (! empty($changes)) {
-            $changes['flagged'] = ['old' => $toilet->flagged, 'new' => true];
+            if (! $toilet->flagged) {
+                $changes['flagged'] = ['old' => false, 'new' => true];
+                $toilet->flagged = true;
+            }
             $toilet->last_diff = json_encode($changes);
-            $toilet->flagged = true; // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
             $toilet->save();
 
             $this->revisionService->recordRevision(
