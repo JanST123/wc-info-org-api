@@ -78,6 +78,32 @@ class AdminToiletTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Recent Admin Toilet 24h');
         $response->assertSee((string) $recentToilet->id);
+        $response->assertSee('deleteRecentToilet(' . $recentToilet->id, false);
+    }
+
+    public function test_update_status_sets_toilet_to_deleted(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Toilet To Delete',
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->postJson("/admin/toilets/{$toilet->id}/status", [
+                'status' => 'deleted',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'toilet_id' => $toilet->id,
+            'status' => 'deleted',
+        ]);
+
+        $toilet->refresh();
+        $this->assertSame('deleted', $toilet->status);
+        $this->assertTrue($toilet->isUserOverridden('status'));
     }
 
     public function test_find_toilet_by_id(): void

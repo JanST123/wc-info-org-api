@@ -379,7 +379,7 @@
                 </thead>
                 <tbody>
                     @forelse ($recentToilets as $toilet)
-                        <tr>
+                        <tr id="recent-row-{{ $toilet->id }}">
                             <td>
                                 <a href="{{ route('admin.toilets.show', $toilet->id) }}" style="font-weight: 700; font-family: monospace;">
                                     #{{ $toilet->id }}
@@ -395,7 +395,7 @@
                                     </div>
                                 @endif
                             </td>
-                            <td>
+                            <td id="recent-status-{{ $toilet->id }}">
                                 @if ($toilet->status === 'active')
                                     <span class="badge badge-active">Active</span>
                                 @elseif ($toilet->status === 'hidden')
@@ -454,10 +454,25 @@
                                     -
                                 @endif
                             </td>
-                            <td style="text-align: right;">
-                                <a href="{{ route('admin.toilets.show', $toilet->id) }}" class="btn btn-secondary btn-sm">
-                                    Edit Toilet →
-                                </a>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.375rem;">
+                                    <a href="{{ route('admin.toilets.show', $toilet->id) }}" class="btn btn-secondary btn-sm">
+                                        Edit Toilet →
+                                    </a>
+                                    @if ($toilet->status !== 'deleted')
+                                        <button
+                                            type="button"
+                                            class="btn btn-danger-outline btn-sm"
+                                            onclick="deleteRecentToilet({{ $toilet->id }}, this)"
+                                            title="Mark toilet as deleted"
+                                            style="display: inline-flex; align-items: center; gap: 0.25rem;"
+                                        >
+                                            🗑️ Delete
+                                        </button>
+                                    @else
+                                        <span class="badge badge-deleted" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">Deleted</span>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -1335,6 +1350,60 @@
             }
         } finally {
             selectElem.disabled = false;
+        }
+    }
+
+    async function deleteRecentToilet(toiletId, btn) {
+        
+        btn.disabled = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '⏳ Deleting...';
+
+        try {
+            const response = await fetch(`/admin/toilets/${toiletId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken()
+                },
+                body: JSON.stringify({ status: 'deleted' })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Update status cell in 24h list
+            const statusCell = document.getElementById(`recent-status-${toiletId}`);
+            if (statusCell) {
+                statusCell.innerHTML = '<span class="badge badge-deleted">Deleted</span>';
+            }
+
+            // Visual feedback on row
+            const row = document.getElementById(`recent-row-${toiletId}`);
+            if (row) {
+                row.style.opacity = '0.5';
+            }
+
+            // Replace button with Deleted indicator
+            const container = btn.parentElement;
+            if (container) {
+                btn.remove();
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-deleted';
+                badge.style.fontSize = '0.75rem';
+                badge.style.padding = '0.25rem 0.5rem';
+                badge.textContent = 'Deleted';
+                container.appendChild(badge);
+            }
+        } catch (err) {
+            console.error('Error deleting toilet:', err);
+            alert('Failed to delete toilet. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
         }
     }
 
