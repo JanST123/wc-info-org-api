@@ -37,7 +37,9 @@ class Handler
                 $response['exception'] = get_class($e);
                 $response['file'] = $e->getFile();
                 $response['line'] = $e->getLine();
-                $response['trace'] = $e->getTrace();
+                $response['trace'] = collect($e->getTrace())->map(function ($trace) {
+                    return \Illuminate\Support\Arr::except($trace, ['args']);
+                })->all();
             }
 
             return response()->json($response, $status);

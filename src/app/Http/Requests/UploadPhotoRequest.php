@@ -15,7 +15,7 @@ class UploadPhotoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:jpg,jpeg,heic', 'max:30720'],
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,heic,png,webp', 'max:30720'],
             'toilet_id' => ['nullable', 'integer'],
             'exif' => ['nullable', 'string'],
             'fixed_geo' => ['nullable', 'string'],
@@ -27,7 +27,7 @@ class UploadPhotoRequest extends FormRequest
         return [
             'file.uploaded' => 'The file failed to upload. It likely exceeds the server upload limit (upload_max_filesize / post_max_size).',
             'file.max' => 'The file size must not exceed 30MB.',
-            'file.mimes' => 'The file must be a file of type: jpg, jpeg, heic.',
+            'file.mimes' => 'The file must be a file of type: jpg, jpeg, heic, png, webp.',
         ];
     }
 

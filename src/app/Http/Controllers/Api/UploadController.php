@@ -82,14 +82,20 @@ class UploadController extends Controller
         $exifData = $this->extractExif($request, $fileTemp);
 
         $imagePathThumb = tempnam(sys_get_temp_dir(), 'thumb');
-        $this->createThumbnail($fileTemp, $imagePathThumb, $exifData);
+        $this->createThumbnail($fileTemp, $imagePathThumb, $exifData, $extension);
 
         $placeResult = $this->handleGeoData($request, $exifData, $toilet, $toiletExisted, $hasPlaceId);
         $hasGeo = $placeResult['hasGeo'];
         $placeId = $placeResult['placeId'];
 
-        $this->s3->put($toiletId, $filename, file_get_contents($fileTemp));
-        $this->s3->put($toiletId, $filenameThumb, file_get_contents($imagePathThumb));
+        $mimeType = match ($extension) {
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
+
+        $this->s3->put($toiletId, $filename, file_get_contents($fileTemp), $mimeType);
+        $this->s3->put($toiletId, $filenameThumb, file_get_contents($imagePathThumb), $mimeType);
 
         unlink($fileTemp);
         unlink($imagePathThumb);
@@ -248,15 +254,24 @@ class UploadController extends Controller
         }
 
         if (function_exists('exif_read_data')) {
-            return exif_read_data($fileTemp, 'EXIF', true) ?: null;
+            try {
+                return @exif_read_data($fileTemp, 'EXIF', true) ?: null;
+            } catch (\Throwable $e) {
+                return null;
+            }
         }
 
         return null;
     }
 
-    private function createThumbnail(string $sourcePath, string $thumbPath, ?array $exifData): void
+    private function createThumbnail(string $sourcePath, string $thumbPath, ?array $exifData, string $extension = 'jpg'): void
     {
-        $img = imagecreatefromjpeg($sourcePath);
+        $contents = file_get_contents($sourcePath);
+        if ($contents === false) {
+            return;
+        }
+
+        $img = @imagecreatefromstring($contents);
         if (! $img) {
             return;
         }
@@ -272,12 +287,22 @@ class UploadController extends Controller
         }
 
         $thumb = imagecreatetruecolor($newWidth, $newHeight);
+
+        // Preserve alpha transparency for PNG and WebP
+        imagealphablending($thumb, false);
+        imagesavealpha($thumb, true);
+
         imagecopyresampled($thumb, $img, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
 
         $orientation = $exifData['IFD0']['Orientation'] ?? $exifData['THUMBNAIL']['Orientation'] ?? 0;
         $thumb = $this->applyExifOrientation($thumb, (int) $orientation);
 
-        imagejpeg($thumb, $thumbPath);
+        match ($extension) {
+            'png' => imagepng($thumb, $thumbPath),
+            'webp' => imagewebp($thumb, $thumbPath, 85),
+            default => imagejpeg($thumb, $thumbPath, 85),
+        };
+
         imagedestroy($img);
         imagedestroy($thumb);
     }
