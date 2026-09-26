@@ -39,9 +39,9 @@ class ToiletResourceTest extends TestCase
         $this->assertTrue($array['is_qualified']);
         $this->assertSame(52.5200, $array['lat']);
         $this->assertSame(13.4050, $array['lon']);
-        $this->assertSame('Test Street 1', $array['properties']['address']);
-        $this->assertSame('https://example.com', $array['properties']['website']);
-        $this->assertTrue($array['flags']['is_unisex']);
+        $this->assertSame('Test Street 1', $array['address']);
+        $this->assertSame('https://example.com', $array['website']);
+        $this->assertTrue($array['is_unisex']);
 
         // Internal and legacy fields must be absent.
         $this->assertArrayNotHasKey('source', $array);

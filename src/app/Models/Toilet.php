@@ -34,6 +34,7 @@ class Toilet extends Model
         'contact_email',
         'source',
         'created_at',
+        'updated',
         'last_included',
         'last_discovered',
         'last_places_fetch',

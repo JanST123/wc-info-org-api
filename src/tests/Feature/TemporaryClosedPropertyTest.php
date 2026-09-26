@@ -76,9 +76,7 @@ class TemporaryClosedPropertyTest extends TestCase
         $response->assertStatus(200);
         $response->assertJson([
             'id' => $toilet->id,
-            'flags' => [
-                'temporary_closed' => true,
-            ],
+            'temporary_closed' => true,
             'is_open' => false,
             'open_timestamp' => null,
             'close_timestamp' => null,

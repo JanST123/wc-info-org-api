@@ -165,11 +165,11 @@ class ToiletAddValidationTest extends TestCase
         $detailResponse = $this->getJson("/toilet/{$toiletId}");
         $detailResponse->assertStatus(200);
         $detail = $detailResponse->json();
-        $this->assertTrue($detail['flags']['accessible_outside_opening_times']);
-        $this->assertTrue($detail['flags']['public_accessible']);
-        $this->assertEquals('much', $detail['properties']['storage_space']);
-        $this->assertEquals('Entrance on the left side', $detail['properties']['comment']);
-        $this->assertEquals('https://example.com/wc', $detail['properties']['website']);
+        $this->assertTrue($detail['accessible_outside_opening_times']);
+        $this->assertTrue($detail['public_accessible']);
+        $this->assertEquals('much', $detail['storage_space']);
+        $this->assertEquals('Entrance on the left side', $detail['comment']);
+        $this->assertEquals('https://example.com/wc', $detail['website']);
 
         // 3. GET /toilets/bounds/... (ToiletListResource)
         $listResponse = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0');
@@ -196,11 +196,11 @@ class ToiletAddValidationTest extends TestCase
         $updatedDetailResponse = $this->getJson("/toilet/{$toiletId}");
         $updatedDetailResponse->assertStatus(200);
         $updatedDetail = $updatedDetailResponse->json();
-        $this->assertFalse($updatedDetail['flags']['accessible_outside_opening_times']);
-        $this->assertFalse($updatedDetail['flags']['public_accessible']);
-        $this->assertEquals('little', $updatedDetail['properties']['storage_space']);
-        $this->assertEquals('Updated comment', $updatedDetail['properties']['comment']);
-        $this->assertEquals('https://example.com/new-wc', $updatedDetail['properties']['website']);
+        $this->assertFalse($updatedDetail['accessible_outside_opening_times']);
+        $this->assertFalse($updatedDetail['public_accessible']);
+        $this->assertEquals('little', $updatedDetail['storage_space']);
+        $this->assertEquals('Updated comment', $updatedDetail['comment']);
+        $this->assertEquals('https://example.com/new-wc', $updatedDetail['website']);
     }
 
     public function test_add_toilet_source_parameter(): void

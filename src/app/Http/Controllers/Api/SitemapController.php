@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Toilet;
+use Carbon\Carbon;
 use Illuminate\Http\Response;
 
 class SitemapController extends Controller
@@ -11,38 +14,85 @@ class SitemapController extends Controller
     /**
      * Generate the XML sitemap.
      *
-     * Returns a sitemap.org compatible XML document containing static pages
-     * and all qualified toilet detail pages.
+     * Returns a sitemap.org compatible XML document containing fixed pages
+     * and all active qualified toilet detail pages.
      */
     public function output(): Response
     {
         $urls = [
-            ['loc' => '/', 'lastmod' => '2023-10-19', 'changefreq' => 'daily', 'priority' => '1.0'],
-            ['loc' => '/Toilets/Current-Location---NEARBY', 'lastmod' => date('Y-m-d'), 'changefreq' => 'daily', 'priority' => '1.0'],
-            ['loc' => '/Help', 'lastmod' => '2023-03-22', 'changefreq' => 'monthly', 'priority' => '0.7'],
-            ['loc' => '/Law/Disclaimer', 'lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.1'],
-            ['loc' => '/Law/Imprint', 'lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.1'],
-            ['loc' => '/Law/Privacy', 'lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.2'],
+            [
+                'loc' => '/',
+                'lastmod' => '2023-10-19',
+                'changefreq' => 'daily',
+                'priority' => '1.0',
+            ],
+            [
+                'loc' => '/Toilets/Current-Location---NEARBY',
+                'lastmod' => date('Y-m-d'),
+                'changefreq' => 'daily',
+                'priority' => '1.0',
+            ],
+            [
+                'loc' => '/Help',
+                'lastmod' => '2023-03-22',
+                'changefreq' => 'monthly',
+                'priority' => '0.7',
+            ],
+            [
+                'loc' => '/Law/Disclaimer',
+                'lastmod' => '2023-03-22',
+                'changefreq' => 'yearly',
+                'priority' => '0.1',
+            ],
+            [
+                'loc' => '/Law/Imprint',
+                'lastmod' => '2023-03-22',
+                'changefreq' => 'yearly',
+                'priority' => '0.1',
+            ],
+            [
+                'loc' => '/Law/Privacy',
+                'lastmod' => '2023-03-22',
+                'changefreq' => 'yearly',
+                'priority' => '0.2',
+            ],
         ];
 
-        $toilets = Toilet::qualified()
-            ->where('status', '!=', 'deleted')
-            ->with('place')
-            ->orderByDesc('updated')
+        $toilets = Toilet::where('status', 'active')
+            ->where('is_qualified', 1)
+            ->with('properties')
             ->get();
 
+        $recentCutoff = Carbon::now()->subDays(14)->timestamp;
+
         foreach ($toilets as $toilet) {
-            $placeName = $toilet->place?->data['name'] ?? $toilet->owner;
+            $placeSegment = ! empty($toilet->place_id) ? $toilet->place_id : 'NEARBY';
+            $loc = '/Toilets/Toilet---'.$placeSegment.'/Toilet---'.$toilet->id;
+
+            $updatedDate = $toilet->updated
+                ? $toilet->updated
+                : ($toilet->created_at ? $toilet->created_at : null);
+
+            $lastmod = $updatedDate ? $updatedDate->format('Y-m-d') : date('Y-m-d');
+            $updatedTimestamp = $updatedDate ? $updatedDate->timestamp : 0;
+            $isRecent = $updatedTimestamp >= $recentCutoff;
+            $isPublic = $toilet->isFlagSet('public_accessible');
+
+            if ($isPublic) {
+                $priority = $isRecent ? '0.9' : '0.8';
+            } else {
+                $priority = $isRecent ? '0.7' : '0.6';
+            }
 
             $urls[] = [
-                'loc' => '/Toilets/'.$this->slug($placeName).'---'.$toilet->place_id.'/'.$this->slug($toilet->owner.'-'.$toilet->name).'-'.$toilet->id,
-                'lastmod' => date('Y-m-d', strtotime($toilet->updated)),
+                'loc' => $loc,
+                'lastmod' => $lastmod,
                 'changefreq' => 'daily',
-                'priority' => time() - strtotime($toilet->updated) < (60 * 60 * 24 * 4) ? '0.9' : '0.8',
+                'priority' => $priority,
             ];
         }
 
-        usort($urls, function ($a, $b) {
+        usort($urls, function (array $a, array $b): int {
             return $b['priority'] <=> $a['priority'];
         });
 
@@ -52,25 +102,26 @@ class SitemapController extends Controller
             $urlEl = $xml->addChild('url');
             foreach ($url as $key => $val) {
                 if ($key === 'loc') {
-                    $val = 'https://wc-info.org'.$val;
+                    $val = str_starts_with((string) $val, 'http') ? (string) $val : 'https://wc-info.org'.$val;
+                    $val = $this->replaceUmlauts((string) $val);
                 }
-                $urlEl->addChild($key, (string) $val);
+                $urlEl->addChild($key, htmlspecialchars((string) $val, ENT_XML1, 'UTF-8'));
             }
         }
 
         return response($xml->asXML(), 200)
-            ->header('Content-Type', 'application/xml');
+            ->header('Content-Type', 'application/xml; charset=UTF-8');
     }
 
-    private function slug(?string $text): string
+    /**
+     * Replace German umlauts and sharp s with ASCII equivalents to ensure valid URLs.
+     */
+    private function replaceUmlauts(string $text): string
     {
-        $text = (string) $text;
-        $text = str_replace(
+        return str_replace(
             ['Ä', 'Ö', 'Ü', 'ä', 'ö', 'ü', 'ß'],
             ['Ae', 'Oe', 'Ue', 'ae', 'oe', 'ue', 'ss'],
             $text
         );
-
-        return trim((string) preg_replace('/[^0-9a-zA-Z]+/', '-', $text), '-');
     }
 }
