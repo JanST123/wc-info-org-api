@@ -121,7 +121,7 @@ class AdminToiletController extends Controller
      */
     public function show(int $id): View
     {
-        $toilet = Toilet::with(['properties', 'photos', 'place'])->findOrFail($id);
+        $toilet = Toilet::with(['properties', 'allPhotos', 'place'])->findOrFail($id);
 
         $lastDiff = null;
         if (! empty($toilet->last_diff)) {
@@ -449,6 +449,53 @@ class AdminToiletController extends Controller
 
         return redirect()->route('admin.toilets.show', ['id' => $id])
             ->with('success', "Photo '{$filename}' was soft-deleted.");
+    }
+
+    /**
+     * Restore a soft-deleted photo for a toilet.
+     */
+    public function restorePhoto(int $id, string $filename, Request $request): RedirectResponse
+    {
+        $photo = ToiletPhoto::where('fk_toiletId', $id)
+            ->where(function ($query) use ($filename) {
+                $query->where('filename', $filename)
+                    ->orWhere('filename', '_DELETED_'.$filename);
+            })
+            ->first();
+
+        if (! $photo) {
+            return redirect()->route('admin.toilets.show', ['id' => $id])
+                ->with('error', "Photo '{$filename}' not found for Toilet #{$id}.");
+        }
+
+        $cleanFilename = str_starts_with($photo->filename, '_DELETED_')
+            ? substr($photo->filename, 9)
+            : $photo->filename;
+
+        if ($this->s3->exists($id, $photo->filename) && $photo->filename !== $cleanFilename) {
+            $this->s3->rename($id, $photo->filename, $cleanFilename);
+        }
+
+        $cleanThumb = null;
+        if (! empty($photo->filename_thumb)) {
+            $cleanThumb = str_starts_with($photo->filename_thumb, '_DELETED_')
+                ? substr($photo->filename_thumb, 9)
+                : $photo->filename_thumb;
+
+            if ($this->s3->exists($id, $photo->filename_thumb) && $photo->filename_thumb !== $cleanThumb) {
+                $this->s3->rename($id, $photo->filename_thumb, $cleanThumb);
+            }
+        }
+
+        $photo->update([
+            'filename' => $cleanFilename,
+            'filename_thumb' => $cleanThumb ?? $photo->filename_thumb,
+            'deleted_ts' => null,
+            'email_sent' => 0,
+        ]);
+
+        return redirect()->route('admin.toilets.show', ['id' => $id])
+            ->with('success', "Photo '{$cleanFilename}' restored successfully.");
     }
 
     /**

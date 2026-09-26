@@ -71,5 +71,6 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
     Route::post('toilets/{id}/restore-version/{version}', [AdminToiletController::class, 'restoreVersion'])->name('toilets.restore-version');
     Route::post('toilets/{id}/reschedule-discovery', [AdminToiletController::class, 'rescheduleDiscovery'])->name('toilets.reschedule-discovery');
     Route::post('toilets/{id}/photos/{filename}/delete', [AdminToiletController::class, 'deletePhoto'])->name('toilets.photos.delete');
+    Route::post('toilets/{id}/photos/{filename}/restore', [AdminToiletController::class, 'restorePhoto'])->name('toilets.photos.restore');
     Route::delete('toilets/{id}/photos/{filename}', [AdminToiletController::class, 'deletePhoto']);
 });

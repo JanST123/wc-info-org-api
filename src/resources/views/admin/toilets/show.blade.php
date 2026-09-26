@@ -605,26 +605,27 @@
     <div class="card">
         <div class="card-header">
             <div class="card-title">
-                <span>📷 Toilet Photos ({{ $toilet->photos->count() }})</span>
+                <span>📷 Toilet Photos ({{ $toilet->allPhotos->count() }})</span>
             </div>
             <div style="font-size: 0.8125rem; color: var(--gray-500);">
-                Uploaded image attachments
+                Uploaded image attachments (including soft-deleted)
             </div>
         </div>
         <div class="card-body">
-            @if ($toilet->photos->isEmpty())
+            @if ($toilet->allPhotos->isEmpty())
                 <div style="text-align: center; padding: 2rem; color: var(--gray-500); background: var(--gray-50); border-radius: var(--radius-md); border: 1px dashed var(--gray-300);">
-                    No active photos attached to this toilet.
+                    No photos attached to this toilet.
                 </div>
             @else
                 <div class="photo-grid">
-                    @foreach ($toilet->photos as $photo)
+                    @foreach ($toilet->allPhotos as $photo)
                         @php
                             $photoPath = \App\Services\S3PhotoStorageService::pathForId($toilet->id);
                             $publicUrl = config('wcinfo.s3.public_url') . $photoPath . '/' . ($photo->filename_thumb ?: $photo->filename);
                             $fullUrl = config('wcinfo.s3.public_url') . $photoPath . '/' . $photo->filename;
+                            $isDeleted = ! empty($photo->deleted_ts);
                         @endphp
-                        <div class="photo-card">
+                        <div class="photo-card" @if($isDeleted) style="border-color: #fca5a5; background: rgba(239, 68, 68, 0.04);" @endif>
                             <a href="{{ $fullUrl }}" target="_blank" rel="noopener">
                                 <img src="{{ $publicUrl }}" alt="Photo {{ $photo->id }}" loading="lazy">
                             </a>
@@ -632,25 +633,40 @@
                                 <div class="photo-card-meta">
                                     <strong>#{{ $photo->id }}</strong>: {{ $photo->filename }}
                                 </div>
-                                @if ($photo->deleted_ts)
+                                @if ($isDeleted)
                                     <div class="badge badge-deleted" style="font-size: 0.6875rem;">
-                                        Deleted: {{ $photo->deleted_ts->format('Y-m-d H:i') }}
+                                        🗑️ Deleted: {{ $photo->deleted_ts instanceof \Carbon\CarbonInterface ? $photo->deleted_ts->format('Y-m-d H:i') : $photo->deleted_ts }}
                                     </div>
                                 @endif
 
                                 <div style="display: flex; gap: 0.375rem; margin-top: auto; padding-top: 0.5rem;">
-                                    <!-- Soft Delete -->
-                                    <form
-                                        action="{{ route('admin.toilets.photos.delete', ['id' => $toilet->id, 'filename' => $photo->filename]) }}"
-                                        method="POST"
-                                        onsubmit="return confirm('Soft-delete this photo? (Files on S3 will be prefixed with _DELETED_)');"
-                                        style="flex: 1;"
-                                    >
-                                        @csrf
-                                        <button type="submit" class="btn btn-danger-outline btn-sm" style="width: 100%;">
-                                            🗑 Soft Delete
-                                        </button>
-                                    </form>
+                                    @if ($isDeleted)
+                                        <!-- Restore Button -->
+                                        <form
+                                            action="{{ route('admin.toilets.photos.restore', ['id' => $toilet->id, 'filename' => $photo->filename]) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('Restore this photo? (Files on S3 will remove the _DELETED_ prefix)');"
+                                            style="flex: 1;"
+                                        >
+                                            @csrf
+                                            <button type="submit" class="btn btn-success-outline btn-sm" style="width: 100%;">
+                                                ♻️ Restore
+                                            </button>
+                                        </form>
+                                    @else
+                                        <!-- Soft Delete -->
+                                        <form
+                                            action="{{ route('admin.toilets.photos.delete', ['id' => $toilet->id, 'filename' => $photo->filename]) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('Soft-delete this photo? (Files on S3 will be prefixed with _DELETED_)');"
+                                            style="flex: 1;"
+                                        >
+                                            @csrf
+                                            <button type="submit" class="btn btn-danger-outline btn-sm" style="width: 100%;">
+                                                🗑 Soft Delete
+                                            </button>
+                                        </form>
+                                    @endif
 
                                     <!-- Hard Delete -->
                                     <form

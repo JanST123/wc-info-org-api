@@ -88,6 +88,11 @@ class Toilet extends Model
         return $this->hasMany(ToiletPhoto::class, 'fk_toiletId')->whereNull('deleted_ts');
     }
 
+    public function allPhotos(): HasMany
+    {
+        return $this->hasMany(ToiletPhoto::class, 'fk_toiletId');
+    }
+
     public function place()
     {
         return $this->hasOne(Place::class, 'place_id', 'place_id');

@@ -1108,5 +1108,77 @@ class AdminToiletTest extends TestCase
         $this->assertTrue($toilet->isUserOverridden('lat'));
         $this->assertTrue($toilet->isUserOverridden('lon'));
     }
+
+    public function test_show_toilet_view_displays_deleted_photos_and_timestamps(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Photo View Test Toilet',
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $activePhoto = ToiletPhoto::create([
+            'fk_toiletId' => $toilet->id,
+            'filename' => 'active_img_123.jpg',
+            'filename_thumb' => 'active_img_123.thumb.jpg',
+        ]);
+
+        $deletedPhoto = ToiletPhoto::create([
+            'fk_toiletId' => $toilet->id,
+            'filename' => '_DELETED_deleted_img_456.jpg',
+            'filename_thumb' => '_DELETED_deleted_img_456.thumb.jpg',
+            'deleted_ts' => Carbon::parse('2026-09-20 12:30:00'),
+        ]);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->get('/admin/toilets/' . $toilet->id);
+
+        $response->assertStatus(200);
+        $response->assertSee('active_img_123.jpg');
+        $response->assertSee('_DELETED_deleted_img_456.jpg');
+        $response->assertSee('2026-09-20 12:30');
+        $response->assertSee('Soft Delete');
+        $response->assertSee('Restore');
+        $response->assertSee('Permanent');
+    }
+
+    public function test_restore_photo_unprefixes_filename_and_clears_deleted_ts(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Restore Photo Test Toilet',
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $photo = ToiletPhoto::create([
+            'fk_toiletId' => $toilet->id,
+            'filename' => '_DELETED_sample_pic.jpg',
+            'filename_thumb' => '_DELETED_sample_pic.thumb.jpg',
+            'deleted_ts' => Carbon::now()->subDays(2),
+            'email_sent' => 2,
+        ]);
+
+        // Mock S3
+        $s3Mock = $this->createMock(S3PhotoStorageService::class);
+        $s3Mock->method('exists')->willReturn(true);
+        $s3Mock->expects($this->exactly(2))
+            ->method('rename')
+            ->willReturnCallback(function ($toiletId, $old, $new) {
+                return true;
+            });
+        $this->app->instance(S3PhotoStorageService::class, $s3Mock);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->post('/admin/toilets/' . $toilet->id . '/photos/' . $photo->filename . '/restore');
+
+        $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
+        $response->assertSessionHas('success');
+
+        $photo->refresh();
+        $this->assertSame('sample_pic.jpg', $photo->filename);
+        $this->assertSame('sample_pic.thumb.jpg', $photo->filename_thumb);
+        $this->assertNull($photo->deleted_ts);
+        $this->assertSame(0, $photo->email_sent);
+    }
 }
 

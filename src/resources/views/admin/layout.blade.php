@@ -357,6 +357,16 @@
             border-color: var(--danger);
         }
 
+        .btn-success-outline {
+            background-color: var(--btn-sec-bg);
+            border-color: #86efac;
+            color: var(--success);
+        }
+        .btn-success-outline:hover {
+            background-color: var(--success-light);
+            border-color: var(--success);
+        }
+
         .btn-sm {
             padding: 0.25rem 0.625rem;
             font-size: 0.8125rem;
