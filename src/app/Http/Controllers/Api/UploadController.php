@@ -131,7 +131,7 @@ class UploadController extends Controller
         $this->mail->send(
             $from,
             'Toilette mit Fotos hinzugefügt - ID: '.$toiletId,
-            'https://wc-info.org/Toilets/Place---'.$toilet->place_id.'/Toilette---'.$toiletId
+            'https://wc-info.org/admin/toilets/'.$toiletId
         );
 
         return response()->json(['success' => true]);
@@ -183,6 +183,13 @@ class UploadController extends Controller
                 'deleted_ts' => now(),
                 'email_sent' => 2,
             ]);
+
+            $from = config('wcinfo.sender_mail');
+            $this->mail->send(
+                $from,
+                'Photo von Toilette gelöscht - ID: '.$toiletId,
+                'https://wc-info.org/admin/toilets/'.$toiletId . ' photo id: ' . $photo->id . ' filename: ' . $newFilename
+            );
 
             return response()->json([
                 'success' => true,
