@@ -184,4 +184,29 @@ class Toilet extends Model
             }
         }
     }
+
+    public function setLatAttribute($value): void
+    {
+        $this->attributes['lat'] = $value !== null ? round((float) $value, 7) : null;
+    }
+
+    public function setLonAttribute($value): void
+    {
+        $this->attributes['lon'] = $value !== null ? round((float) $value, 7) : null;
+    }
+
+    /**
+     * Compare two coordinates with precision tolerance (default: 7 decimal places ~ 1.1cm).
+     */
+    public static function areCoordinatesEqual(?float $c1, ?float $c2, int $precision = 7): bool
+    {
+        if ($c1 === null && $c2 === null) {
+            return true;
+        }
+        if ($c1 === null || $c2 === null) {
+            return false;
+        }
+
+        return round($c1, $precision) === round($c2, $precision);
+    }
 }

@@ -52,7 +52,7 @@ class SitemapTest extends TestCase
 
         // Fixed links assertions
         $this->assertArrayHasKey('https://wc-info.org/', $urls);
-        $this->assertSame('2023-10-19', $urls['https://wc-info.org/']['lastmod']);
+        $this->assertSame('2026-09-28', $urls['https://wc-info.org/']['lastmod']);
         $this->assertSame('daily', $urls['https://wc-info.org/']['changefreq']);
         $this->assertSame('1.0', $urls['https://wc-info.org/']['priority']);
 

@@ -335,17 +335,19 @@ class ToiletController extends Controller
         }
 
         if (array_key_exists('lat', $input) && $input['lat'] !== null) {
-            if ($input['lat'] != $toilet->lat) {
-                $diff['lat'] = ['old' => $toilet->lat, 'new' => $input['lat']];
-                $toilet->lat = $input['lat'];
+            $newLat = round((float) $input['lat'], 7);
+            if (! Toilet::areCoordinatesEqual($toilet->lat, $newLat)) {
+                $diff['lat'] = ['old' => $toilet->lat, 'new' => $newLat];
+                $toilet->lat = $newLat;
                 $userOverriddenFields[] = 'lat';
             }
         }
 
         if (array_key_exists('lon', $input) && $input['lon'] !== null) {
-            if ($input['lon'] != $toilet->lon) {
-                $diff['lon'] = ['old' => $toilet->lon, 'new' => $input['lon']];
-                $toilet->lon = $input['lon'];
+            $newLon = round((float) $input['lon'], 7);
+            if (! Toilet::areCoordinatesEqual($toilet->lon, $newLon)) {
+                $diff['lon'] = ['old' => $toilet->lon, 'new' => $newLon];
+                $toilet->lon = $newLon;
                 $userOverriddenFields[] = 'lon';
             }
         }
@@ -618,7 +620,7 @@ class ToiletController extends Controller
 
             DB::table('toilet_properties')->updateOrInsert(
                 ['fk_toiletId' => $toiletId, 'type' => $type],
-                ['value' => '', 'user_overridden' => 1]
+                ['value' => '', 'user_overridden' => 0]
             );
 
             return;

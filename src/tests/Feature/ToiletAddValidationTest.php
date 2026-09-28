@@ -284,4 +284,33 @@ class ToiletAddValidationTest extends TestCase
         $this->assertArrayNotHasKey('source', $placeItem);
         $this->assertStringNotContainsString('confidential_source_name', $placeRes->getContent());
     }
+
+    public function test_patch_toilet_update_ignores_floating_point_truncation_inaccuracies(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Patch Float Toilet',
+            'lat' => 52.5200000,
+            'lon' => 7.4091114,
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $response = $this->patchJson("/toilet/{$toilet->id}/update", [
+            'lat' => 52.52000000000001,
+            'lon' => 7.409111399999999,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'id' => $toilet->id,
+            'diff' => [],
+        ]);
+
+        $toilet->refresh();
+        $this->assertSame(52.52, $toilet->lat);
+        $this->assertSame(7.4091114, $toilet->lon);
+        $this->assertFalse($toilet->isUserOverridden('lat'));
+        $this->assertFalse($toilet->isUserOverridden('lon'));
+    }
 }

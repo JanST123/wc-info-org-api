@@ -353,4 +353,52 @@ class PlaceToiletServiceTest extends TestCase
 
         $this->assertNull($toilet->last_crawled);
     }
+
+    public function test_update_toilet_from_place_ignores_floating_point_truncation_inaccuracies(): void
+    {
+        $placeId = 'place_float_test_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'WC Float Precision',
+            'owner' => 'Owner',
+            'lat' => 52.5200000,
+            'lon' => 7.4091114,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        // Set type flag so $needsCrawl is false and set website
+        DB::table('toilet_properties')->insert([
+            ['fk_toiletId' => $toilet->id, 'type' => 'is_unisex', 'value' => '1', 'user_overridden' => 0],
+            ['fk_toiletId' => $toilet->id, 'type' => 'website', 'value' => 'https://example.com', 'user_overridden' => 0],
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Owner',
+            'website' => 'https://example.com',
+            'location' => [
+                'lat' => 52.52000000000001,
+                'lng' => 7.409111399999999,
+            ],
+            'formatted_address' => null,
+            'types' => ['point_of_interest'],
+        ], null, $changes);
+
+        $this->assertFalse($result);
+        $this->assertArrayNotHasKey('lat', $changes);
+        $this->assertArrayNotHasKey('lon', $changes);
+        $this->assertEmpty($changes);
+
+        $toilet->refresh();
+        $this->assertSame(52.52, $toilet->lat);
+        $this->assertSame(7.4091114, $toilet->lon);
+        $this->assertFalse((bool) $toilet->flagged);
+    }
 }

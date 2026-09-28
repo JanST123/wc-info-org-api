@@ -253,15 +253,15 @@ class AdminToiletController extends Controller
                 $placeLon = $placeData['location']['longitude'] ?? $placeData['location']['lng'] ?? $placeData['geometry']['location']['lng'] ?? null;
 
                 if ($placeLat !== null && $placeLon !== null) {
-                    $placeLat = (float) $placeLat;
-                    $placeLon = (float) $placeLon;
+                    $placeLat = round((float) $placeLat, 7);
+                    $placeLon = round((float) $placeLon, 7);
 
-                    if ($placeLat !== $toilet->lat) {
+                    if (! Toilet::areCoordinatesEqual($toilet->lat, $placeLat)) {
                         $diff['lat'] = ['old' => $toilet->lat, 'new' => $placeLat];
                         $toilet->lat = $placeLat;
                     }
 
-                    if ($placeLon !== $toilet->lon) {
+                    if (! Toilet::areCoordinatesEqual($toilet->lon, $placeLon)) {
                         $diff['lon'] = ['old' => $toilet->lon, 'new' => $placeLon];
                         $toilet->lon = $placeLon;
                     }
@@ -271,8 +271,8 @@ class AdminToiletController extends Controller
             }
         } else {
             if (array_key_exists('lat', $validated)) {
-                $latVal = $validated['lat'] !== null ? (float) $validated['lat'] : null;
-                if ($latVal !== $toilet->lat) {
+                $latVal = $validated['lat'] !== null ? round((float) $validated['lat'], 7) : null;
+                if (! Toilet::areCoordinatesEqual($toilet->lat, $latVal)) {
                     $diff['lat'] = ['old' => $toilet->lat, 'new' => $latVal];
                     $toilet->lat = $latVal;
                     $overriddenFields[] = 'lat';
@@ -280,8 +280,8 @@ class AdminToiletController extends Controller
             }
 
             if (array_key_exists('lon', $validated)) {
-                $lonVal = $validated['lon'] !== null ? (float) $validated['lon'] : null;
-                if ($lonVal !== $toilet->lon) {
+                $lonVal = $validated['lon'] !== null ? round((float) $validated['lon'], 7) : null;
+                if (! Toilet::areCoordinatesEqual($toilet->lon, $lonVal)) {
                     $diff['lon'] = ['old' => $toilet->lon, 'new' => $lonVal];
                     $toilet->lon = $lonVal;
                     $overriddenFields[] = 'lon';
@@ -747,10 +747,12 @@ class AdminToiletController extends Controller
             }
 
             if ($newLat !== null && $newLon !== null) {
+                $newLat = round((float) $newLat, 7);
+                $newLon = round((float) $newLon, 7);
                 $oldLat = $toilet->lat;
                 $oldLon = $toilet->lon;
 
-                if ($oldLat != $newLat || $oldLon != $newLon) {
+                if (! Toilet::areCoordinatesEqual($oldLat, $newLat) || ! Toilet::areCoordinatesEqual($oldLon, $newLon)) {
                     $toilet->lat = $newLat;
                     $toilet->lon = $newLon;
                     $toilet->markUserOverridden('lat');
@@ -863,15 +865,15 @@ class AdminToiletController extends Controller
                 $oldLat = $toilet->lat !== null ? (float) $toilet->lat : null;
                 $oldLon = $toilet->lon !== null ? (float) $toilet->lon : null;
 
-                if ($oldLat !== (float) $newLat) {
-                    $diff['lat'] = ['old' => $oldLat, 'new' => (float) $newLat];
-                    $toilet->lat = (float) $newLat;
+                if (! Toilet::areCoordinatesEqual($oldLat, $newLat)) {
+                    $diff['lat'] = ['old' => $oldLat, 'new' => $newLat];
+                    $toilet->lat = $newLat;
                 }
-                if ($oldLon !== (float) $newLon) {
-                    $diff['lon'] = ['old' => $oldLon, 'new' => (float) $newLon];
-                    $toilet->lon = (float) $newLon;
+                if (! Toilet::areCoordinatesEqual($oldLon, $newLon)) {
+                    $diff['lon'] = ['old' => $oldLon, 'new' => $newLon];
+                    $toilet->lon = $newLon;
                 }
-                if ($oldLat !== (float) $newLat || $oldLon !== (float) $newLon) {
+                if (! Toilet::areCoordinatesEqual($oldLat, $newLat) || ! Toilet::areCoordinatesEqual($oldLon, $newLon)) {
                     $toilet->markUserOverridden('lat', 'lon');
                 }
             }
@@ -968,16 +970,16 @@ class AdminToiletController extends Controller
             'lon' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
-        $newLat = (float) $request->input('lat');
-        $newLon = (float) $request->input('lon');
+        $newLat = round((float) $request->input('lat'), 7);
+        $newLon = round((float) $request->input('lon'), 7);
         $oldLat = $toilet->lat !== null ? (float) $toilet->lat : null;
         $oldLon = $toilet->lon !== null ? (float) $toilet->lon : null;
 
         $diff = [];
-        if ($oldLat !== $newLat) {
+        if (! Toilet::areCoordinatesEqual($oldLat, $newLat)) {
             $diff['lat'] = ['old' => $oldLat, 'new' => $newLat];
         }
-        if ($oldLon !== $newLon) {
+        if (! Toilet::areCoordinatesEqual($oldLon, $newLon)) {
             $diff['lon'] = ['old' => $oldLon, 'new' => $newLon];
         }
 

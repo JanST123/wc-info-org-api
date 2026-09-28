@@ -41,4 +41,21 @@ class ToiletModelTest extends TestCase
         $this->assertSame('https://example.com', $toilet->propertyValue('website'));
         $this->assertNull($toilet->propertyValue('comment'));
     }
+
+    public function test_coordinates_are_rounded_and_compared_with_tolerance(): void
+    {
+        $toilet = new Toilet;
+        $toilet->lat = 52.52000000000001;
+        $toilet->lon = 7.409111399999999;
+
+        $this->assertSame(52.52, $toilet->lat);
+        $this->assertSame(7.4091114, $toilet->lon);
+
+        $this->assertTrue(Toilet::areCoordinatesEqual(7.4091114, 7.409111399999999));
+        $this->assertTrue(Toilet::areCoordinatesEqual(52.52, 52.52000000000001));
+        $this->assertTrue(Toilet::areCoordinatesEqual(null, null));
+        $this->assertFalse(Toilet::areCoordinatesEqual(7.4091114, null));
+        $this->assertFalse(Toilet::areCoordinatesEqual(null, 7.4091114));
+        $this->assertFalse(Toilet::areCoordinatesEqual(7.4091114, 7.4092114));
+    }
 }

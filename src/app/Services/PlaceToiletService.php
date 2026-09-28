@@ -147,15 +147,18 @@ class PlaceToiletService
 
         // Always update coordinates from Google unless the user moved the toilet manually.
         if (! empty($details['location'])) {
-            if (! $toilet->isUserOverridden('lat') && (float) $toilet->lat != (float) ($details['location']['lat'] ?? null)) {
-                $changes['lat'] = ['old' => $toilet->lat, 'new' => $details['location']['lat']];
-                $toilet->lat = $details['location']['lat'];
+            $newLat = isset($details['location']['lat']) && $details['location']['lat'] !== null ? round((float) $details['location']['lat'], 7) : null;
+            $newLon = isset($details['location']['lng']) && $details['location']['lng'] !== null ? round((float) $details['location']['lng'], 7) : null;
+
+            if (! $toilet->isUserOverridden('lat') && $newLat !== null && ! Toilet::areCoordinatesEqual($toilet->lat, $newLat)) {
+                $changes['lat'] = ['old' => $toilet->lat, 'new' => $newLat];
+                $toilet->lat = $newLat;
                 $updated = true;
             }
 
-            if (! $toilet->isUserOverridden('lon') && (float) $toilet->lon != (float) ($details['location']['lng'] ?? null)) {
-                $changes['lon'] = ['old' => $toilet->lon, 'new' => $details['location']['lng']];
-                $toilet->lon = $details['location']['lng'];
+            if (! $toilet->isUserOverridden('lon') && $newLon !== null && ! Toilet::areCoordinatesEqual($toilet->lon, $newLon)) {
+                $changes['lon'] = ['old' => $toilet->lon, 'new' => $newLon];
+                $toilet->lon = $newLon;
                 $updated = true;
             }
         }

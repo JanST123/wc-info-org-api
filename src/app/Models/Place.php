@@ -52,7 +52,7 @@ class Place extends Model
 
         $lat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
 
-        return $lat !== null ? (float) $lat : null;
+        return $lat !== null ? round((float) $lat, 7) : null;
     }
 
     public function getLon(): ?float
@@ -64,7 +64,7 @@ class Place extends Model
 
         $lon = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
 
-        return $lon !== null ? (float) $lon : null;
+        return $lon !== null ? round((float) $lon, 7) : null;
     }
 
     /**

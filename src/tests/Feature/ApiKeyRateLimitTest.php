@@ -18,7 +18,7 @@ class ApiKeyRateLimitTest extends TestCase
         parent::setUp();
         Cache::flush();
 
-        $this->activeKey = ApiKey::firstOrCreate(
+        $this->activeKey = ApiKey::updateOrCreate(
             ['key' => 'wc_test_key_abc123'],
             [
                 'name' => 'Test Key',
@@ -30,7 +30,6 @@ class ApiKeyRateLimitTest extends TestCase
                 'global_rate_limit_per_minute' => 15,
             ]
         );
-        $this->activeKey->update(['is_active' => true]);
     }
 
     public function test_missing_api_key_returns_401(): void
