@@ -1365,7 +1365,7 @@ class AdminToiletController extends Controller
 
             DB::table('toilet_properties')->updateOrInsert(
                 ['fk_toiletId' => $toiletId, 'type' => $type],
-                ['value' => '', 'user_overridden' => 1]
+                ['value' => '', 'user_overridden' => 0]
             );
 
             return;
