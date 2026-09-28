@@ -363,7 +363,9 @@ class DiscoverPlacesCommand extends Command
             }
         }
 
-        $existingToilet = Toilet::where('place_id', $toilet->place_id)->first();
+        $existingToilet = Toilet::where('place_id', $toilet->place_id)
+            ->where('status', '!=', 'deleted')
+            ->first();
 
         if ($existingToilet) {
             $changes = [];

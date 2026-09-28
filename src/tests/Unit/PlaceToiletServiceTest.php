@@ -401,4 +401,40 @@ class PlaceToiletServiceTest extends TestCase
         $this->assertSame(7.4091114, $toilet->lon);
         $this->assertFalse((bool) $toilet->flagged);
     }
+
+    public function test_create_toilet_from_place_ignores_deleted_toilets_with_same_place_id(): void
+    {
+        $placeId = 'place_deleted_test_'.uniqid();
+
+        $deletedToilet = Toilet::create([
+            'name' => 'Deleted Toilet',
+            'owner' => 'Old Owner',
+            'place_id' => $placeId,
+            'status' => 'deleted',
+        ]);
+        $this->createdToiletIds[] = $deletedToilet->id;
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->method('crawlWebsite')
+            ->willReturn([
+                'toiletType' => 'forall',
+                'contactEmail' => 'new@example.com',
+                'resultCount' => 1,
+            ]);
+
+        $service = new PlaceToiletService($placesService);
+
+        $newToilet = $service->createToiletFromPlace([
+            'place_id' => $placeId,
+            'name' => 'New Place Owner',
+            'website' => 'https://newplace.example.com',
+            'location' => ['lat' => 52.52, 'lng' => 13.40],
+            'formatted_address' => 'Sample Address',
+        ]);
+
+        $this->assertNotNull($newToilet);
+        $this->assertNotEquals($deletedToilet->id, $newToilet->id);
+        $this->assertSame('active', $newToilet->status);
+        $this->createdToiletIds[] = $newToilet->id;
+    }
 }

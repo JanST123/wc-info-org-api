@@ -38,7 +38,9 @@ class PlaceToiletService
             return null;
         }
 
-        $existingToilet = Toilet::where('place_id', $placeId)->first();
+        $existingToilet = Toilet::where('place_id', $placeId)
+            ->where('status', '!=', 'deleted')
+            ->first();
 
         // if ($existingToilet) {
         //     return $existingToilet;
