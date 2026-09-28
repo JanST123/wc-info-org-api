@@ -313,6 +313,17 @@ class DiscoverPlacesCommand extends Command
         }
 
         if (! $details) {
+            $costService = app(GoogleCostService::class);
+            if (! $costService->hasBudget()) {
+                $this->warn("Google API budget exceeded: skipping toilet {$toilet->id} (place_id={$toilet->place_id}) without modifying it.");
+                Log::info("DiscoverPlaces: Google API budget exceeded, skipped toilet {$toilet->id} without modifying place_id", [
+                    'toilet_id' => $toilet->id,
+                    'place_id' => $toilet->place_id,
+                ]);
+
+                return;
+            }
+
             $oldPlaceId = $toilet->place_id;
             $changes = [
                 'place_id' => ['old' => $oldPlaceId, 'new' => null],

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\ToiletRevision;
+use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -601,6 +602,48 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertSame('discover-places-not-found', $revision->source);
         $this->assertNull($revision->toilet_data['place_id']);
         $this->assertTrue((bool) $revision->toilet_data['flagged']);
+    }
+
+    public function test_does_not_unlink_place_id_when_budget_is_exceeded(): void
+    {
+        $costService = $this->createMock(GoogleCostService::class);
+        $costService->method('hasBudget')->willReturn(false);
+        $this->app->instance(GoogleCostService::class, $costService);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->method('fetchPlaceDetails')->willReturn(null);
+        $this->app->instance(GooglePlacesService::class, $placesService);
+
+        $placeId = 'ChIJbudget_test_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet With Exceeded Budget',
+            'owner' => 'Some Cafe',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'flagged' => 0,
+            'last_included' => now()->addDays(5),
+            'last_discovered' => null,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $status = Artisan::call('app:discover-places', ['--limit' => 1]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('Google API budget exceeded: skipping toilet', $output);
+
+        // Toilet must NOT be changed
+        $toilet->refresh();
+        $this->assertSame($placeId, $toilet->place_id);
+        $this->assertFalse((bool) $toilet->flagged);
+        $this->assertNull($toilet->last_discovered);
+
+        // No revisions should have been created
+        $revisionCount = ToiletRevision::where('toilet_id', $toilet->id)->count();
+        $this->assertSame(0, $revisionCount);
     }
 }
 
