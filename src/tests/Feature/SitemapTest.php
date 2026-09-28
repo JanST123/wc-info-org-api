@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\ToiletProperty;
 use Carbon\Carbon;
@@ -12,12 +13,17 @@ use Tests\TestCase;
 class SitemapTest extends TestCase
 {
     private array $createdToiletIds = [];
+    private array $createdPlaceIds = [];
 
     protected function tearDown(): void
     {
         if (! empty($this->createdToiletIds)) {
             ToiletProperty::whereIn('fk_toiletId', $this->createdToiletIds)->delete();
             Toilet::whereIn('id', $this->createdToiletIds)->delete();
+        }
+
+        if (! empty($this->createdPlaceIds)) {
+            Place::whereIn('place_id', $this->createdPlaceIds)->delete();
         }
 
         parent::tearDown();
@@ -78,9 +84,18 @@ class SitemapTest extends TestCase
 
     public function test_sitemap_includes_active_qualified_toilets_with_correct_url_schema_and_priorities(): void
     {
-        // 1. Active & Qualified with place_id + public_accessible + recently updated -> Priority 0.9
+        $place1 = Place::create([
+            'place_id' => 'ChIJplace123',
+            'data' => [
+                'displayName' => ['text' => 'Alexanderplatz Station'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place1->place_id;
+
+        // 1. Active & Qualified with place in places table + owner + public_accessible + recently updated -> Priority 0.9
         $toilet1 = Toilet::create([
-            'name' => 'Active Qualified Public Recent',
+            'name' => 'Toilet Inside Station',
+            'owner' => 'Deutsche Bahn',
             'place_id' => 'ChIJplace123',
             'status' => 'active',
             'is_qualified' => 1,
@@ -93,9 +108,10 @@ class SitemapTest extends TestCase
             'value' => '1',
         ]);
 
-        // 2. Active & Qualified with NULL place_id + public_accessible + older -> Priority 0.8
+        // 2. Active & Qualified with NULL place_id + owner set + public_accessible + older -> Priority 0.8
         $toilet2 = Toilet::create([
-            'name' => 'Active Qualified Public Older',
+            'name' => 'Toilet Without Place',
+            'owner' => 'City Council',
             'place_id' => null,
             'status' => 'active',
             'is_qualified' => 1,
@@ -108,9 +124,10 @@ class SitemapTest extends TestCase
             'value' => '1',
         ]);
 
-        // 3. Active & Qualified with place_id + NOT public_accessible + recently updated -> Priority 0.7
+        // 3. Active & Qualified with place_id NOT in places table + owner null (use name) + NOT public_accessible + recently updated -> Priority 0.7
         $toilet3 = Toilet::create([
-            'name' => 'Active Qualified Private Recent',
+            'name' => 'Active Private Recent',
+            'owner' => null,
             'place_id' => 'ChIJplace456',
             'status' => 'active',
             'is_qualified' => 1,
@@ -118,9 +135,10 @@ class SitemapTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet3->id;
 
-        // 4. Active & Qualified with NULL place_id + NOT public_accessible + older -> Priority 0.6
+        // 4. Active & Qualified with NULL place_id + owner null + name null -> fallback 'Toilet' + NOT public_accessible + older -> Priority 0.6
         $toilet4 = Toilet::create([
-            'name' => 'Active Qualified Private Older',
+            'name' => null,
+            'owner' => null,
             'place_id' => null,
             'status' => 'active',
             'is_qualified' => 1,
@@ -173,9 +191,9 @@ class SitemapTest extends TestCase
         }
 
         // Expected URLs
-        $url1 = "https://wc-info.org/Toilets/Toilet---ChIJplace123/Toilet---{$toilet1->id}";
-        $url2 = "https://wc-info.org/Toilets/Toilet---NEARBY/Toilet---{$toilet2->id}";
-        $url3 = "https://wc-info.org/Toilets/Toilet---ChIJplace456/Toilet---{$toilet3->id}";
+        $url1 = "https://wc-info.org/Toilets/Alexanderplatz-Station---ChIJplace123/Deutsche-Bahn---{$toilet1->id}";
+        $url2 = "https://wc-info.org/Toilets/Toilet---NEARBY/City-Council---{$toilet2->id}";
+        $url3 = "https://wc-info.org/Toilets/Toilet---ChIJplace456/Active-Private-Recent---{$toilet3->id}";
         $url4 = "https://wc-info.org/Toilets/Toilet---NEARBY/Toilet---{$toilet4->id}";
 
         $this->assertArrayHasKey($url1, $urls);
@@ -191,9 +209,9 @@ class SitemapTest extends TestCase
         $this->assertSame('0.6', $urls[$url4]['priority']);
 
         // Excluded URLs
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJhidden/Toilet---{$hiddenToilet->id}", $urls);
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJdeleted/Toilet---{$deletedToilet->id}", $urls);
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJunqualified/Toilet---{$unqualifiedToilet->id}", $urls);
+        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJhidden/Hidden-Qualified-Toilet---{$hiddenToilet->id}", $urls);
+        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJdeleted/Deleted-Qualified-Toilet---{$deletedToilet->id}", $urls);
+        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJunqualified/Active-Unqualified-Toilet---{$unqualifiedToilet->id}", $urls);
 
         // Verify sorted by priority desc
         $sortedPriorities = $priorityList;
@@ -201,11 +219,20 @@ class SitemapTest extends TestCase
         $this->assertSame($sortedPriorities, $priorityList);
     }
 
-    public function test_sitemap_replaces_umlauts_in_urls(): void
+    public function test_sitemap_replaces_umlauts_in_urls_and_uses_place_and_owner_names(): void
     {
+        $place = Place::create([
+            'place_id' => 'ChIJ_münchen_hbf',
+            'data' => [
+                'displayName' => ['text' => 'München Hauptbahnhof'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $place->place_id;
+
         $toilet = Toilet::create([
-            'name' => 'Umlaut Toilet München-Süd',
-            'place_id' => 'ChIJ_münchen_äöüß_place',
+            'name' => 'WC Südeingang',
+            'owner' => 'Städtische Betriebe München',
+            'place_id' => 'ChIJ_münchen_hbf',
             'status' => 'active',
             'is_qualified' => 1,
         ]);
@@ -220,8 +247,7 @@ class SitemapTest extends TestCase
             $urls[] = (string) $url->loc;
         }
 
-        $expectedUrl = "https://wc-info.org/Toilets/Toilet---ChIJ_muenchen_aeoeuess_place/Toilet---{$toilet->id}";
+        $expectedUrl = "https://wc-info.org/Toilets/Muenchen-Hauptbahnhof---ChIJ_muenchen_hbf/Staedtische-Betriebe-Muenchen---{$toilet->id}";
         $this->assertContains($expectedUrl, $urls);
-        $this->assertNotContains("https://wc-info.org/Toilets/Toilet---ChIJ_münchen_äöüß_place/Toilet---{$toilet->id}", $urls);
     }
 }

@@ -22,7 +22,7 @@ class SitemapController extends Controller
         $urls = [
             [
                 'loc' => '/',
-                'lastmod' => '2023-10-19',
+                'lastmod' => '2026-09-28',
                 'changefreq' => 'daily',
                 'priority' => '1.0',
             ],
@@ -60,14 +60,40 @@ class SitemapController extends Controller
 
         $toilets = Toilet::where('status', 'active')
             ->where('is_qualified', 1)
-            ->with('properties')
+            ->with(['properties', 'place'])
             ->get();
 
         $recentCutoff = Carbon::now()->subDays(14)->timestamp;
 
         foreach ($toilets as $toilet) {
-            $placeSegment = ! empty($toilet->place_id) ? $toilet->place_id : 'NEARBY';
-            $loc = '/Toilets/Toilet---'.$placeSegment.'/Toilet---'.$toilet->id;
+            $placePrefix = 'Toilet';
+            if ($toilet->place) {
+                $placeName = $toilet->place->getName();
+                $placeSlug = $this->slug($placeName);
+                if ($placeSlug !== '') {
+                    $placePrefix = $placeSlug;
+                }
+            }
+
+            $placeId = ! empty($toilet->place_id) ? $toilet->place_id : 'NEARBY';
+            $placeSegment = $placePrefix.'---'.$placeId;
+
+            $toiletPrefix = 'Toilet';
+            if (! empty($toilet->owner)) {
+                $ownerSlug = $this->slug($toilet->owner);
+                if ($ownerSlug !== '') {
+                    $toiletPrefix = $ownerSlug;
+                }
+            } elseif (! empty($toilet->name)) {
+                $nameSlug = $this->slug($toilet->name);
+                if ($nameSlug !== '') {
+                    $toiletPrefix = $nameSlug;
+                }
+            }
+
+            $toiletSegment = $toiletPrefix.'---'.$toilet->id;
+
+            $loc = '/Toilets/'.$placeSegment.'/'.$toiletSegment;
 
             $updatedDate = $toilet->updated
                 ? $toilet->updated
@@ -111,6 +137,20 @@ class SitemapController extends Controller
 
         return response($xml->asXML(), 200)
             ->header('Content-Type', 'application/xml; charset=UTF-8');
+    }
+
+    /**
+     * Create a URL-compatible slug from text with umlaut replacement.
+     */
+    private function slug(?string $text): string
+    {
+        if ($text === null || trim($text) === '') {
+            return '';
+        }
+
+        $text = $this->replaceUmlauts($text);
+
+        return trim((string) preg_replace('/[^0-9a-zA-Z]+/', '-', $text), '-');
     }
 
     /**
