@@ -444,7 +444,7 @@ class PlaceToiletService
             'place_id' => $placeId,
             'status' => 'hidden',
             'source' => 'auto_crawl',
-            'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
+            'flagged' => false, // this toilets are only created hidden so they are not created on every discovery run, so we do not flag for review
         ]);
     }
 
