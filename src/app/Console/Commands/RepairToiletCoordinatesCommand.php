@@ -25,7 +25,7 @@ class RepairToiletCoordinatesCommand extends Command
             ->whereNotNull('toilets.place_id')
             ->whereNotNull('places.place_id')
             ->join('places', 'places.place_id', '=', 'toilets.place_id')
-            ->select(['toilets.id', 'toilets.place_id', 'toilets.user_overridden', 'places.data'])
+            ->select(['toilets.id', 'toilets.place_id', 'toilets.lat', 'toilets.lon', 'toilets.user_overridden', 'places.data'])
             ->get();
 
         $updated = 0;
@@ -42,6 +42,14 @@ class RepairToiletCoordinatesCommand extends Command
                     continue;
                 }
             }
+            if (round((float)$row->lat, 0) != (float)$row->lat || round((float)$row->lon, 0) != (float)$row->lon) {
+                if ($dryRun) {
+                    $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> skipped as not afftected");
+                }
+                $skipped++;
+                continue;
+            }
+
             $data = json_decode($row->data, true);
             $location = $data['location'] ?? $data['result']['location'] ?? null;
 
@@ -54,7 +62,7 @@ class RepairToiletCoordinatesCommand extends Command
             $lon = (float) $location['longitude'];
 
             if ($dryRun) {
-                $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> lat={$lat} lon={$lon}");
+                $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} ({$row->lat}/{$row->lon}) -> lat={$lat} lon={$lon}");
                 $updated++;
 
                 continue;
