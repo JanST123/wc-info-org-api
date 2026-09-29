@@ -65,6 +65,7 @@ class MigrateV2SchemaCommand extends Command
         $this->line('  - ALTER TABLE toilets: DROP COLUMN is_quailified, type, nr');
         $this->line('  - ALTER TABLE toilet_properties: ADD user_overridden, MODIFY type enum with new flags and place_opening_hours');
         $this->line('  - ALTER TABLE unknown_places: MODIFY lat/lon DECIMAL');
+        $this->line('  - ALTER TABLE types: ADD priorize');
         $this->newLine();
 
         $hasTypeColumn = $this->columnExists('toilets', 'type');
@@ -163,6 +164,7 @@ class MigrateV2SchemaCommand extends Command
         $this->createCostTrackingTables();
         $this->createToiletRevisionsTable();
         $this->createApiKeysTable();
+        $this->prepareTypesTable();
         $this->optimizeIndexes();
     }
 
@@ -745,6 +747,24 @@ class MigrateV2SchemaCommand extends Command
                 ],
             ]);
             $this->info('Default API keys created successfully.');
+        }
+    }
+
+    private function prepareTypesTable(): void
+    {
+        $this->info('Preparing types table schema...');
+
+        if (! $this->tableExists('types')) {
+            $this->warn('Table types does not exist, skipping.');
+
+            return;
+        }
+
+        if (! $this->columnExists('types', 'priorize')) {
+            $this->runStatement('ALTER TABLE `types` ADD COLUMN `priorize` TINYINT(1) NOT NULL DEFAULT 0');
+            $this->info('Added column priorize to types table.');
+        } else {
+            $this->info('Column priorize already exists on types table, skipping.');
         }
     }
 

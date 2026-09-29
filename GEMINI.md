@@ -60,6 +60,7 @@ wc-info-org-api/
 - **`Place`** (`app/Models/Place.php`): Authoritative store for Google Places API (New) cached place metadata.
 - **`ToiletPhoto`** (`app/Models/ToiletPhoto.php`): S3-stored photo metadata supporting soft and permanent deletions.
 - **`ToiletProperty`** (`app/Models/ToiletProperty.php`): Key-value properties associated with toilets.
+- **`Type`** (`app/Models/Type.php`): Google Places types cache with `priorize` flag (1 = likely contains accessible toilet, 0 = unlikely).
 - **`ApiKey`** (`app/Models/ApiKey.php`): Client application API keys with configurable per-IP rate limits, block/penalty periods, and global request limits.
 
 ---
@@ -140,6 +141,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:convert-places-v2`: Converts legacy place cache records to Places API (New) format.
 - `php artisan app:extract-nearby-cache-places [--dry-run] [--force] [--update-toilets]`: Extracts places from `google_nearby_search_cache` and adds/updates them in the `places` table (enriching missing `regularOpeningHours`, `websiteUri`, etc.).
 - `php artisan app:create-initial-toilet-revisions [--dry-run] [--source=initial]`: Creates an initial snapshot revision for all toilets that currently do not have any revisions.
+- `php artisan app:prioritize-place-types [--dry-run]`: Sets `priorize = 1` for place types likely to contain an easily accessible toilet (e.g. `public_bathroom`, `bar`, `cafe`, `restaurant`, `train_station`, `shopping_mall`) and `0` for others. Alias: `app:priorize-place-types`.
 - `php artisan app:repair-toilet-coordinates`: Fixes legacy scaled coordinates.
 
 ---
