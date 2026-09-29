@@ -213,7 +213,7 @@ class GoogleNearbyCacheService
      * @param array<string, mixed> $place
      * @return array{lat: float, lon: float}|null
      */
-    private function extractPlaceCoordinates(array $place): ?array
+    public function extractPlaceCoordinates(array $place): ?array
     {
         // Google Places API (New) format: places.location.latitude / places.location.longitude
         if (isset($place['location']['latitude'], $place['location']['longitude'])) {

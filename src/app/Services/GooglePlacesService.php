@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Place;
 use App\Models\Toilet;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -363,6 +364,189 @@ class GooglePlacesService
         ]);
 
         return $places;
+    }
+
+    /**
+     * Find nearest Google places to a coordinate within a radius (in meters), preferring cached data
+     * from google_nearby_search_cache (freshness <= 30 days) or fetching from Google Places API (New),
+     * and ordering results by type priorize flag (1 = preferred) and distance ascending.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getNearestPlaces(
+        float $lat,
+        float $lon,
+        float $radiusMeters = 40.0,
+        int $limit = 3,
+        bool $forceRefresh = false
+    ): array {
+        $radius = max(1.0, min($radiusMeters, 50000.0));
+        $freshnessDays = (int) config('wcinfo.google.nearby_cache_days', 30);
+        $endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
+        $places = [];
+
+        // 1. Check intelligent geometric spatial cache
+        if (! $forceRefresh) {
+            $cached = $this->cacheService->findEnclosingCache($lat, $lon, $radius, $freshnessDays);
+
+            if ($cached !== null) {
+                $cachedPlaces = $this->cacheService->filterCachedPlaces(
+                    $cached->response_places ?? [],
+                    $lat,
+                    $lon,
+                    $radius
+                );
+
+                if (! empty($cachedPlaces)) {
+                    $this->costService->logApiCall(
+                        GoogleCostService::SERVICE_PLACES_NEARBY,
+                        $endpoint,
+                        0.0,
+                        200,
+                        [
+                            'lat' => $lat,
+                            'lon' => $lon,
+                            'radius_meters' => $radius,
+                            'cached' => true,
+                            'cache_id' => $cached->id,
+                            'results_count' => count($cachedPlaces),
+                        ],
+                        true
+                    );
+
+                    $places = $cachedPlaces;
+                }
+            }
+        }
+
+        // 2. Cache miss or empty cached results -> call Google Places API
+        if (empty($places)) {
+            if (! $this->costService->hasBudget()) {
+                Log::warning('Google API call blocked: Monthly budget exceeded', [
+                    'service' => GoogleCostService::SERVICE_PLACES_NEARBY,
+                    'lat' => $lat,
+                    'lon' => $lon,
+                    'radius_meters' => $radius,
+                ]);
+                $this->costService->checkBudgetAndNotify();
+            } else {
+                $response = Http::withHeaders([
+                    'X-Goog-Api-Key' => $this->apiKey,
+                    'X-Goog-FieldMask' => 'places.id,places.displayName,places.location,places.regularOpeningHours,places.websiteUri,places.formattedAddress,places.types,places.business_status',
+                ])->post($endpoint, [
+                    'languageCode' => 'de',
+                    'locationRestriction' => [
+                        'circle' => [
+                            'center' => [
+                                'latitude' => $lat,
+                                'longitude' => $lon,
+                            ],
+                            'radius' => max(10.0, $radius),
+                        ],
+                    ],
+                    'rankPreference' => 'DISTANCE',
+                    'maxResultCount' => 20,
+                ]);
+
+                $this->costService->logApiCall(
+                    GoogleCostService::SERVICE_PLACES_NEARBY,
+                    $endpoint,
+                    GoogleCostService::COST_PLACES_NEARBY_USD,
+                    $response->status(),
+                    ['lat' => $lat, 'lon' => $lon, 'radius_meters' => $radius, 'cached' => false],
+                    false
+                );
+
+                if ($response->successful()) {
+                    $json = $response->json();
+                    $rawPlaces = $json['places'] ?? [];
+
+                    // Store result in cache table
+                    $this->cacheService->store($lat, $lon, max(10.0, $radius), $rawPlaces, [
+                        'languageCode' => 'de',
+                        'rankPreference' => 'DISTANCE',
+                        'maxResultCount' => 20,
+                    ]);
+
+                    // Persist places in places table
+                    foreach ($rawPlaces as $rawPlace) {
+                        $placeId = $rawPlace['id'] ?? $rawPlace['place_id'] ?? null;
+                        if ($placeId) {
+                            Place::updateOrCreate(
+                                ['place_id' => $placeId],
+                                ['data' => $rawPlace]
+                            );
+                        }
+                    }
+
+                    $places = $this->cacheService->filterCachedPlaces($rawPlaces, $lat, $lon, $radius);
+                } else {
+                    Log::warning('Google Nearby Search request failed in getNearestPlaces', [
+                        'lat' => $lat,
+                        'lon' => $lon,
+                        'radius_meters' => $radius,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+                }
+            }
+        }
+
+        // 3. Order results by distance and priorize flag (1 = prefer)
+        $prioritizedTypeNames = DB::table('types')
+            ->where('priorize', 1)
+            ->pluck('type')
+            ->all();
+        $prioritizedMap = array_fill_keys($prioritizedTypeNames, true);
+
+        $placesWithScore = [];
+        foreach ($places as $place) {
+            $coords = $this->cacheService->extractPlaceCoordinates($place);
+            $dist = $coords !== null
+                ? $this->cacheService->haversineDistanceMeters($lat, $lon, $coords['lat'], $coords['lon'])
+                : 999999.0;
+
+            // Only keep places within the requested radius (with 1.0m tolerance)
+            if ($dist > ($radius + 1.0)) {
+                continue;
+            }
+
+            $types = (array) ($place['types'] ?? []);
+            $priorize = 0;
+            foreach ($types as $type) {
+                if (isset($prioritizedMap[$type])) {
+                    $priorize = 1;
+                    break;
+                }
+            }
+
+            $placesWithScore[] = [
+                'distance' => $dist,
+                'priorize' => $priorize,
+                'place' => $place,
+            ];
+        }
+
+        // Sort by priorize DESC (1 before 0), then distance ASC (closer first)
+        usort($placesWithScore, function (array $a, array $b): int {
+            if ($a['priorize'] !== $b['priorize']) {
+                return $b['priorize'] <=> $a['priorize'];
+            }
+
+            return $a['distance'] <=> $b['distance'];
+        });
+        
+        if ($limit > 0) {
+            $placesWithScore = array_slice($placesWithScore, 0, $limit);
+        }
+        
+
+        return array_map(function (array $item): array {
+            $place = $item['place'];
+            $place['distance'] = round($item['distance'], 1);
+
+            return $place;
+        }, $placesWithScore);
     }
 
     /**

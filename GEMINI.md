@@ -100,6 +100,7 @@ All endpoints are registered in `src/routes/web.php` without an `/api` prefix:
 | `POST` | `/toilet/add` | Create new toilet manually |
 | `POST` | `/toilet/add-properties/{toiletId}` | Add key-value toilet properties |
 | `POST` | `/toilet/feedback/{toiletId}` | Send feedback email for a toilet |
+| `GET` | `/places/nearest/{lat}/{lon}` | Nearest Google places ordered by type priority & distance (`?limit=3&radius=40`) |
 | `GET` | `/places/{placeId}` | Get cached Google Place details |
 | `POST` | `/places/{placeId}` | Store/update Google Place details |
 | `POST` | `/upload` | Upload toilet photo |

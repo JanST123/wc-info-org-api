@@ -10,6 +10,7 @@ use App\Models\Toilet;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class PlaceController extends Controller
@@ -18,6 +19,36 @@ class PlaceController extends Controller
         private GooglePlacesService $placesService,
         private PlaceToiletService $placeToiletService,
     ) {}
+
+    /**
+     * Retrieve nearest Google places for a coordinate.
+     */
+    public function nearest(string $lat, string $lon, Request $request): JsonResponse
+    {
+        if (! is_numeric($lat) || ! is_numeric($lon) || (float) $lat < -90 || (float) $lat > 90 || (float) $lon < -180 || (float) $lon > 180) {
+            return response()->json(['error' => 'Invalid coordinates'], 422);
+        }
+
+        $validated = $request->validate([
+            'limit' => 'nullable|integer|min:1|max:50',
+            'radius' => 'nullable|numeric|min:1|max:50000',
+        ]);
+
+        $limit = (int) ($validated['limit'] ?? 3);
+        $radius = (float) ($validated['radius'] ?? 40.0);
+
+        $places = $this->placesService->getNearestPlaces(
+            (float) $lat,
+            (float) $lon,
+            $radius,
+            $limit
+        );
+
+        return response()->json([
+            'status' => 'okay',
+            'places' => $places,
+        ]);
+    }
 
     /**
      * Store authoritative Google Places data for a place.

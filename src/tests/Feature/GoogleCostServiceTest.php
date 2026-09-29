@@ -20,6 +20,13 @@ class GoogleCostServiceTest extends TestCase
         AppSetting::truncate();
     }
 
+    protected function tearDown(): void
+    {
+        GoogleApiLog::truncate();
+        AppSetting::truncate();
+        parent::tearDown();
+    }
+
     public function test_logs_api_calls_and_calculates_monthly_cost(): void
     {
         /** @var GoogleCostService $service */

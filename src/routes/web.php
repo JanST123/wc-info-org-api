@@ -23,6 +23,7 @@ Route::middleware('api.key')->group(function () {
     Route::post('toilet/feedback/{toiletId}', [ToiletController::class, 'feedback']);
 
     // Public Place cache routes
+    Route::get('places/nearest/{lat}/{lon}', [PlaceController::class, 'nearest']);
     Route::post('places/{placeId}', [PlaceController::class, 'store']);
     Route::get('places/{placeId}', [PlaceController::class, 'show']);
 
