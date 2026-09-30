@@ -107,7 +107,7 @@ class ToiletFeedbackTest extends TestCase
             ]);
     }
 
-    public function test_feedback_validation_requires_subject_and_message(): void
+    public function test_feedback_validation_requires_subject(): void
     {
         $toilet = Toilet::create([
             'name' => 'WC Test Valid',
@@ -119,7 +119,43 @@ class ToiletFeedbackTest extends TestCase
 
         $response->assertStatus(400);
         $this->assertArrayHasKey('subject', $response->json('errors'));
-        $this->assertArrayHasKey('message', $response->json('errors'));
+        $this->assertArrayNotHasKey('message', $response->json('errors') ?? []);
+    }
+
+    public function test_feedback_succeeds_without_message(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'WC No Message Test',
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $mailService = $this->createMock(MailService::class);
+        $mailService->expects($this->once())
+            ->method('send')
+            ->with(
+                $this->anything(),
+                $this->equalTo('Feedback: Subject only feedback'),
+                $this->callback(function (string $body) use ($toilet): bool {
+                    $this->assertStringContainsString('WC No Message Test', $body);
+                    $this->assertStringContainsString((string) $toilet->id, $body);
+
+                    return true;
+                }),
+                $this->isTrue()
+            );
+
+        $this->app->instance(MailService::class, $mailService);
+
+        $response = $this->postJson("/toilet/feedback/{$toilet->id}", [
+            'subject' => 'Subject only feedback',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'status' => 'okay',
+                'message' => 'Feedback sent successfully',
+            ]);
     }
 
     public function test_feedback_accepts_body_as_alias_for_message(): void

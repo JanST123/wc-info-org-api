@@ -550,7 +550,7 @@ class ToiletController extends Controller
 
         $input = $request->validated();
         $userSubject = $input['subject'];
-        $userMessage = $input['message'];
+        $userMessage = isset($input['message']) && is_string($input['message']) ? trim($input['message']) : '';
 
         $toEmail = (string) config('wcinfo.sender_mail');
         $emailSubject = 'Feedback: '.$userSubject;
@@ -565,10 +565,12 @@ class ToiletController extends Controller
 
         $adminUrl = url("/admin/toilets/{$toilet->id}");
 
-        $body = "<h2>Feedback Received</h2>\n"
-            ."<p><strong>Message:</strong></p>\n"
-            .'<blockquote>'.nl2br(e($userMessage))."</blockquote>\n"
-            ."<hr>\n"
+        $body = "<h2>Feedback Received</h2>\n";
+        if ($userMessage !== '') {
+            $body .= "<p><strong>Message:</strong></p>\n"
+                .'<blockquote>'.nl2br(e($userMessage))."</blockquote>\n";
+        }
+        $body .= "<hr>\n"
             ."<h3>Toilet Details</h3>\n"
             ."<ul>\n"
             ."<li><strong>ID:</strong> {$toilet->id}</li>\n"

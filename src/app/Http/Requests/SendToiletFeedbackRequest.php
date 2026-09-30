@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * @property string $subject Subject of the feedback
- * @property string $message Message content of the feedback
+ * @property string|null $message Message content of the feedback
  */
 class SendToiletFeedbackRequest extends FormRequest
 {
@@ -30,7 +30,7 @@ class SendToiletFeedbackRequest extends FormRequest
     {
         return [
             'subject' => ['required', 'string', 'max:255'],
-            'message' => ['required', 'string', 'max:10000'],
+            'message' => ['nullable', 'string', 'max:10000'],
         ];
     }
 }
