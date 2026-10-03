@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Toilet;
-use App\Models\ToiletPhoto;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DetectDuplicateToiletsCommandTest extends TestCase
 {
     private array $createdToiletIds = [];
+
     private array $createdPhotoIds = [];
 
     protected function tearDown(): void
@@ -31,7 +31,7 @@ class DetectDuplicateToiletsCommandTest extends TestCase
 
     public function test_dry_run_does_not_modify_database(): void
     {
-        $placeId = 'test_dry_run_place_' . uniqid();
+        $placeId = 'test_dry_run_place_'.uniqid();
 
         $toilet1 = Toilet::create([
             'name' => 'Original Toilet',
@@ -65,7 +65,7 @@ class DetectDuplicateToiletsCommandTest extends TestCase
 
     public function test_detects_and_deletes_duplicate_by_same_place_id(): void
     {
-        $placeId = 'test_same_place_' . uniqid();
+        $placeId = 'test_same_place_'.uniqid();
 
         $master = Toilet::create([
             'name' => 'Main Qualified Toilet',
@@ -142,7 +142,7 @@ class DetectDuplicateToiletsCommandTest extends TestCase
 
     public function test_relinks_photos_from_duplicate_to_master(): void
     {
-        $placeId = 'test_photo_relink_' . uniqid();
+        $placeId = 'test_photo_relink_'.uniqid();
 
         $master = Toilet::create([
             'name' => 'Master Toilet For Photos',
@@ -161,7 +161,7 @@ class DetectDuplicateToiletsCommandTest extends TestCase
 
         $photoId = DB::table('toilet_photos')->insertGetId([
             'fk_toiletId' => $duplicate->id,
-            'filename' => 'test_photo_' . uniqid() . '.jpg',
+            'filename' => 'test_photo_'.uniqid().'.jpg',
         ]);
         $this->createdPhotoIds[] = $photoId;
 

@@ -587,7 +587,7 @@ class MigrateV2SchemaCommand extends Command
         $this->info('Creating cost tracking and settings tables...');
 
         if (! $this->tableExists('google_api_logs')) {
-            $this->runStatement("
+            $this->runStatement('
                 CREATE TABLE google_api_logs (
                     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                     service VARCHAR(50) NOT NULL,
@@ -601,7 +601,7 @@ class MigrateV2SchemaCommand extends Command
                     INDEX idx_created (created_at),
                     INDEX idx_cache_created (is_cache_hit, created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
+            ');
         } else {
             $this->runStatement('ALTER TABLE google_api_logs MODIFY COLUMN service VARCHAR(50) NOT NULL');
             if (! $this->columnExists('google_api_logs', 'is_cache_hit')) {
@@ -613,7 +613,7 @@ class MigrateV2SchemaCommand extends Command
         }
 
         if (! $this->tableExists('google_nearby_search_cache')) {
-            $this->runStatement("
+            $this->runStatement('
                 CREATE TABLE google_nearby_search_cache (
                     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                     lat DECIMAL(10, 7) NOT NULL,
@@ -628,20 +628,20 @@ class MigrateV2SchemaCommand extends Command
                     INDEX idx_lat_lon (lat, lon),
                     INDEX idx_radius (radius_meters)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
+            ');
             $this->info('Created table google_nearby_search_cache.');
         } else {
             $this->info('Table google_nearby_search_cache already exists, skipping.');
         }
 
         if (! $this->tableExists('app_settings')) {
-            $this->runStatement("
+            $this->runStatement('
                 CREATE TABLE app_settings (
                     `key` VARCHAR(100) PRIMARY KEY,
                     `value` LONGTEXT NULL DEFAULT NULL,
                     `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
+            ');
         } else {
             $this->info('Table app_settings already exists, skipping.');
         }
@@ -683,7 +683,7 @@ class MigrateV2SchemaCommand extends Command
         $this->info('Creating api_keys table...');
 
         if (! $this->tableExists('api_keys')) {
-            $this->runStatement("
+            $this->runStatement('
                 CREATE TABLE api_keys (
                     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                     `key` VARCHAR(64) NOT NULL UNIQUE,
@@ -698,7 +698,7 @@ class MigrateV2SchemaCommand extends Command
                     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     INDEX idx_api_keys_active (is_active)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
+            ');
             $this->info('Created table api_keys.');
         } else {
             $this->info('Table api_keys already exists, skipping creation.');
@@ -710,7 +710,7 @@ class MigrateV2SchemaCommand extends Command
             $now = now();
             DB::table('api_keys')->insert([
                 [
-                    'key' => 'wc_ios_' . bin2hex(random_bytes(16)),
+                    'key' => 'wc_ios_'.bin2hex(random_bytes(16)),
                     'name' => 'iOS App',
                     'description' => 'Official iOS mobile application',
                     'is_active' => 1,
@@ -722,7 +722,7 @@ class MigrateV2SchemaCommand extends Command
                     'updated_at' => $now,
                 ],
                 [
-                    'key' => 'wc_and_' . bin2hex(random_bytes(16)),
+                    'key' => 'wc_and_'.bin2hex(random_bytes(16)),
                     'name' => 'Android App',
                     'description' => 'Official Android mobile application',
                     'is_active' => 1,
@@ -734,7 +734,7 @@ class MigrateV2SchemaCommand extends Command
                     'updated_at' => $now,
                 ],
                 [
-                    'key' => 'wc_web_' . bin2hex(random_bytes(16)),
+                    'key' => 'wc_web_'.bin2hex(random_bytes(16)),
                     'name' => 'Web App',
                     'description' => 'Official Web application',
                     'is_active' => 1,

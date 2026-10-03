@@ -13,6 +13,7 @@ use Illuminate\View\View;
 class AdminAuthController extends Controller
 {
     public const REMEMBER_COOKIE_NAME = 'admin_remember';
+
     public const REMEMBER_DURATION_MINUTES = 60 * 24 * 30; // 30 days
 
     public function showLogin(Request $request): View|RedirectResponse
@@ -93,7 +94,7 @@ class AdminAuthController extends Controller
         $configPass = (string) config('wcinfo.admin.password');
         $appKey = (string) config('app.key');
 
-        return hash_hmac('sha256', $configUser . ':' . $configPass, $appKey);
+        return hash_hmac('sha256', $configUser.':'.$configPass, $appKey);
     }
 
     public static function isValidRememberToken(?string $token): bool

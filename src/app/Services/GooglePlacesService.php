@@ -13,7 +13,9 @@ use RuntimeException;
 class GooglePlacesService
 {
     private string $apiKey;
+
     private GoogleCostService $costService;
+
     private GoogleNearbyCacheService $cacheService;
 
     public function __construct(
@@ -535,11 +537,10 @@ class GooglePlacesService
 
             return $a['distance'] <=> $b['distance'];
         });
-        
+
         if ($limit > 0) {
             $placesWithScore = array_slice($placesWithScore, 0, $limit);
         }
-        
 
         return array_map(function (array $item): array {
             $place = $item['place'];

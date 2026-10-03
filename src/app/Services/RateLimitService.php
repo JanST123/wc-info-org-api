@@ -29,7 +29,7 @@ class RateLimitService
      */
     public function check(ApiKey $apiKey, string $ip): array
     {
-        $now = time();
+        $now = now()->timestamp;
         $minuteBucket = (int) floor($now / 60);
         $resetSeconds = 60 - ($now % 60);
 
@@ -148,9 +148,9 @@ class RateLimitService
                 $subject = "ALERT: Global rate limit hit for API Key {$apiKey->name}";
                 $body = "Warning: The API key '{$apiKey->name}' (ID: {$apiKey->id}) has hit its global safety ceiling of {$apiKey->global_rate_limit_per_minute} req/min.\n"
                     ."Current requests in the last minute: {$currentCount}\n"
-                    ."Timestamp: ".date('Y-m-d H:i:s')."\n\n"
+                    .'Timestamp: '.date('Y-m-d H:i:s')."\n\n"
                     ."All further requests using this API key across all IPs will be throttled until the minute window resets.\n"
-                    ."Please check the admin panel for potential scraping or botnet activity: ".url('/admin/api-keys');
+                    .'Please check the admin panel for potential scraping or botnet activity: '.url('/admin/api-keys');
 
                 $this->mailService->send($senderMail, $subject, $body, false);
             }
@@ -186,10 +186,10 @@ class RateLimitService
             'ip' => $ip,
             'blocked_until' => $blockExpiresAt,
             'penalty_until' => $penaltyExpiresAt,
-            'created_at' => time(),
+            'created_at' => now()->timestamp,
         ];
         // Clean up expired entries while saving
-        $now = time();
+        $now = now()->timestamp;
         $records = array_filter($records, fn ($r) => $r['penalty_until'] > $now);
         Cache::put($indexKey, $records, 86400);
     }
@@ -212,7 +212,7 @@ class RateLimitService
     {
         $indexKey = 'rl:active_blocks_index';
         $records = Cache::get($indexKey, []);
-        $now = time();
+        $now = now()->timestamp;
         $keys = ApiKey::all()->keyBy('id');
 
         $active = [];
@@ -273,7 +273,7 @@ class RateLimitService
      */
     public function getKeyMetrics(ApiKey $apiKey): array
     {
-        $now = time();
+        $now = now()->timestamp;
         $minuteBucket = (int) floor($now / 60);
         $globalMinuteKey = "rl:global:{$apiKey->id}:{$minuteBucket}";
         $currentCount = (int) Cache::get($globalMinuteKey, 0);

@@ -111,7 +111,7 @@ class GoogleNearbyCacheService
     /**
      * Filter and rank places from a cached response to only those within the requested sub-radius.
      *
-     * @param array<int, array> $places
+     * @param  array<int, array>  $places
      * @return array<int, array>
      */
     public function filterCachedPlaces(
@@ -131,6 +131,7 @@ class GoogleNearbyCacheService
                     'distance' => 0.0,
                     'place' => $place,
                 ];
+
                 continue;
             }
 
@@ -160,8 +161,8 @@ class GoogleNearbyCacheService
     /**
      * Store a Google Places Nearby Search response in the cache table.
      *
-     * @param array<int, array> $places
-     * @param array<string, mixed> $queryParams
+     * @param  array<int, array>  $places
+     * @param  array<string, mixed>  $queryParams
      */
     public function store(
         float $lat,
@@ -210,7 +211,7 @@ class GoogleNearbyCacheService
     /**
      * Extract lat/lon float coordinates from diverse Google Place data representations.
      *
-     * @param array<string, mixed> $place
+     * @param  array<string, mixed>  $place
      * @return array{lat: float, lon: float}|null
      */
     public function extractPlaceCoordinates(array $place): ?array

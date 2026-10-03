@@ -19,6 +19,7 @@ use Tests\TestCase;
 class GoogleThrottlingTest extends TestCase
 {
     private array $createdToiletIds = [];
+
     private array $createdPlaceIds = [];
 
     protected function setUp(): void

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 class GeminiPlaceMatchingService
 {
     private string $geminiApiKey;
+
     private string $geminiModel;
 
     public function __construct(
@@ -67,7 +68,7 @@ class GeminiPlaceMatchingService
                 $toilet,
                 $publicBathroom,
                 'high',
-                'Found dedicated public bathroom place within ' . ($publicBathroom['distance_m'] ?? 0) . 'm.',
+                'Found dedicated public bathroom place within '.($publicBathroom['distance_m'] ?? 0).'m.',
                 'nearby_public_bathroom'
             );
         }
@@ -132,7 +133,7 @@ class GeminiPlaceMatchingService
                     $toilet,
                     $publicBathroomAddr,
                     'high',
-                    'Found public bathroom place matching address: ' . $toiletAddress,
+                    'Found public bathroom place matching address: '.$toiletAddress,
                     'address_public_bathroom'
                 );
             }
@@ -201,7 +202,7 @@ class GeminiPlaceMatchingService
                     $toilet,
                     $publicBathroomName,
                     'high',
-                    'Found public bathroom place matching toilet name: ' . $toiletName,
+                    'Found public bathroom place matching toilet name: '.$toiletName,
                     'name_public_bathroom'
                 );
             }
@@ -288,7 +289,7 @@ class GeminiPlaceMatchingService
                             $toilet,
                             $matchedCandidate,
                             $aiMatch['confidence'] ?? 'medium',
-                            $aiMatch['reasoning'] ?? 'Place website (' . $matchedCandidate['website'] . ') confirmed toilet facilities on site.',
+                            $aiMatch['reasoning'] ?? 'Place website ('.$matchedCandidate['website'].') confirmed toilet facilities on site.',
                             'website_crawl'
                         );
                     }
@@ -302,16 +303,16 @@ class GeminiPlaceMatchingService
             'toilet_id' => $toilet->id,
             'message' => 'No matching Google Place could be found.',
             'reasoning' => 'Searched nearby places (~40m)'
-                . (! empty($toiletAddress) ? ' and address ("' . $toiletAddress . '")' : '')
-                . ($toiletName !== '' ? ' and name ("' . $toiletName . '")' : '')
-                . ' and crawled place websites, but no place matched the toilet record with sufficient confidence.',
+                .(! empty($toiletAddress) ? ' and address ("'.$toiletAddress.'")' : '')
+                .($toiletName !== '' ? ' and name ("'.$toiletName.'")' : '')
+                .' and crawled place websites, but no place matched the toilet record with sufficient confidence.',
         ];
     }
 
     /**
      * Normalize and cache raw Places API results into candidate array.
      *
-     * @param array<int, array> $rawPlaces
+     * @param  array<int, array>  $rawPlaces
      * @return array<int, array>
      */
     private function normalizeCandidates(array $rawPlaces, ?float $refLat = null, ?float $refLon = null): array
@@ -376,8 +377,7 @@ class GeminiPlaceMatchingService
     /**
      * Look for a public_bathroom type in candidate list.
      *
-     * @param array<int, array> $candidates
-     * @return array|null
+     * @param  array<int, array>  $candidates
      */
     private function findPublicBathroomCandidate(array $candidates): ?array
     {
@@ -394,7 +394,7 @@ class GeminiPlaceMatchingService
     /**
      * Find a candidate place whose name strongly matches the toilet's name or owner.
      *
-     * @param array<int, array> $candidates
+     * @param  array<int, array>  $candidates
      * @return array{candidate: array, score: float, reason: string}|null
      */
     private function findEstablishmentNameMatch(Toilet $toilet, array $candidates): ?array
@@ -497,7 +497,7 @@ class GeminiPlaceMatchingService
     /**
      * Find candidate by place_id.
      *
-     * @param array<int, array> $candidates
+     * @param  array<int, array>  $candidates
      */
     private function findCandidateById(array $candidates, string $placeId): ?array
     {
@@ -513,7 +513,7 @@ class GeminiPlaceMatchingService
     /**
      * Ask Gemini AI to pick the matching place from candidates.
      *
-     * @param array<int, array> $candidates
+     * @param  array<int, array>  $candidates
      * @return array{match_found: bool, matched_place_id: ?string, confidence: string, reasoning: string}
      */
     private function queryGeminiForMatch(Toilet $toilet, ?string $address, ?string $comment, array $candidates): array
@@ -620,7 +620,7 @@ PROMPT;
                     'match_found' => false,
                     'matched_place_id' => null,
                     'confidence' => 'low',
-                    'reasoning' => 'Gemini API call failed with status ' . $response->status(),
+                    'reasoning' => 'Gemini API call failed with status '.$response->status(),
                 ];
             }
 
@@ -657,7 +657,7 @@ PROMPT;
                 'match_found' => false,
                 'matched_place_id' => null,
                 'confidence' => 'low',
-                'reasoning' => 'Exception during Gemini evaluation: ' . $e->getMessage(),
+                'reasoning' => 'Exception during Gemini evaluation: '.$e->getMessage(),
             ];
         }
     }
@@ -665,7 +665,7 @@ PROMPT;
     /**
      * Build the structured successful match result.
      *
-     * @param array<string, mixed> $matchedCandidate
+     * @param  array<string, mixed>  $matchedCandidate
      * @return array<string, mixed>
      */
     private function buildMatchResult(
@@ -679,8 +679,8 @@ PROMPT;
         $isPublicAccessible = PlaceToiletService::isPublicAccessibleType($placeTypes);
 
         $mapsUrl = ($toilet->lat !== null && $toilet->lon !== null)
-            ? 'https://www.google.com/maps/search/?api=1&query=' . $toilet->lat . ',' . $toilet->lon . '&query_place_id=' . urlencode($matchedCandidate['place_id'])
-            : 'https://www.google.com/maps/place/?q=place_id:' . urlencode($matchedCandidate['place_id']);
+            ? 'https://www.google.com/maps/search/?api=1&query='.$toilet->lat.','.$toilet->lon.'&query_place_id='.urlencode($matchedCandidate['place_id'])
+            : 'https://www.google.com/maps/place/?q=place_id:'.urlencode($matchedCandidate['place_id']);
 
         return [
             'success' => true,

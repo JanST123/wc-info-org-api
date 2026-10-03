@@ -13,15 +13,23 @@ use Illuminate\Support\Facades\Log;
 class GoogleCostService
 {
     public const SERVICE_PLACES_NEARBY = 'places_nearby';
+
     public const SERVICE_PLACES_TEXT_SEARCH = 'places_text_search';
+
     public const SERVICE_PLACES_DETAILS = 'places_details';
+
     public const SERVICE_CUSTOM_SEARCH = 'custom_search';
+
     public const SERVICE_GEOCODING = 'geocoding';
 
     public const COST_PLACES_NEARBY_USD = 0.032;
+
     public const COST_PLACES_TEXT_SEARCH_USD = 0.032;
+
     public const COST_PLACES_DETAILS_USD = 0.017;
+
     public const COST_CUSTOM_SEARCH_USD = 0.005;
+
     public const COST_GEOCODING_USD = 0.005;
 
     public const PRICING = [
@@ -147,7 +155,7 @@ class GoogleCostService
         try {
             $this->mail->send(
                 $recipient,
-                "🚨 Alert: Google API Budget Exceeded ($".number_format($currentCost, 2)." / $".number_format($budget, 2).")",
+                '🚨 Alert: Google API Budget Exceeded ($'.number_format($currentCost, 2).' / $'.number_format($budget, 2).')',
                 $body,
                 true
             );

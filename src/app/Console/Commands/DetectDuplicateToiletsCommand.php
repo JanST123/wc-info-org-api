@@ -55,6 +55,7 @@ class DetectDuplicateToiletsCommand extends Command
 
         if ($totalActiveToilets <= 1) {
             $this->info('Not enough toilets to detect duplicates.');
+
             return self::SUCCESS;
         }
 
@@ -68,6 +69,7 @@ class DetectDuplicateToiletsCommand extends Command
             if ($parent[$i] === $i) {
                 return $i;
             }
+
             return $parent[$i] = $find($parent[$i]);
         };
 
@@ -133,7 +135,7 @@ class DetectDuplicateToiletsCommand extends Command
                 // Inspect 3x3 neighboring grid cells
                 for ($dx = -1; $dx <= 1; $dx++) {
                     for ($dy = -1; $dy <= 1; $dy++) {
-                        $nKey = ($gx + $dx) . ':' . ($gy + $dy);
+                        $nKey = ($gx + $dx).':'.($gy + $dy);
                         if (! isset($grid[$nKey])) {
                             continue;
                         }
@@ -144,7 +146,7 @@ class DetectDuplicateToiletsCommand extends Command
                                     continue;
                                 }
 
-                                $pairKey = $t1->id . '-' . $t2->id;
+                                $pairKey = $t1->id.'-'.$t2->id;
                                 if (isset($seenPairs[$pairKey])) {
                                     continue;
                                 }
@@ -180,6 +182,7 @@ class DetectDuplicateToiletsCommand extends Command
 
         if (empty($duplicateClusters)) {
             $this->info('✓ No duplicate toilets found.');
+
             return self::SUCCESS;
         }
 
@@ -220,6 +223,7 @@ class DetectDuplicateToiletsCommand extends Command
                 if ($scoreA !== $scoreB) {
                     return $scoreB <=> $scoreA;
                 }
+
                 return $a->id <=> $b->id;
             });
 
@@ -227,7 +231,7 @@ class DetectDuplicateToiletsCommand extends Command
             $master = $cluster[0];
             $duplicates = array_slice($cluster, 1);
 
-            $masterPlace = $master->place_id ? substr($master->place_id, 0, 14) . '...' : 'none';
+            $masterPlace = $master->place_id ? substr($master->place_id, 0, 14).'...' : 'none';
             $masterInfo = sprintf(
                 '#%d "%s" [%s%s, 📷%d, %s]',
                 $master->id,
@@ -242,10 +246,10 @@ class DetectDuplicateToiletsCommand extends Command
                 $totalDeleted++;
 
                 $distToMaster = ($master->lat !== null && $master->lon !== null && $dup->lat !== null && $dup->lon !== null)
-                    ? round($this->calculateDistanceMeters((float) $master->lat, (float) $master->lon, (float) $dup->lat, (float) $dup->lon), 1) . 'm'
+                    ? round($this->calculateDistanceMeters((float) $master->lat, (float) $master->lon, (float) $dup->lat, (float) $dup->lon), 1).'m'
                     : 'N/A';
 
-                $dupPlace = $dup->place_id ? substr($dup->place_id, 0, 14) . '...' : 'none';
+                $dupPlace = $dup->place_id ? substr($dup->place_id, 0, 14).'...' : 'none';
                 $dupInfo = sprintf(
                     '#%d "%s" [%s%s, 📷%d, %s, dist: %s]',
                     $dup->id,
@@ -266,7 +270,7 @@ class DetectDuplicateToiletsCommand extends Command
                     'Action' => 'DELETE',
                     'Toilet ID' => $dup->id,
                     'Details' => $dupInfo,
-                    'Master Toilet' => "#{$master->id} (" . ($master->name ?: 'Unnamed') . ')',
+                    'Master Toilet' => "#{$master->id} (".($master->name ?: 'Unnamed').')',
                     'Reason' => $reason,
                 ];
 
@@ -321,7 +325,7 @@ class DetectDuplicateToiletsCommand extends Command
 
         $this->line('');
         $this->line('====================================================');
-        $this->info("Total duplicate clusters: " . count($duplicateClusters));
+        $this->info('Total duplicate clusters: '.count($duplicateClusters));
         $this->info("Total duplicate toilets to mark deleted: {$totalDeleted}");
         if ($relinkPhotos) {
             $this->info("Total photos re-linked to master: {$totalPhotosMoved}");
@@ -329,7 +333,7 @@ class DetectDuplicateToiletsCommand extends Command
         $this->line('====================================================');
 
         if ($dryRun) {
-            $this->warn("DRY-RUN completed. Run without --dry-run to apply changes.");
+            $this->warn('DRY-RUN completed. Run without --dry-run to apply changes.');
         } else {
             $this->info("✓ Successfully marked {$totalDeleted} duplicate toilets as deleted and unflagged.");
         }

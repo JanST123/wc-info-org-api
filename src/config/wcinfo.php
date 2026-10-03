@@ -73,29 +73,29 @@ return [
         'rv_park',
 
         // Civic & Government
-        //'city_hall',
-        //'local_government_office',
-        //'government_office',
-        //'courthouse',
-        //'library',
-        //'post_office',
+        // 'city_hall',
+        // 'local_government_office',
+        // 'government_office',
+        // 'courthouse',
+        // 'library',
+        // 'post_office',
         'cemetery',
 
         // Culture & Tourism
         'tourist_attraction',
-        //'museum',
-        //'art_museum',
-        //'planetarium',
-        //'aquarium',
-        //'zoo',
-        //'amusement_park',
+        // 'museum',
+        // 'art_museum',
+        // 'planetarium',
+        // 'aquarium',
+        // 'zoo',
+        // 'amusement_park',
 
         // Large Public Facilities
         'shopping_mall',
         'department_store',
-        //'stadium',
-        //'swimming_pool',
-        //'sports_activity_location',
+        // 'stadium',
+        // 'swimming_pool',
+        // 'sports_activity_location',
         'gas_station',
         'parking',
         'parking_lot',
@@ -300,4 +300,3 @@ return [
         'parking_garage',
     ],
 ];
-

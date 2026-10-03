@@ -1,9 +1,10 @@
 <?php
 
 declare(strict_types=1);
+
 namespace App\Console\Commands;
 
-ini_alter('memory_limit', '1512M');
+ini_set('memory_limit', '1512M');
 
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
@@ -11,8 +12,8 @@ use App\Models\Toilet;
 use App\Services\PlaceToiletService;
 use App\Services\ToiletRevisionService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class ExtractNearbyCachePlacesCommand extends Command
 {
@@ -127,7 +128,7 @@ class ExtractNearbyCachePlacesCommand extends Command
         $idChunks = array_chunk($placeIds, 250);
 
         foreach ($idChunks as $idChunk) {
-            /** @var \Illuminate\Database\Eloquent\Collection<string, Place> $existingPlaces */
+            /** @var Collection<string, Place> $existingPlaces */
             $existingPlaces = Place::whereIn('place_id', $idChunk)->get()->keyBy('place_id');
 
             foreach ($idChunk as $placeId) {
@@ -358,8 +359,8 @@ class ExtractNearbyCachePlacesCommand extends Command
     /**
      * Merge existing place data with incoming cached place data, filling in missing or richer fields.
      *
-     * @param array<string, mixed> $existing
-     * @param array<string, mixed> $incoming
+     * @param  array<string, mixed>  $existing
+     * @param  array<string, mixed>  $incoming
      * @return array<string, mixed>
      */
     public function mergePlaceData(array $existing, array $incoming): array

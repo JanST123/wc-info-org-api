@@ -25,7 +25,7 @@ class AdminApiKeyManagementTest extends TestCase
 
     public function test_authenticated_admin_can_view_api_keys_dashboard(): void
     {
-        $uniqueKey = 'wc_ios_unique_' . uniqid();
+        $uniqueKey = 'wc_ios_unique_'.uniqid();
         $key = ApiKey::create([
             'key' => $uniqueKey,
             'name' => 'iOS App Unique',
@@ -69,7 +69,7 @@ class AdminApiKeyManagementTest extends TestCase
     public function test_admin_can_update_existing_api_key(): void
     {
         $key = ApiKey::create([
-            'key' => 'wc_test_update_' . uniqid(),
+            'key' => 'wc_test_update_'.uniqid(),
             'name' => 'Old Name',
             'is_active' => true,
             'rate_limit_per_minute' => 40,
@@ -100,7 +100,7 @@ class AdminApiKeyManagementTest extends TestCase
     public function test_admin_can_toggle_api_key_active_status(): void
     {
         $key = ApiKey::create([
-            'key' => 'wc_toggle_key_' . uniqid(),
+            'key' => 'wc_toggle_key_'.uniqid(),
             'name' => 'Toggle Key',
             'is_active' => true,
             'rate_limit_per_minute' => 40,
@@ -125,7 +125,7 @@ class AdminApiKeyManagementTest extends TestCase
 
     public function test_admin_can_regenerate_api_key_token(): void
     {
-        $oldToken = 'wc_old_token_' . uniqid();
+        $oldToken = 'wc_old_token_'.uniqid();
         $key = ApiKey::create([
             'key' => $oldToken,
             'name' => 'iOS App',
@@ -148,7 +148,7 @@ class AdminApiKeyManagementTest extends TestCase
     public function test_admin_can_unblock_ip(): void
     {
         $key = ApiKey::create([
-            'key' => 'wc_unblock_key_' . uniqid(),
+            'key' => 'wc_unblock_key_'.uniqid(),
             'name' => 'Test Key',
             'is_active' => true,
             'rate_limit_per_minute' => 40,

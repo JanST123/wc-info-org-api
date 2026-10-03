@@ -73,8 +73,7 @@ class DiscoverPlacesCommand extends Command
         GooglePlacesService $placesService,
         PlaceToiletService $placeToiletService,
         ToiletRevisionService $revisionService
-    ): int
-    {
+    ): int {
         $this->dryRun = (bool) $this->option('dry-run');
 
         $preferCacheOption = $this->option('prefer-cache');
@@ -166,7 +165,7 @@ class DiscoverPlacesCommand extends Command
             $toilets = (clone $query)->limit($this->limit)->get(['id', 'place_id', 'last_included', 'last_discovered']);
             $this->toiletsNeedingDiscoveryCount = $this->totalNeedingDiscoveryCount;
 
-            $this->info("Found {$toilets->count()} toilets to discover." . ($this->totalNeedingDiscoveryCount > $toilets->count() ? " ({$this->totalNeedingDiscoveryCount} total in database needing discovery)" : ''));
+            $this->info("Found {$toilets->count()} toilets to discover.".($this->totalNeedingDiscoveryCount > $toilets->count() ? " ({$this->totalNeedingDiscoveryCount} total in database needing discovery)" : ''));
 
             if ($toilets->isEmpty()) {
                 return;

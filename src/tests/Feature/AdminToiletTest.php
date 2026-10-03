@@ -9,15 +9,17 @@ use App\Models\Toilet;
 use App\Models\ToiletPhoto;
 use App\Models\ToiletProperty;
 use App\Models\ToiletRevision;
+use App\Services\GeminiPlaceMatchingService;
+use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\S3PhotoStorageService;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminToiletTest extends TestCase
 {
     private array $createdToiletIds = [];
+
     private array $createdPlaceIds = [];
 
     protected function tearDown(): void
@@ -44,10 +46,10 @@ class AdminToiletTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
-        $resQualify = $this->get('/toilet/' . $toilet->id . '/admin-qualify');
+        $resQualify = $this->get('/toilet/'.$toilet->id.'/admin-qualify');
         $resQualify->assertStatus(404);
 
-        $resDelete = $this->get('/toilet/' . $toilet->id . '/admin-delete');
+        $resDelete = $this->get('/toilet/'.$toilet->id.'/admin-delete');
         $resDelete->assertStatus(404);
     }
 
@@ -78,7 +80,7 @@ class AdminToiletTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Recent Admin Toilet 24h');
         $response->assertSee((string) $recentToilet->id);
-        $response->assertSee('deleteRecentToilet(' . $recentToilet->id, false);
+        $response->assertSee('deleteRecentToilet('.$recentToilet->id, false);
     }
 
     public function test_update_status_sets_toilet_to_deleted(): void
@@ -166,7 +168,7 @@ class AdminToiletTest extends TestCase
         ]);
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->get('/admin/toilets/' . $toilet->id);
+            ->get('/admin/toilets/'.$toilet->id);
 
         $response->assertStatus(200);
         $response->assertSee('Show View Test Toilet');
@@ -221,7 +223,7 @@ class AdminToiletTest extends TestCase
         ];
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id, $updateData);
+            ->post('/admin/toilets/'.$toilet->id, $updateData);
 
         $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $response->assertSessionHas('success');
@@ -267,7 +269,7 @@ class AdminToiletTest extends TestCase
         $this->createdToiletIds[] = $toilet->id;
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id . '/reschedule-discovery');
+            ->post('/admin/toilets/'.$toilet->id.'/reschedule-discovery');
 
         $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $response->assertSessionHas('success');
@@ -306,7 +308,7 @@ class AdminToiletTest extends TestCase
 
         // 1. Soft delete photo 1
         $resSoft = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id . '/photos/' . $photo1->filename . '/delete');
+            ->post('/admin/toilets/'.$toilet->id.'/photos/'.$photo1->filename.'/delete');
 
         $resSoft->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $photo1->refresh();
@@ -315,7 +317,7 @@ class AdminToiletTest extends TestCase
 
         // 2. Hard delete photo 2
         $resHard = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id . '/photos/' . $photo2->filename . '/delete', ['hard' => 1]);
+            ->post('/admin/toilets/'.$toilet->id.'/photos/'.$photo2->filename.'/delete', ['hard' => 1]);
 
         $resHard->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $this->assertNull(ToiletPhoto::find($photo2->id));
@@ -358,7 +360,7 @@ class AdminToiletTest extends TestCase
         ];
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id, $updateData);
+            ->post('/admin/toilets/'.$toilet->id, $updateData);
 
         $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $response->assertSessionHas('success');
@@ -507,9 +509,9 @@ class AdminToiletTest extends TestCase
         $this->createdToiletIds[] = $toilet->id;
 
         // Mock GoogleCostService to ensure budget is available
-        $costMock = $this->createMock(\App\Services\GoogleCostService::class);
+        $costMock = $this->createMock(GoogleCostService::class);
         $costMock->method('hasBudget')->willReturn(true);
-        $this->app->instance(\App\Services\GoogleCostService::class, $costMock);
+        $this->app->instance(GoogleCostService::class, $costMock);
 
         // Mock GooglePlacesService
         $placesMock = $this->createMock(GooglePlacesService::class);
@@ -554,9 +556,9 @@ class AdminToiletTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
-        $costMock = $this->createMock(\App\Services\GoogleCostService::class);
+        $costMock = $this->createMock(GoogleCostService::class);
         $costMock->method('hasBudget')->willReturn(false);
-        $this->app->instance(\App\Services\GoogleCostService::class, $costMock);
+        $this->app->instance(GoogleCostService::class, $costMock);
 
         $response = $this->withSession(['admin_logged_in' => true])
             ->getJson("/admin/toilets/{$toilet->id}/nearby-places");
@@ -753,7 +755,7 @@ class AdminToiletTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toilet->id;
 
-        $aiMock = $this->createMock(\App\Services\GeminiPlaceMatchingService::class);
+        $aiMock = $this->createMock(GeminiPlaceMatchingService::class);
         $aiMock->expects($this->once())
             ->method('suggestPlace')
             ->willReturn([
@@ -778,7 +780,7 @@ class AdminToiletTest extends TestCase
                 'reasoning' => 'Matched with train station at the same coordinate.',
                 'source' => 'nearby_gemini',
             ]);
-        $this->app->instance(\App\Services\GeminiPlaceMatchingService::class, $aiMock);
+        $this->app->instance(GeminiPlaceMatchingService::class, $aiMock);
 
         $response = $this->withSession(['admin_logged_in' => true])
             ->getJson("/admin/toilets/{$toilet->id}/ai-suggest-place");
@@ -1030,7 +1032,7 @@ class AdminToiletTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'toilet' => [
-                'id', 'name', 'status', 'flagged', 'lat', 'lon', 'place_id', 'place_name'
+                'id', 'name', 'status', 'flagged', 'lat', 'lon', 'place_id', 'place_name',
             ],
             'google_places',
             'nearby_toilets',
@@ -1131,7 +1133,7 @@ class AdminToiletTest extends TestCase
         ]);
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->get('/admin/toilets/' . $toilet->id);
+            ->get('/admin/toilets/'.$toilet->id);
 
         $response->assertStatus(200);
         $response->assertSee('active_img_123.jpg');
@@ -1169,7 +1171,7 @@ class AdminToiletTest extends TestCase
         $this->app->instance(S3PhotoStorageService::class, $s3Mock);
 
         $response = $this->withSession(['admin_logged_in' => true])
-            ->post('/admin/toilets/' . $toilet->id . '/photos/' . $photo->filename . '/restore');
+            ->post('/admin/toilets/'.$toilet->id.'/photos/'.$photo->filename.'/restore');
 
         $response->assertRedirect(route('admin.toilets.show', ['id' => $toilet->id]));
         $response->assertSessionHas('success');
@@ -1181,4 +1183,3 @@ class AdminToiletTest extends TestCase
         $this->assertSame(0, $photo->email_sent);
     }
 }
-

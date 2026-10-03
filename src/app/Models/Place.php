@@ -70,7 +70,7 @@ class Place extends Model
     /**
      * Map place types to descriptive emojis (e.g. 🚽 for toilets, 🚉 for stations, 🍽️ for restaurants, ☕ for cafes).
      *
-     * @param array<int, string>|null $types
+     * @param  array<int, string>|null  $types
      */
     public static function getEmojiForTypes(?array $types): string
     {
@@ -155,4 +155,3 @@ class Place extends Model
         return self::getEmojiForTypes(is_array($types) ? $types : []);
     }
 }
-

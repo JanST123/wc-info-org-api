@@ -79,7 +79,7 @@ class ApiKeyRateLimitTest extends TestCase
     public function test_bearer_token_authorization_succeeds(): void
     {
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $this->activeKey->key,
+            'Authorization' => 'Bearer '.$this->activeKey->key,
             'X-Api-Key' => '',
         ])->getJson('/toilets/nearby/52.52/13.405');
 
@@ -90,7 +90,7 @@ class ApiKeyRateLimitTest extends TestCase
     public function test_query_parameter_api_key_succeeds(): void
     {
         $response = $this->withHeaders(['X-Api-Key' => ''])
-            ->getJson('/toilets/nearby/52.52/13.405?api_key=' . $this->activeKey->key);
+            ->getJson('/toilets/nearby/52.52/13.405?api_key='.$this->activeKey->key);
 
         $response->assertStatus(200);
     }

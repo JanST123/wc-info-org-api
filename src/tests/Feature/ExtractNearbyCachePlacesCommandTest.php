@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
 use App\Models\Toilet;
+use App\Models\ToiletRevision;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -21,7 +22,7 @@ class ExtractNearbyCachePlacesCommandTest extends TestCase
     protected function tearDown(): void
     {
         if (! empty($this->createdToiletIds)) {
-            \App\Models\ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
+            ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
             DB::table('toilet_properties')->whereIn('fk_toiletId', $this->createdToiletIds)->delete();
             Toilet::whereIn('id', $this->createdToiletIds)->delete();
         }
@@ -270,7 +271,7 @@ class ExtractNearbyCachePlacesCommandTest extends TestCase
         $this->assertStringContainsString('"day":1', $hoursProp->value);
 
         // Verify revision was recorded
-        $revision = \App\Models\ToiletRevision::where('toilet_id', $toilet->id)->latest('id')->first();
+        $revision = ToiletRevision::where('toilet_id', $toilet->id)->latest('id')->first();
         $this->assertNotNull($revision);
         $this->assertSame('extract-nearby-cache', $revision->source);
         $this->assertNotNull($revision->diff);

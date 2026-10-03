@@ -44,4 +44,3 @@ class Type extends Model
         );
     }
 }
-

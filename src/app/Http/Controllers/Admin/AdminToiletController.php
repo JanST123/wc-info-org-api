@@ -9,6 +9,7 @@ use App\Models\Place;
 use App\Models\Toilet;
 use App\Models\ToiletPhoto;
 use App\Models\ToiletProperty;
+use App\Services\GeminiPlaceMatchingService;
 use App\Services\GoogleCostService;
 use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
@@ -29,7 +30,7 @@ class AdminToiletController extends Controller
         private S3PhotoStorageService $s3,
         private GoogleCostService $costService,
         private ToiletRevisionService $revisionService,
-        private \App\Services\GeminiPlaceMatchingService $aiService,
+        private GeminiPlaceMatchingService $aiService,
     ) {}
 
     /**
@@ -741,8 +742,12 @@ class AdminToiletController extends Controller
                     $placeModel = Place::find($newPlaceId);
                     $newLat = $placeModel?->data['location']['latitude'] ?? $placeModel?->data['location']['lat'] ?? $placeModel?->data['geometry']['location']['lat'] ?? null;
                     $newLon = $placeModel?->data['location']['longitude'] ?? $placeModel?->data['location']['lng'] ?? $placeModel?->data['geometry']['location']['lng'] ?? null;
-                    if ($newLat !== null) $newLat = (float) $newLat;
-                    if ($newLon !== null) $newLon = (float) $newLon;
+                    if ($newLat !== null) {
+                        $newLat = (float) $newLat;
+                    }
+                    if ($newLon !== null) {
+                        $newLon = (float) $newLon;
+                    }
                 }
             }
 
@@ -780,7 +785,7 @@ class AdminToiletController extends Controller
                 $toilet,
                 'admin_place_assign',
                 $diff,
-                'Place assigned via admin' . ($applyCoordinates ? ' (with coordinates)' : '')
+                'Place assigned via admin'.($applyCoordinates ? ' (with coordinates)' : '')
             );
         }
 
@@ -943,7 +948,7 @@ class AdminToiletController extends Controller
                 $toilet,
                 'admin_public_accessible_change',
                 $diff,
-                'Public accessibility ' . ($newValue ? 'enabled' : 'disabled') . ' in admin'
+                'Public accessibility '.($newValue ? 'enabled' : 'disabled').' in admin'
             );
         }
 
@@ -952,7 +957,7 @@ class AdminToiletController extends Controller
                 'success' => true,
                 'toilet_id' => $toilet->id,
                 'public_accessible' => $newValue,
-                'message' => 'Public accessibility set to ' . ($newValue ? 'Yes' : 'No') . '.',
+                'message' => 'Public accessibility set to '.($newValue ? 'Yes' : 'No').'.',
             ]);
         }
 
@@ -1040,7 +1045,7 @@ class AdminToiletController extends Controller
                 $toilet,
                 'admin_name_change',
                 $diff,
-                "Toilet name updated to '" . ($toilet->name ?? 'Unnamed') . "' in admin"
+                "Toilet name updated to '".($toilet->name ?? 'Unnamed')."' in admin"
             );
         }
 

@@ -188,7 +188,7 @@ class UploadController extends Controller
             $this->mail->send(
                 $from,
                 'Photo von Toilette gelöscht - ID: '.$toiletId,
-                'https://wc-info.org/admin/toilets/'.$toiletId . ' photo id: ' . $photo->id . ' filename: ' . $newFilename
+                'https://wc-info.org/admin/toilets/'.$toiletId.' photo id: '.$photo->id.' filename: '.$newFilename
             );
 
             return response()->json([

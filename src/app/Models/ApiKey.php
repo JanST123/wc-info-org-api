@@ -43,6 +43,6 @@ class ApiKey extends Model
      */
     public static function generateKey(string $prefix = 'wc_'): string
     {
-        return $prefix . Str::random(32);
+        return $prefix.Str::random(32);
     }
 }

@@ -646,4 +646,3 @@ class DiscoverPlacesCommandTest extends TestCase
         $this->assertSame(0, $revisionCount);
     }
 }
-

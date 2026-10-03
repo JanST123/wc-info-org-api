@@ -32,21 +32,23 @@ class RepairToiletCoordinatesCommand extends Command
         $skipped = 0;
 
         foreach ($rows as $row) {
-            if (!empty($row->user_overridden)) {
+            if (! empty($row->user_overridden)) {
                 $userOverridden = json_decode($row->user_overridden, true);
                 if (in_array('lat', $userOverridden) || in_array('lon', $userOverridden)) {
                     if ($dryRun) {
                         $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> skipped due to user_overridden lat/lon");
                     }
                     $skipped++;
+
                     continue;
                 }
             }
-            if (round((float)$row->lat, 0) != (float)$row->lat || round((float)$row->lon, 0) != (float)$row->lon) {
+            if (round((float) $row->lat, 0) != (float) $row->lat || round((float) $row->lon, 0) != (float) $row->lon) {
                 if ($dryRun) {
                     $this->line("[DRY-RUN] id={$row->id} place_id={$row->place_id} -> skipped as not afftected");
                 }
                 $skipped++;
+
                 continue;
             }
 
@@ -55,6 +57,7 @@ class RepairToiletCoordinatesCommand extends Command
 
             if (! $location || ! isset($location['latitude'], $location['longitude'])) {
                 $skipped++;
+
                 continue;
             }
 

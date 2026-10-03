@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\AdminAuthController;
 use Tests\TestCase;
 
 class AdminAuthTest extends TestCase
@@ -74,7 +75,7 @@ class AdminAuthTest extends TestCase
         config(['wcinfo.admin.user' => 'testadmin']);
         config(['wcinfo.admin.password' => 'testpassword123']);
 
-        $token = \App\Http\Controllers\Admin\AdminAuthController::generateRememberToken();
+        $token = AdminAuthController::generateRememberToken();
 
         // Access protected route with remember cookie and no session
         $response = $this->withCookie('admin_remember', $token)

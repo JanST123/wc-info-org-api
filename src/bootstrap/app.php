@@ -9,6 +9,7 @@ use App\Http\Middleware\ValidateJsonBodyMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\HandleCors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,7 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->replace(\Illuminate\Http\Middleware\HandleCors::class, CorsMiddleware::class);
+        $middleware->replace(HandleCors::class, CorsMiddleware::class);
         $middleware->append(ValidateJsonBodyMiddleware::class);
         $middleware->append(RequestLogMiddleware::class);
 

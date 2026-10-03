@@ -4,6 +4,7 @@ namespace App\Exceptions;
 
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
@@ -38,7 +39,7 @@ class Handler
                 $response['file'] = $e->getFile();
                 $response['line'] = $e->getLine();
                 $response['trace'] = collect($e->getTrace())->map(function ($trace) {
-                    return \Illuminate\Support\Arr::except($trace, ['args']);
+                    return Arr::except($trace, ['args']);
                 })->all();
             }
 

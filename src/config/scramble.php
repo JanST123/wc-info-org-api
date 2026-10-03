@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Middleware\ApiKeyRateLimitMiddleware;
 use Dedoc\Scramble\Http\Middleware\RestrictedDocsAccess;
+use Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy;
+use Dedoc\Scramble\Support\Generator\SecurityScheme;
 
 return [
     /*
@@ -59,7 +62,7 @@ return [
             ."### Rate Limiting & Anti-Scraping\n"
             ."- **Standard Quota**: 40 requests/minute per client IP.\n"
             ."- **Exceeded Quota**: 120-second temporary hard block (`429 Too Many Requests` with `Retry-After`).\n"
-            ."- **Slowdown Penalty**: 300-second penalty phase with reduced quota (10 req/min) and artificial delay.",
+            .'- **Slowdown Penalty**: 300-second penalty phase with reduced quota (10 req/min) and artificial delay.',
     ],
 
     'ui' => [
@@ -179,10 +182,10 @@ return [
      * ],
      */
     'security_strategy' => [
-        \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
+        MiddlewareAuthSecurityStrategy::class,
         [
-            'middleware' => ['api.key', \App\Http\Middleware\ApiKeyRateLimitMiddleware::class],
-            'scheme' => \Dedoc\Scramble\Support\Generator\SecurityScheme::apiKey('header', 'X-Api-Key')
+            'middleware' => ['api.key', ApiKeyRateLimitMiddleware::class],
+            'scheme' => SecurityScheme::apiKey('header', 'X-Api-Key')
                 ->as('ApiKeyAuth')
                 ->setDescription('API Key authentication required for all public endpoints. Pass via `X-Api-Key` header, `Authorization: Bearer <key>`, or `?api_key=<key>`.'),
         ],
