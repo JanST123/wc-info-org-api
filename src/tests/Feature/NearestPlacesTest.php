@@ -9,7 +9,6 @@ use App\Models\GoogleApiLog;
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
 use App\Models\Type;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 

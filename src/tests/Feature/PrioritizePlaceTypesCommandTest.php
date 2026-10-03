@@ -24,8 +24,8 @@ class PrioritizePlaceTypesCommandTest extends TestCase
     public function test_command_prioritizes_place_types_and_supports_dry_run(): void
     {
         // 1. Setup a prioritized type (e.g., test_cafe_xxx) and a non-prioritized type (e.g., test_insurance_xxx)
-        $uniqueCafe = 'test_cafe_' . uniqid();
-        $uniqueInsurance = 'test_insurance_' . uniqid();
+        $uniqueCafe = 'test_cafe_'.uniqid();
+        $uniqueInsurance = 'test_insurance_'.uniqid();
 
         // Temporarily configure prioritized types
         config(['wcinfo.prioritized_place_types' => [
@@ -73,7 +73,7 @@ class PrioritizePlaceTypesCommandTest extends TestCase
 
     public function test_type_model_casts_and_fillable(): void
     {
-        $uniqueType = 'test_type_' . uniqid();
+        $uniqueType = 'test_type_'.uniqid();
         $type = Type::create([
             'type' => $uniqueType,
             'priorize' => 1,

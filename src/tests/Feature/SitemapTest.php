@@ -13,6 +13,7 @@ use Tests\TestCase;
 class SitemapTest extends TestCase
 {
     private array $createdToiletIds = [];
+
     private array $createdPlaceIds = [];
 
     protected function tearDown(): void

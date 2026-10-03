@@ -182,4 +182,3 @@ class ToiletRevisionTest extends TestCase
         $this->assertStringContainsString('Malformed JSON', $response->json('error'));
     }
 }
-

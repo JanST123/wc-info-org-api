@@ -16,6 +16,7 @@ use Tests\TestCase;
 class GeminiPlaceMatchingServiceTest extends TestCase
 {
     private array $createdToiletIds = [];
+
     private array $createdPlaceIds = [];
 
     protected function tearDown(): void

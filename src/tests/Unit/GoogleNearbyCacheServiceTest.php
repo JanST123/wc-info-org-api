@@ -17,7 +17,7 @@ class GoogleNearbyCacheServiceTest extends TestCase
     {
         parent::setUp();
         GoogleNearbySearchCache::truncate();
-        $this->service = new GoogleNearbyCacheService();
+        $this->service = new GoogleNearbyCacheService;
     }
 
     public function test_haversine_distance_calculation(): void
@@ -142,4 +142,3 @@ class GoogleNearbyCacheServiceTest extends TestCase
         $this->assertNotNull($hit);
     }
 }
-
