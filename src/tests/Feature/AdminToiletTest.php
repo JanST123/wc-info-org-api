@@ -83,6 +83,62 @@ class AdminToiletTest extends TestCase
         $response->assertSee('deleteRecentToilet('.$recentToilet->id, false);
     }
 
+    public function test_dashboard_recent_toilets_displays_type_icons_source_and_place_emoji(): void
+    {
+        $placeId = 'place_recent_test_'.uniqid();
+        Place::create([
+            'place_id' => $placeId,
+            'data' => [
+                'id' => $placeId,
+                'displayName' => ['text' => 'Central Station Restroom'],
+                'types' => ['public_bathroom', 'train_station'],
+            ],
+        ]);
+        $this->createdPlaceIds[] = $placeId;
+
+        $toilet = Toilet::create([
+            'name' => 'WC Central Station',
+            'owner' => 'City Services',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'status' => 'active',
+            'source' => 'auto_crawl_with_public_bathroom',
+            'place_id' => $placeId,
+            'created_at' => Carbon::now()->subHours(2),
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'has_wheelchair_access',
+            'value' => '1',
+        ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'has_changing_table',
+            'value' => '1',
+        ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'is_gender_separated',
+            'value' => '1',
+        ]);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->get('/admin');
+
+        $response->assertStatus(200);
+        // Type icons
+        $response->assertSee('♿');
+        $response->assertSee('👶');
+        $response->assertSee('🚹🚺');
+        // Source badge
+        $response->assertSee('AUTO CRAWL WITH PUBLIC BATHROOM');
+        // Place emoji & name
+        $response->assertSee('🚽');
+        $response->assertSee('Central Station Restroom');
+    }
+
     public function test_update_status_sets_toilet_to_deleted(): void
     {
         $toilet = Toilet::create([

@@ -47,7 +47,7 @@ class AdminToiletController extends Controller
                         ->where('updated', '>=', $since);
                 });
         })
-            ->with(['properties', 'photos'])
+            ->with(['properties', 'photos', 'place'])
             ->orderByDesc('id')
             ->get();
 

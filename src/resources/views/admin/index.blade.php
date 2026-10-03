@@ -367,12 +367,14 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 80px;">ID</th>
+                        <th style="width: 70px;">ID</th>
                         <th>Name & Owner</th>
+                        <th>Types</th>
+                        <th>Source</th>
                         <th>Status</th>
                         <th>Qualified</th>
                         <th>Coordinates</th>
-                        <th>Place ID</th>
+                        <th>Place</th>
                         <th>Created / Updated</th>
                         <th style="text-align: right;">Action</th>
                     </tr>
@@ -390,9 +392,55 @@
                                     {{ $toilet->name ?: 'Unnamed Toilet' }}
                                 </a>
                                 @if (!empty($toilet->owner))
-                                    <div style="font-size: 0.75rem; color: var(--gray-500);">
-                                        {{ $toilet->owner }}
+                                    <div style="font-size: 0.75rem; color: var(--gray-500); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.125rem;">
+                                        @if ($toilet->place?->getEmoji())
+                                            <span>{{ $toilet->place->getEmoji() }}</span>
+                                        @endif
+                                        <span>{{ $toilet->owner }}</span>
                                     </div>
+                                @endif
+                            </td>
+                            <td style="white-space: nowrap;">
+                                <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                                    @php
+                                        $hasAnyType = false;
+                                    @endphp
+                                    @if ($toilet->isFlagSet('has_wheelchair_access'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Wheelchair Accessible (♿)" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #e0f2fe; border-radius: 4px; font-size: 0.875rem;">♿</span>
+                                    @endif
+                                    @if ($toilet->isFlagSet('has_changing_table'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Changing Table (👶)" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #fef3c7; border-radius: 4px; font-size: 0.875rem;">👶</span>
+                                    @endif
+                                    @if ($toilet->isFlagSet('is_gender_separated'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Gender Separated (🚹🚺)" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; height: 24px; background: #f1f5f9; border-radius: 4px; font-size: 0.8125rem;">🚹🚺</span>
+                                    @elseif ($toilet->isFlagSet('is_unisex'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Unisex (⚧)" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #f3e8ff; border-radius: 4px; font-size: 0.875rem;">⚧</span>
+                                    @endif
+                                    @if ($toilet->isFlagSet('public_accessible'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Publicly Accessible (🌐)" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #dcfce7; border-radius: 4px; font-size: 0.875rem;">🌐</span>
+                                    @endif
+                                    @if ($toilet->isFlagSet('euro_key'))
+                                        @php $hasAnyType = true; @endphp
+                                        <span title="Euro-Key Required (🔑)" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #fef9c3; border-radius: 4px; font-size: 0.875rem;">🔑</span>
+                                    @endif
+
+                                    @if (! $hasAnyType)
+                                        <span style="color: var(--gray-400); font-size: 0.8125rem;">-</span>
+                                    @endif
+                                </div>
+                            </td>
+                            <td>
+                                @if (!empty($toilet->source))
+                                    <span class="badge" style="background: #ede9fe; color: #5b21b6; font-size: 0.6875rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.03em;" title="Source: {{ $toilet->source }}">
+                                        {{ strtoupper(str_replace('_', ' ', $toilet->source)) }}
+                                    </span>
+                                @else
+                                    <span style="color: var(--gray-400); font-size: 0.8125rem;">-</span>
                                 @endif
                             </td>
                             <td id="recent-status-{{ $toilet->id }}">
@@ -436,9 +484,26 @@
                                     <span style="color: var(--gray-400);">-</span>
                                 @endif
                             </td>
-                            <td style="font-family: monospace; font-size: 0.75rem;">
-                                @if ($toilet->place_id)
-                                    <span title="{{ $toilet->place_id }}">{{ \Illuminate\Support\Str::limit($toilet->place_id, 18) }}</span>
+                            <td style="font-size: 0.8125rem;">
+                                @if ($toilet->place)
+                                    @php
+                                        $placeEmoji = $toilet->place->getEmoji() ?: '📍';
+                                        $placeName = $toilet->place->getName();
+                                    @endphp
+                                    <div style="font-weight: 600; color: var(--gray-900); display: flex; align-items: center; gap: 0.35rem;" title="{{ $placeName }}">
+                                        <span style="font-size: 1rem; line-height: 1;">{{ $placeEmoji }}</span>
+                                        <span>{{ \Illuminate\Support\Str::limit($placeName ?: 'Place without name', 26) }}</span>
+                                    </div>
+                                    <div style="font-family: monospace; font-size: 0.6875rem; color: var(--gray-400); margin-top: 0.15rem;" title="{{ $toilet->place_id }}">
+                                        {{ \Illuminate\Support\Str::limit($toilet->place_id, 20) }}
+                                    </div>
+                                @elseif ($toilet->place_id)
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <span style="font-size: 1rem; line-height: 1;">📍</span>
+                                        <span style="font-family: monospace; font-size: 0.75rem; color: var(--gray-600);" title="{{ $toilet->place_id }}">
+                                            {{ \Illuminate\Support\Str::limit($toilet->place_id, 20) }}
+                                        </span>
+                                    </div>
                                 @else
                                     <span style="color: var(--gray-400);">-</span>
                                 @endif
@@ -477,7 +542,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 3rem 1rem; color: var(--gray-500);">
+                            <td colspan="10" style="text-align: center; padding: 3rem 1rem; color: var(--gray-500);">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
                                 <div style="font-weight: 600; font-size: 1rem; color: var(--gray-700);">No toilets added in the last 24 hours</div>
                                 <div style="font-size: 0.875rem; margin-top: 0.25rem;">Use the search box above to open any existing toilet by its ID.</div>
