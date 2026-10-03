@@ -25,6 +25,7 @@ class PlaceToiletServiceTest extends TestCase
 
         parent::tearDown();
     }
+
     public function test_update_respects_user_overridden_properties(): void
     {
         $toilet = Toilet::create([
@@ -436,5 +437,71 @@ class PlaceToiletServiceTest extends TestCase
         $this->assertNotEquals($deletedToilet->id, $newToilet->id);
         $this->assertSame('active', $newToilet->status);
         $this->createdToiletIds[] = $newToilet->id;
+    }
+
+    public function test_create_toilet_from_public_bathroom_without_website_is_active_and_public(): void
+    {
+        $placeId = 'place_pb_no_web_'.uniqid();
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('crawlWebsite');
+
+        $service = new PlaceToiletService($placesService);
+
+        $toilet = $service->createToiletFromPlace([
+            'id' => $placeId,
+            'displayName' => ['text' => 'Public Restroom Test'],
+            'location' => ['latitude' => 52.52, 'longitude' => 13.40],
+            'types' => ['public_bathroom', 'point_of_interest'],
+        ]);
+
+        $this->assertNotNull($toilet);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('auto_crawl_with_public_bathroom', $toilet->source);
+        $this->assertSame('WC #'.$toilet->id, $toilet->name);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['public_accessible'] ?? null);
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertArrayNotHasKey('has_wheelchair_access', $properties);
+    }
+
+    public function test_create_toilet_from_public_bathroom_with_wheelchair_access(): void
+    {
+        $placeId = 'place_pb_wheelchair_'.uniqid();
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('crawlWebsite');
+
+        $service = new PlaceToiletService($placesService);
+
+        $toilet = $service->createToiletFromPlace([
+            'id' => $placeId,
+            'displayName' => ['text' => 'Accessible Public Toilet'],
+            'location' => ['latitude' => 52.52, 'longitude' => 13.40],
+            'types' => ['public_bathroom'],
+            'accessibilityOptions' => [
+                'wheelchairAccessibleEntrance' => true,
+            ],
+        ]);
+
+        $this->assertNotNull($toilet);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('auto_crawl_with_public_bathroom', $toilet->source);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['public_accessible'] ?? null);
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
     }
 }

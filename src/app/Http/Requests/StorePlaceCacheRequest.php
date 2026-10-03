@@ -36,6 +36,12 @@ class StorePlaceCacheRequest extends FormRequest
             'opening_hours' => ['nullable', 'array'],
             'openingHours' => ['nullable', 'array'],
             'types' => ['nullable', 'array'],
+            'businessStatus' => ['nullable', 'string'],
+            'business_status' => ['nullable', 'string'],
+            'accessibilityOptions' => ['nullable', 'array'],
+            'accessibilityOptions.wheelchairAccessibleEntrance' => ['nullable', 'boolean'],
+            'accessibility_options' => ['nullable', 'array'],
+            'accessibility_options.wheelchair_accessible_entrance' => ['nullable', 'boolean'],
         ];
     }
 }
