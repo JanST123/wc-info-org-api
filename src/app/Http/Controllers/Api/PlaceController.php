@@ -72,7 +72,7 @@ class PlaceController extends Controller
         try {
             $toilet = $this->placeToiletService->createToiletFromPlace($input);
 
-            if ($toilet && $toilet->source === 'auto_crawl') {
+            if (strpos($toilet && $toilet->source, 'auto_crawl') === 0) {
                 $fetchedPlace = true;
             }
 

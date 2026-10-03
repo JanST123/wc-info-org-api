@@ -44,7 +44,7 @@ class GooglePlacesService
         $endpoint = "https://places.googleapis.com/v1/places/{$placeId}";
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
-            'X-Goog-FieldMask' => 'id,displayName,location,regularOpeningHours,websiteUri,formattedAddress,types,business_status',
+            'X-Goog-FieldMask' => 'id,displayName,location,regularOpeningHours,websiteUri,formattedAddress,types,business_status,accessibilityOptions',
         ])->get($endpoint, [
             'languageCode' => 'de',
         ]);
@@ -316,7 +316,7 @@ class GooglePlacesService
 
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
-            'X-Goog-FieldMask' => 'places.id,places.displayName,places.location,places.regularOpeningHours,places.websiteUri,places.formattedAddress,places.types,places.business_status',
+            'X-Goog-FieldMask' => 'places.id,places.displayName,places.location,places.regularOpeningHours,places.websiteUri,places.formattedAddress,places.types,places.business_status,places.accessibilityOptions',
         ])->post($endpoint, [
             'languageCode' => 'de',
             'locationRestriction' => [

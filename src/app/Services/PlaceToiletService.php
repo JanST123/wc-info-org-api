@@ -51,7 +51,21 @@ class PlaceToiletService
         } 
         $details = $this->resolveDetails($placeData, $fetchedDetails);
 
-        if (empty($details['website'])) {
+
+
+        // if the place type is 'public_bathroom' we force adding this toilet as active and public_accessible, regardless of the crawl result
+        $isPublicBathroom = false;
+        if (array_search('public_bathroom', $details['types']) !== false) {
+            $isPublicBathroom = true;
+            Log::info('Place is of public_bathroom type, force creating an active, public_accessible toilet', [
+                'place_id' => $placeId,
+                'place_name' => $details['name'] ?? null,
+            ]);
+        }
+
+
+
+        if (!$isPublicBathroom && empty($details['website'])) {
             Log::info('Place has no website, creating hidden toilet', [
                 'place_id' => $placeId,
                 'place_name' => $details['name'] ?? null,
@@ -60,29 +74,54 @@ class PlaceToiletService
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
-        // Log::debug('Place has a website');
 
-        $crawlResult = $this->crawlWithLogging($placeId, $details['website']);
+        $crawlResult = empty($details['website']) ? null : $this->crawlWithLogging($placeId, $details['website']);
 
-        if ($crawlResult === null) {
+        if (!$isPublicBathroom && $crawlResult === null) {
             // Log::debug('Crawl returned without result');
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
         // Log::debug('Crawl had a result: ' . print_r($crawlResult, 1));
 
-        $toiletType = $crawlResult['toiletType'] ?? 'none';
-        $contactEmail = $crawlResult['contactEmail'] ?? '';
-        $status = $toiletType === 'none' ? 'hidden' : 'active';
+        $status = 'active';
+        $toiletType = 'none';
 
-        Log::info('Crawl result parsed', [
-            'place_id' => $placeId,
-            'website' => $details['website'],
-            'toilet_type' => $toiletType,
-            'status' => $status,
-            'contact_email' => $contactEmail,
-            'result_count' => $crawlResult['resultCount'] ?? null,
-        ]);
+        
+        $toiletType = $crawlResult['toiletType'] ?? 'none'; 
+        if ($isPublicBathroom) {
+            // if it's a public bathroom we can at least say it IS a toilet, so not none
+            if ($details['wheelchairAccessibleEntrance']) {
+                // we know at least the toilet has disability features
+                if ($toiletType === 'none') {
+                    // we can at least set the disabled access
+                    $toiletType = 'd';
+
+                } else if(strpos($toiletType, 'd') === false) {
+                    // we append the disabled access if not catched by page crawl
+                    $toiletType .= 'd';
+                }
+            } else if ($toiletType === 'none') {
+                // then we know at least it's not none
+                $toiletType = 'forall';
+            }
+        }
+
+        $status = $toiletType === 'none' ? 'hidden' : 'active';
+            
+        
+        $contactEmail = $crawlResult['contactEmail'] ?? '';
+
+        if ($crawlResult !== null) {
+            Log::info('Crawl result parsed', [
+                'place_id' => $placeId,
+                'website' => $details['website'],
+                'toilet_type' => $toiletType,
+                'status' => $status,
+                'contact_email' => $contactEmail,
+                'result_count' => $crawlResult['resultCount'] ?? null,
+            ]);
+        }
 
         
         $toilet = Toilet::create([
@@ -93,7 +132,7 @@ class PlaceToiletService
             'place_id' => $placeId,
             'contact_email' => $contactEmail,
             'status' => $status,
-            'source' => 'auto_crawl',
+            'source' => $isPublicBathroom ? 'auto_crawl_with_public_bathroom' : 'auto_crawl',
             'last_places_fetch' => now(),
             'last_crawled' => now(),
             'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
@@ -104,7 +143,9 @@ class PlaceToiletService
             $toilet->update(['name' => 'WC #'.$toilet->id]);
 
             $this->applyTypeFlags($toilet->id, $toiletType);
-            $this->insertProperty($toilet->id, 'website', $details['website']);
+            if (!empty($details['website'])) {
+                $this->insertProperty($toilet->id, 'website', $details['website']);
+            }
 
             if (is_array($details['openingHours']) && isset($details['openingHours']['periods'])) {
                 $this->insertProperty($toilet->id, 'place_opening_hours', json_encode($details['openingHours']['periods']));
@@ -116,7 +157,7 @@ class PlaceToiletService
 
             $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
 
-            if (self::isPublicAccessibleType($placeTypes)) {
+            if ($isPublicBathroom || self::isPublicAccessibleType($placeTypes)) {
                 $this->insertProperty($toilet->id, 'public_accessible', '1');
             }
 
@@ -302,6 +343,8 @@ class PlaceToiletService
             if (! is_array($types)) {
                 $types = null;
             }
+            
+            $wheelchairAccessibleEntrance = isset($data['accessibilityOptions']) && isset($data['accessibilityOptions']['wheelchairAccessibleEntrance']) ? $data['accessibilityOptions']['wheelchairAccessibleEntrance'] : false;
 
             return [
                 'place_id' => $placeId,
@@ -312,6 +355,7 @@ class PlaceToiletService
                 'formattedAddress' => $address,
                 'types' => $types,
                 'businessStatus' => $businessStatus,
+                'wheelchairAccessibleEntrance' => $wheelchairAccessibleEntrance
             ];
         };
 
@@ -326,7 +370,7 @@ class PlaceToiletService
             $details['formattedAddress'] = $fetched['formattedAddress'] ?? $details['formattedAddress'];
             $details['types'] = $fetched['types'] ?? $details['types'];
             $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
-        } elseif (empty($details['website']) || empty($details['name']) || empty($details['location'])) {
+        } elseif (empty($details['website']) || empty($details['name']) || empty($details['location']) || empty($details['accessibilityOptions']) ) {
             $placeId = $details['place_id'] ?? $placeData['place_id'] ?? $placeData['id'] ?? null;
             if ($placeId) {
                 $fetchedRaw = $this->placesService->fetchPlaceDetails($placeId);
