@@ -40,13 +40,14 @@ class AdminToiletController extends Controller
     {
         $since = Carbon::now()->subHours(24);
 
-        $recentToilets = Toilet::where(function ($query) use ($since) {
-            $query->where('created_at', '>=', $since)
-                ->orWhere(function ($q) use ($since) {
-                    $q->whereNull('created_at')
-                        ->where('updated', '>=', $since);
-                });
-        })
+        $recentToilets = Toilet::where('status', 'active')
+            ->where(function ($query) use ($since) {
+                $query->where('created_at', '>=', $since)
+                    ->orWhere(function ($q) use ($since) {
+                        $q->whereNull('created_at')
+                            ->where('updated', '>=', $since);
+                    });
+            })
             ->with(['properties', 'photos', 'place'])
             ->orderByDesc('id')
             ->get();

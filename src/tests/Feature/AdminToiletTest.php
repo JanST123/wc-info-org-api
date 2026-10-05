@@ -55,7 +55,7 @@ class AdminToiletTest extends TestCase
 
     public function test_dashboard_lists_toilets_added_in_last_24_hours(): void
     {
-        // 1. Toilet created recently (e.g. now)
+        // 1. Active toilet created recently (e.g. 10 mins ago)
         $recentToilet = Toilet::create([
             'name' => 'Recent Admin Toilet 24h',
             'owner' => 'City Council',
@@ -66,7 +66,26 @@ class AdminToiletTest extends TestCase
         ]);
         $this->createdToiletIds[] = $recentToilet->id;
 
-        // 2. Toilet created 3 days ago
+        // 2. Hidden toilet created recently (e.g. 5 mins ago) - should NOT be in recent list
+        $recentHiddenToilet = Toilet::create([
+            'name' => 'Recent Hidden Toilet 24h',
+            'owner' => 'Private Office',
+            'lat' => 52.5201,
+            'lon' => 13.4051,
+            'status' => 'hidden',
+            'created_at' => Carbon::now()->subMinutes(5),
+        ]);
+        $this->createdToiletIds[] = $recentHiddenToilet->id;
+
+        // 3. Deleted toilet created recently (e.g. 5 mins ago) - should NOT be in recent list
+        $recentDeletedToilet = Toilet::create([
+            'name' => 'Recent Deleted Toilet 24h',
+            'status' => 'deleted',
+            'created_at' => Carbon::now()->subMinutes(5),
+        ]);
+        $this->createdToiletIds[] = $recentDeletedToilet->id;
+
+        // 4. Active toilet created 3 days ago - should NOT be in recent list
         $oldToilet = Toilet::create([
             'name' => 'Old Toilet 3 Days Ago',
             'status' => 'active',
@@ -81,6 +100,11 @@ class AdminToiletTest extends TestCase
         $response->assertSee('Recent Admin Toilet 24h');
         $response->assertSee((string) $recentToilet->id);
         $response->assertSee('deleteRecentToilet('.$recentToilet->id, false);
+
+        // Hidden, deleted and old toilets should not appear in recent list
+        $response->assertDontSee('Recent Hidden Toilet 24h');
+        $response->assertDontSee('Recent Deleted Toilet 24h');
+        $response->assertDontSee('Old Toilet 3 Days Ago');
     }
 
     public function test_dashboard_recent_toilets_displays_type_icons_source_and_place_emoji(): void
