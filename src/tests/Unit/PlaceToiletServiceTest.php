@@ -504,4 +504,38 @@ class PlaceToiletServiceTest extends TestCase
         $this->assertSame('1', $properties['is_unisex'] ?? null);
         $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
     }
+
+    public function test_create_toilet_from_public_bathroom_with_wheelchair_accessible_restroom(): void
+    {
+        $placeId = 'place_pb_restroom_'.uniqid();
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $placesService->expects($this->never())->method('crawlWebsite');
+
+        $service = new PlaceToiletService($placesService);
+
+        $toilet = $service->createToiletFromPlace([
+            'id' => $placeId,
+            'displayName' => ['text' => 'Accessible Restroom Public Toilet'],
+            'location' => ['latitude' => 52.52, 'longitude' => 13.40],
+            'types' => ['public_bathroom'],
+            'accessibilityOptions' => [
+                'wheelchairAccessibleRestroom' => true,
+            ],
+        ]);
+
+        $this->assertNotNull($toilet);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('auto_crawl_with_public_bathroom', $toilet->source);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['public_accessible'] ?? null);
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
+    }
 }

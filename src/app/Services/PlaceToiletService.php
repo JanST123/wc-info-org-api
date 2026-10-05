@@ -81,7 +81,7 @@ class PlaceToiletService
             if ($toiletType === 'none') {
                 $toiletType = 'forall';
             }
-            if (! empty($details['wheelchairAccessibleEntrance']) && ! str_contains($toiletType, 'd')) {
+            if ((! empty($details['wheelchairAccessibleEntrance']) || ! empty($details['wheelchairAccessibleRestroom'])) && ! str_contains($toiletType, 'd')) {
                 $toiletType .= 'd';
             }
         }
@@ -322,7 +322,15 @@ class PlaceToiletService
 
             $wheelchairAccessibleEntrance = isset($data['accessibilityOptions']['wheelchairAccessibleEntrance'])
                 ? (bool) $data['accessibilityOptions']['wheelchairAccessibleEntrance']
-                : false;
+                : (isset($data['accessibility_options']['wheelchair_accessible_entrance'])
+                    ? (bool) $data['accessibility_options']['wheelchair_accessible_entrance']
+                    : (bool) ($data['wheelchairAccessibleEntrance'] ?? false));
+
+            $wheelchairAccessibleRestroom = isset($data['accessibilityOptions']['wheelchairAccessibleRestroom'])
+                ? (bool) $data['accessibilityOptions']['wheelchairAccessibleRestroom']
+                : (isset($data['accessibility_options']['wheelchair_accessible_restroom'])
+                    ? (bool) $data['accessibility_options']['wheelchair_accessible_restroom']
+                    : (bool) ($data['wheelchairAccessibleRestroom'] ?? false));
 
             return [
                 'place_id' => $placeId,
@@ -334,6 +342,7 @@ class PlaceToiletService
                 'types' => $types,
                 'businessStatus' => $businessStatus,
                 'wheelchairAccessibleEntrance' => $wheelchairAccessibleEntrance,
+                'wheelchairAccessibleRestroom' => $wheelchairAccessibleRestroom,
             ];
         };
 
@@ -349,6 +358,7 @@ class PlaceToiletService
             $details['types'] = $fetched['types'] ?? $details['types'];
             $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
             $details['wheelchairAccessibleEntrance'] = $fetched['wheelchairAccessibleEntrance'] ?? $details['wheelchairAccessibleEntrance'];
+            $details['wheelchairAccessibleRestroom'] = $fetched['wheelchairAccessibleRestroom'] ?? $details['wheelchairAccessibleRestroom'];
         } elseif (empty($details['website']) || empty($details['name']) || empty($details['location'])) {
             $placeId = $details['place_id'] ?? $placeData['place_id'] ?? $placeData['id'] ?? null;
             if ($placeId) {
@@ -363,6 +373,7 @@ class PlaceToiletService
                     $details['types'] = $fetched['types'] ?? $details['types'];
                     $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
                     $details['wheelchairAccessibleEntrance'] = $fetched['wheelchairAccessibleEntrance'] ?? $details['wheelchairAccessibleEntrance'];
+                    $details['wheelchairAccessibleRestroom'] = $fetched['wheelchairAccessibleRestroom'] ?? $details['wheelchairAccessibleRestroom'];
                 }
             }
         }

@@ -123,6 +123,45 @@ class PlaceStorePublicBathroomTest extends TestCase
         $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
     }
 
+    public function test_store_place_with_public_bathroom_and_wheelchair_accessible_restroom(): void
+    {
+        $placeId = 'place_pb_wc_restroom_store_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $response = $this->withHeaders(['X-Api-Key' => 'wc_test_key_abc123'])->postJson("/places/{$placeId}", [
+            'id' => $placeId,
+            'displayName' => ['text' => 'Accessible Restroom Zoo'],
+            'location' => ['latitude' => 52.5080, 'longitude' => 13.3320],
+            'types' => ['public_bathroom'],
+            'accessibilityOptions' => [
+                'wheelchairAccessibleRestroom' => true,
+            ],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'okay',
+                'fetchedPlace' => true,
+            ]);
+
+        $newToiletId = $response->json('newToiletId');
+        $this->assertNotNull($newToiletId);
+        $this->createdToiletIds[] = $newToiletId;
+
+        $toilet = Toilet::find($newToiletId);
+        $this->assertNotNull($toilet);
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('auto_crawl_with_public_bathroom', $toilet->source);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['public_accessible'] ?? null);
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
+    }
+
     public function test_store_place_with_non_public_type_and_no_website_creates_hidden_toilet(): void
     {
         $placeId = 'place_hidden_store_'.uniqid();

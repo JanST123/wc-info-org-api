@@ -40,8 +40,10 @@ class StorePlaceCacheRequest extends FormRequest
             'business_status' => ['nullable', 'string'],
             'accessibilityOptions' => ['nullable', 'array'],
             'accessibilityOptions.wheelchairAccessibleEntrance' => ['nullable', 'boolean'],
+            'accessibilityOptions.wheelchairAccessibleRestroom' => ['nullable', 'boolean'],
             'accessibility_options' => ['nullable', 'array'],
             'accessibility_options.wheelchair_accessible_entrance' => ['nullable', 'boolean'],
+            'accessibility_options.wheelchair_accessible_restroom' => ['nullable', 'boolean'],
         ];
     }
 }
