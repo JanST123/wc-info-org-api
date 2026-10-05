@@ -131,7 +131,7 @@ class UploadController extends Controller
         $this->mail->send(
             $from,
             'Toilette mit Fotos hinzugefügt - ID: '.$toiletId,
-            'https://wc-info.org/admin/toilets/'.$toiletId
+            'https://api.wc-info.org/admin/toilets/'.$toiletId
         );
 
         return response()->json(['success' => true]);
@@ -188,7 +188,7 @@ class UploadController extends Controller
             $this->mail->send(
                 $from,
                 'Photo von Toilette gelöscht - ID: '.$toiletId,
-                'https://wc-info.org/admin/toilets/'.$toiletId.' photo id: '.$photo->id.' filename: '.$newFilename
+                'https://api.wc-info.org/admin/toilets/'.$toiletId.' photo id: '.$photo->id.' filename: '.$newFilename
             );
 
             return response()->json([
