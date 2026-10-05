@@ -1310,4 +1310,40 @@ class AdminToiletTest extends TestCase
         $resView->assertStatus(200);
         $resView->assertSee('☕🚾♿️ Cafe with Restroom and Wheelchair');
     }
+
+    public function test_dashboard_flagged_toilets_displays_type_icons(): void
+    {
+        $flaggedToilet = Toilet::create([
+            'name' => 'Flagged Toilet with Icons',
+            'status' => 'active',
+            'flagged' => 1,
+            'source' => 'auto_crawl_with_public_bathroom',
+        ]);
+        $this->createdToiletIds[] = $flaggedToilet->id;
+
+        ToiletProperty::create([
+            'fk_toiletId' => $flaggedToilet->id,
+            'type' => 'has_wheelchair_access',
+            'value' => '1',
+        ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $flaggedToilet->id,
+            'type' => 'is_unisex',
+            'value' => '1',
+        ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $flaggedToilet->id,
+            'type' => 'public_accessible',
+            'value' => '1',
+        ]);
+
+        $response = $this->withSession(['admin_logged_in' => true])
+            ->get('/admin');
+
+        $response->assertStatus(200);
+        $response->assertSee('Flagged Toilet with Icons');
+        $response->assertSee('Wheelchair Accessible (♿)');
+        $response->assertSee('Unisex (⚧)');
+        $response->assertSee('Publicly Accessible (🌐)');
+    }
 }
