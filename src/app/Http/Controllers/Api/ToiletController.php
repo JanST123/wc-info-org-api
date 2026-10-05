@@ -399,7 +399,7 @@ class ToiletController extends Controller
 
         if (count($diff) > 0) {
             $toilet->update([
-                'email_sent' => 2,
+                'email_sent' => $toilet->email_sent === 0 ? 0 : 2, // if its a new toilet keep email_sent as 0, otherwise set to 2 (needs re-notification)
                 'last_diff' => json_encode($diff),
             ]);
             $this->revisionService->recordRevision($toilet, 'api_patch', $diff);
