@@ -104,6 +104,7 @@ This runs the following commands according to their schedule in `routes/console.
 
 - `app:notify-new-toilets` — daily email with newly added toilets
 - `app:notify-updated-toilets` — daily email with updated toilets
+- `app:notify-flagged-toilets` — daily email if there are toilets flagged for more than 48 hours
 - `app:discover-places` — daily Google Places discovery run around a random active toilet without recent place data
 
 Configure discovery behaviour with these `.env` values:

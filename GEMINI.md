@@ -138,6 +138,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:discover-places`: Daily crawler discovering/refreshing Google Places metadata for active toilets (prioritizing toilets with `last_included > last_discovered`).
 - `php artisan app:notify-new-toilets`: Daily notification email with newly added toilets.
 - `php artisan app:notify-updated-toilets`: Daily notification email with updated toilets and deleted photos.
+- `php artisan app:notify-flagged-toilets [--hours=48] [--dry-run]`: Daily notification email if there are toilets flagged for more than 48 hours.
 - `php artisan app:detect-duplicate-toilets [--distance=10] [--dry-run] [--no-relink-photos]`: Detects duplicate toilets by identical place_id or coordinate proximity (<=10m) and marks duplicates as deleted and unflagged.
 - `php artisan app:convert-places-v2`: Converts legacy place cache records to Places API (New) format.
 - `php artisan app:extract-nearby-cache-places [--dry-run] [--force] [--update-toilets]`: Extracts places from `google_nearby_search_cache` and adds/updates them in the `places` table (enriching missing `regularOpeningHours`, `websiteUri`, etc.).
