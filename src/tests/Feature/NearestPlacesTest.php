@@ -202,6 +202,13 @@ class NearestPlacesTest extends TestCase
         $this->assertArrayHasKey('distance', $response->json('places.0'));
         $this->assertIsNumeric($response->json('places.0.distance'));
 
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return isset($data['excludedTypes'])
+                && $data['excludedTypes'] === ['lodging', 'post_office', 'shipping_service', 'atm', 'finance'];
+        });
+
         // Check that result was stored in google_nearby_search_cache table
         $savedCache = GoogleNearbySearchCache::whereBetween('lat', [$lat - 0.001, $lat + 0.001])
             ->whereBetween('lon', [$lon - 0.001, $lon + 0.001])
@@ -295,5 +302,67 @@ class NearestPlacesTest extends TestCase
         $this->assertSame('place_public_bathroom_25m', $places[0]['id']);
         $this->assertSame('place_cafe_10m', $places[1]['id']);
         $this->assertSame('place_ins_5m', $places[2]['id']);
+    }
+
+    public function test_nearest_places_ignores_places_with_excluded_types_from_cache(): void
+    {
+        $centerLat = 52.5200;
+        $centerLon = 13.4050;
+
+        $placeHotel = [
+            'id' => 'place_hotel_5m',
+            'displayName' => ['text' => 'Hotel 5m'],
+            'location' => ['latitude' => 52.520045, 'longitude' => 13.4050],
+            'types' => ['lodging'],
+        ];
+
+        $placePost = [
+            'id' => 'place_post_10m',
+            'displayName' => ['text' => 'Post 10m'],
+            'location' => ['latitude' => 52.520090, 'longitude' => 13.4050],
+            'types' => ['post_office'],
+        ];
+
+        $placeAtm = [
+            'id' => 'place_atm_15m',
+            'displayName' => ['text' => 'ATM 15m'],
+            'location' => ['latitude' => 52.520135, 'longitude' => 13.4050],
+            'types' => ['atm', 'finance'],
+        ];
+
+        $placeShipping = [
+            'id' => 'place_shipping_20m',
+            'displayName' => ['text' => 'Shipping 20m'],
+            'location' => ['latitude' => 52.520180, 'longitude' => 13.4050],
+            'types' => ['shipping_service'],
+        ];
+
+        $placeCafe = [
+            'id' => 'place_cafe_25m',
+            'displayName' => ['text' => 'Cafe 25m'],
+            'location' => ['latitude' => 52.520225, 'longitude' => 13.4050],
+            'types' => ['cafe'],
+        ];
+
+        $cache = GoogleNearbySearchCache::create([
+            'lat' => $centerLat,
+            'lon' => $centerLon,
+            'radius_meters' => 100.0,
+            'query_params' => ['maxResultCount' => 20],
+            'response_places' => [$placeHotel, $placePost, $placeAtm, $placeShipping, $placeCafe],
+            'result_count' => 5,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->createdCacheIds[] = $cache->id;
+
+        $response = $this->getJson("/places/nearest/{$centerLat}/{$centerLon}?limit=5&radius=50");
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'okay')
+            ->assertJsonCount(1, 'places');
+
+        $places = $response->json('places');
+        $this->assertSame('place_cafe_25m', $places[0]['id']);
     }
 }

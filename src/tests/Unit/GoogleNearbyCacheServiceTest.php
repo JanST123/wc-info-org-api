@@ -141,4 +141,53 @@ class GoogleNearbyCacheServiceTest extends TestCase
         $hit = $this->service->findEnclosingCache(52.5201, 13.4000, 20.0);
         $this->assertNotNull($hit);
     }
+
+    public function test_filter_cached_places_ignores_places_with_excluded_types(): void
+    {
+        $places = [
+            [
+                'id' => 'place-hotel',
+                'displayName' => ['text' => 'Grand Hotel'],
+                'location' => ['latitude' => 52.5201, 'longitude' => 13.4001],
+                'types' => ['lodging', 'point_of_interest'],
+            ],
+            [
+                'id' => 'place-post',
+                'displayName' => ['text' => 'City Post Office'],
+                'location' => ['latitude' => 52.5202, 'longitude' => 13.4002],
+                'types' => ['post_office'],
+            ],
+            [
+                'id' => 'place-atm',
+                'displayName' => ['text' => 'Bank ATM'],
+                'location' => ['latitude' => 52.5203, 'longitude' => 13.4003],
+                'types' => ['atm', 'finance'],
+            ],
+            [
+                'id' => 'place-shipping',
+                'displayName' => ['text' => 'Express Shipping'],
+                'location' => ['latitude' => 52.5204, 'longitude' => 13.4004],
+                'types' => ['shipping_service'],
+            ],
+            [
+                'id' => 'place-cafe',
+                'displayName' => ['text' => 'Nice Cafe'],
+                'location' => ['latitude' => 52.5205, 'longitude' => 13.4005],
+                'types' => ['cafe', 'food'],
+            ],
+            [
+                'id' => 'place-toilet',
+                'displayName' => ['text' => 'Public Restroom'],
+                'location' => ['latitude' => 52.5206, 'longitude' => 13.4006],
+                'types' => ['public_bathroom'],
+            ],
+        ];
+
+        $filtered = $this->service->filterCachedPlaces($places, 52.5200, 13.4000, 500.0);
+
+        // Should only contain 'place-cafe' and 'place-toilet'
+        $this->assertCount(2, $filtered);
+        $ids = array_column($filtered, 'id');
+        $this->assertEquals(['place-cafe', 'place-toilet'], $ids);
+    }
 }

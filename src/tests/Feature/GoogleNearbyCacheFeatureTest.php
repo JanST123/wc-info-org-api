@@ -55,6 +55,12 @@ class GoogleNearbyCacheFeatureTest extends TestCase
         $this->assertCount(2, $results1);
 
         Http::assertSentCount(1);
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return isset($data['excludedTypes'])
+                && $data['excludedTypes'] === ['lodging', 'post_office', 'shipping_service', 'atm', 'finance'];
+        });
         $this->assertEquals(1, GoogleNearbySearchCache::count());
         $this->assertEquals(1, GoogleApiLog::count());
 

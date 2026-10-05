@@ -12,6 +12,14 @@ use RuntimeException;
 
 class GooglePlacesService
 {
+    public const EXCLUDED_NEARBY_TYPES = [
+        'lodging',
+        'post_office',
+        'shipping_service',
+        'atm',
+        'finance',
+    ];
+
     private string $apiKey;
 
     private GoogleCostService $costService;
@@ -330,6 +338,7 @@ class GooglePlacesService
                     'radius' => $radius,
                 ],
             ],
+            'excludedTypes' => self::EXCLUDED_NEARBY_TYPES,
             'rankPreference' => 'DISTANCE',
             'maxResultCount' => 20,
         ]);
@@ -361,6 +370,7 @@ class GooglePlacesService
         // 3. Store result in cache table
         $this->cacheService->store($lat, $lon, $radius, $places, [
             'languageCode' => 'de',
+            'excludedTypes' => self::EXCLUDED_NEARBY_TYPES,
             'rankPreference' => 'DISTANCE',
             'maxResultCount' => 20,
         ]);
@@ -446,6 +456,7 @@ class GooglePlacesService
                             'radius' => max(10.0, $radius),
                         ],
                     ],
+                    'excludedTypes' => self::EXCLUDED_NEARBY_TYPES,
                     'rankPreference' => 'DISTANCE',
                     'maxResultCount' => 20,
                 ]);
@@ -466,6 +477,7 @@ class GooglePlacesService
                     // Store result in cache table
                     $this->cacheService->store($lat, $lon, max(10.0, $radius), $rawPlaces, [
                         'languageCode' => 'de',
+                        'excludedTypes' => self::EXCLUDED_NEARBY_TYPES,
                         'rankPreference' => 'DISTANCE',
                         'maxResultCount' => 20,
                     ]);
@@ -514,6 +526,10 @@ class GooglePlacesService
             }
 
             $types = (array) ($place['types'] ?? []);
+            if (! empty(array_intersect($types, self::EXCLUDED_NEARBY_TYPES))) {
+                continue;
+            }
+
             $priorize = 0;
             if (in_array('public_bathroom', $types, true)) {
                 $priorize = 2;

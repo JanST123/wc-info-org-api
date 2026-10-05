@@ -283,4 +283,40 @@ class ExtractNearbyCachePlacesCommandTest extends TestCase
         $this->assertNotNull($toilet->last_diff);
         $this->assertArrayHasKey('website', $toilet->last_diff);
     }
+
+    public function test_command_ignores_places_with_excluded_types(): void
+    {
+        $placeIdHotel = 'place_test_hotel_'.uniqid();
+        $placeIdValid = 'place_test_valid_'.uniqid();
+        $this->createdPlaceIds[] = $placeIdHotel;
+        $this->createdPlaceIds[] = $placeIdValid;
+
+        $cache = GoogleNearbySearchCache::create([
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'radius_meters' => 500.0,
+            'result_count' => 2,
+            'response_places' => [
+                [
+                    'id' => $placeIdHotel,
+                    'displayName' => ['text' => 'Excluded Hotel', 'languageCode' => 'de'],
+                    'location' => ['latitude' => 52.5210, 'longitude' => 13.4060],
+                    'types' => ['lodging', 'establishment'],
+                ],
+                [
+                    'id' => $placeIdValid,
+                    'displayName' => ['text' => 'Valid Cafe', 'languageCode' => 'de'],
+                    'location' => ['latitude' => 52.5215, 'longitude' => 13.4065],
+                    'types' => ['cafe'],
+                ],
+            ],
+        ]);
+        $this->createdCacheIds[] = $cache->id;
+
+        $this->artisan('app:extract-nearby-cache-places')
+            ->assertSuccessful();
+
+        $this->assertNull(Place::find($placeIdHotel));
+        $this->assertNotNull(Place::find($placeIdValid));
+    }
 }

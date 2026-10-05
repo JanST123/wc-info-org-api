@@ -109,9 +109,11 @@ class GoogleNearbyCacheService
     }
 
     /**
-     * Filter and rank places from a cached response to only those within the requested sub-radius.
+     * Filter and rank places from a cached response to only those within the requested sub-radius,
+     * ignoring places with excluded types.
      *
      * @param  array<int, array>  $places
+     * @param  array<int, string>|null  $excludedTypes
      * @return array<int, array>
      */
     public function filterCachedPlaces(
@@ -119,11 +121,18 @@ class GoogleNearbyCacheService
         float $lat,
         float $lon,
         float $radiusMeters,
-        ?int $limit = null
+        ?int $limit = null,
+        ?array $excludedTypes = null
     ): array {
+        $excluded = $excludedTypes ?? GooglePlacesService::EXCLUDED_NEARBY_TYPES;
         $placesWithDistance = [];
 
         foreach ($places as $place) {
+            $types = (array) ($place['types'] ?? []);
+            if (! empty($excluded) && ! empty(array_intersect($types, $excluded))) {
+                continue;
+            }
+
             $coords = $this->extractPlaceCoordinates($place);
             if ($coords === null) {
                 // If coordinates are missing, include the place to be safe

@@ -9,6 +9,7 @@ ini_set('memory_limit', '1512M');
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
 use App\Models\Toilet;
+use App\Services\GooglePlacesService;
 use App\Services\PlaceToiletService;
 use App\Services\ToiletRevisionService;
 use Illuminate\Console\Command;
@@ -83,6 +84,11 @@ class ExtractNearbyCachePlacesCommand extends Command
 
                     foreach ($rawPlaces as $rawPlace) {
                         if (! is_array($rawPlace)) {
+                            continue;
+                        }
+
+                        $types = (array) ($rawPlace['types'] ?? []);
+                        if (! empty(array_intersect($types, GooglePlacesService::EXCLUDED_NEARBY_TYPES))) {
                             continue;
                         }
 
