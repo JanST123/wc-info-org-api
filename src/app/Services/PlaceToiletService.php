@@ -60,7 +60,16 @@ class PlaceToiletService
             ]);
         }
 
-        if (! $isPublicBathroom && empty($details['website'])) {
+        $hasRestroom = $details['hasRestroom'] ?? false;
+        if ($hasRestroom) {
+            Log::info('Place has a restroom, force creating an active toilet', [
+                'place_id' => $placeId,
+                'place_name' => $details['name'] ?? null,
+            ]);
+        }
+
+        if (! $hasRestroom && ! $isPublicBathroom && empty($details['website'])) {
+            // no way to get any toilet information
             Log::info('Place has no website, creating hidden toilet', [
                 'place_id' => $placeId,
                 'place_name' => $details['name'] ?? null,
@@ -71,11 +80,29 @@ class PlaceToiletService
 
         $crawlResult = empty($details['website']) ? null : $this->crawlWithLogging($placeId, $details['website']);
 
-        if (! $isPublicBathroom && $crawlResult === null) {
+        if (! $hasRestroom && ! $isPublicBathroom && $crawlResult === null) {
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
-        $toiletType = $crawlResult['toiletType'] ?? 'none';
+        //$toiletType = $crawlResult['toiletType'] ?? 'none';
+
+        /*
+         * how to determine the toilet type:
+         * - if the place has a restroom it's at least "forall" (unisex)
+         * - if $isPublicBathroom is true, we can also say it's at least "forall" (unisex)
+         * - if we have a wheelchairAccessibleRestroom, this implies it has a restroom -> so we have "forall" (unisex) and "d" (wheelchair accessible)
+         * - if it's a public bathroom and we have wheelchairAccessibleEntrance, this implies it has a restroom -> so we have "forall" (unisex) and "d" (wheelchair accessible)
+         * - otherwise the crawl result (which is more magic than knowledge) is used to determine the toilet type, which can be "none", "forall", "foralld", "mw", "mwd", "u", "ud", "b", "bd"
+         */
+
+        $toiletType = 'none';
+        if ($hasRestroom || ! empty($details['wheelchairAccessibleRestroom'])) {
+            $toiletType = 'forall';
+            if (! empty($details['wheelchairAccessibleRestroom'])) {
+                $toiletType .= 'd';
+            }
+        }
+
         if ($isPublicBathroom) {
             // if it's a public bathroom we can at least say it IS a toilet, so not none
             if ($toiletType === 'none') {
@@ -84,6 +111,9 @@ class PlaceToiletService
             if ((! empty($details['wheelchairAccessibleEntrance']) || ! empty($details['wheelchairAccessibleRestroom'])) && ! str_contains($toiletType, 'd')) {
                 $toiletType .= 'd';
             }
+        }
+        if ($toiletType === 'none' && $crawlResult !== null) {
+            $toiletType = $crawlResult['toiletType'] ?? 'none';
         }
 
         $status = $toiletType === 'none' ? 'hidden' : 'active';
@@ -304,6 +334,7 @@ class PlaceToiletService
             $website = $data['websiteUri'] ?? $data['website'] ?? null;
             $address = $data['formattedAddress'] ?? $data['formatted_address'] ?? null;
             $businessStatus = $data['business_status'] ?? $data['businessStatus'] ?? null;
+            $hasRestroom = $data['restroom'] ?? $data['restroom'] ?? false;
 
             $lat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
             $lng = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
@@ -343,6 +374,7 @@ class PlaceToiletService
                 'businessStatus' => $businessStatus,
                 'wheelchairAccessibleEntrance' => $wheelchairAccessibleEntrance,
                 'wheelchairAccessibleRestroom' => $wheelchairAccessibleRestroom,
+                'hasRestroom' => $hasRestroom,
             ];
         };
 
@@ -359,6 +391,7 @@ class PlaceToiletService
             $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
             $details['wheelchairAccessibleEntrance'] = $fetched['wheelchairAccessibleEntrance'] ?? $details['wheelchairAccessibleEntrance'];
             $details['wheelchairAccessibleRestroom'] = $fetched['wheelchairAccessibleRestroom'] ?? $details['wheelchairAccessibleRestroom'];
+            $details['hasRestroom'] = $fetched['hasRestroom'] ?? $details['hasRestroom'];
         } elseif (empty($details['website']) || empty($details['name']) || empty($details['location'])) {
             $placeId = $details['place_id'] ?? $placeData['place_id'] ?? $placeData['id'] ?? null;
             if ($placeId) {
@@ -374,6 +407,7 @@ class PlaceToiletService
                     $details['businessStatus'] = $fetched['businessStatus'] ?? $details['businessStatus'];
                     $details['wheelchairAccessibleEntrance'] = $fetched['wheelchairAccessibleEntrance'] ?? $details['wheelchairAccessibleEntrance'];
                     $details['wheelchairAccessibleRestroom'] = $fetched['wheelchairAccessibleRestroom'] ?? $details['wheelchairAccessibleRestroom'];
+                    $details['hasRestroom'] = $fetched['hasRestroom'] ?? $details['hasRestroom'];
                 }
             }
         }

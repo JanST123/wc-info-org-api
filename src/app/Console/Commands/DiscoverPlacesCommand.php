@@ -323,6 +323,7 @@ class DiscoverPlacesCommand extends Command
                 return;
             }
 
+            // google places API did not gave us the place so we consider it is gone and we remove the place_id from the toilet and flag it for review
             $oldPlaceId = $toilet->place_id;
             $changes = [
                 'place_id' => ['old' => $oldPlaceId, 'new' => null],
