@@ -187,4 +187,79 @@ class PlaceStorePublicBathroomTest extends TestCase
         $this->assertSame('hidden', $hiddenToilet->status);
         $this->assertSame('auto_crawl', $hiddenToilet->source);
     }
+
+    public function test_store_place_with_restroom_true_creates_active_unisex_toilet(): void
+    {
+        $placeId = 'place_restroom_store_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $response = $this->withHeaders(['X-Api-Key' => 'wc_test_key_abc123'])->postJson("/places/{$placeId}", [
+            'id' => $placeId,
+            'displayName' => ['text' => 'Local Cafe with WC'],
+            'location' => ['latitude' => 52.5200, 'longitude' => 13.4000],
+            'types' => ['cafe'],
+            'restroom' => true,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'okay',
+                'fetchedPlace' => true,
+            ]);
+
+        $newToiletId = $response->json('newToiletId');
+        $this->assertNotNull($newToiletId);
+        $this->createdToiletIds[] = $newToiletId;
+
+        $toilet = Toilet::find($newToiletId);
+        $this->assertNotNull($toilet);
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('WC #'.$toilet->id, $toilet->name);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertArrayNotHasKey('has_wheelchair_access', $properties);
+    }
+
+    public function test_store_place_with_restroom_and_wheelchair_accessible_restroom(): void
+    {
+        $placeId = 'place_restroom_wc_store_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $response = $this->withHeaders(['X-Api-Key' => 'wc_test_key_abc123'])->postJson("/places/{$placeId}", [
+            'id' => $placeId,
+            'displayName' => ['text' => 'Accessible Cafe with WC'],
+            'location' => ['latitude' => 52.5200, 'longitude' => 13.4000],
+            'types' => ['cafe'],
+            'restroom' => true,
+            'accessibilityOptions' => [
+                'wheelchairAccessibleRestroom' => true,
+            ],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'okay',
+                'fetchedPlace' => true,
+            ]);
+
+        $newToiletId = $response->json('newToiletId');
+        $this->assertNotNull($newToiletId);
+        $this->createdToiletIds[] = $newToiletId;
+
+        $toilet = Toilet::find($newToiletId);
+        $this->assertNotNull($toilet);
+        $this->assertSame('active', $toilet->status);
+        $this->assertSame('WC #'.$toilet->id, $toilet->name);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        $this->assertSame('1', $properties['is_unisex'] ?? null);
+        $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
+    }
 }

@@ -60,7 +60,7 @@ class PlaceToiletService
             ]);
         }
 
-        $hasRestroom = $details['hasRestroom'] ?? false;
+        $hasRestroom = ($details['hasRestroom'] ?? false) || ! empty($details['wheelchairAccessibleRestroom']);
         if ($hasRestroom) {
             Log::info('Place has a restroom, force creating an active toilet', [
                 'place_id' => $placeId,
@@ -84,8 +84,6 @@ class PlaceToiletService
             return $this->createHiddenToilet($placeId, $details['name'] ?? null, $details['location'] ?? null);
         }
 
-        //$toiletType = $crawlResult['toiletType'] ?? 'none';
-
         /*
          * how to determine the toilet type:
          * - if the place has a restroom it's at least "forall" (unisex)
@@ -96,7 +94,7 @@ class PlaceToiletService
          */
 
         $toiletType = 'none';
-        if ($hasRestroom || ! empty($details['wheelchairAccessibleRestroom'])) {
+        if ($hasRestroom) {
             $toiletType = 'forall';
             if (! empty($details['wheelchairAccessibleRestroom'])) {
                 $toiletType .= 'd';
@@ -131,6 +129,13 @@ class PlaceToiletService
             ]);
         }
 
+        $source = 'auto_crawl';
+        if ($isPublicBathroom) {
+            $source = 'auto_crawl_with_public_bathroom';
+        } elseif ($hasRestroom) {
+            $source = 'auto_crawl_with_restroom';
+        }
+
         $toilet = Toilet::create([
             'name' => 'Toilette',
             'owner' => $details['name'] ?? null,
@@ -139,7 +144,7 @@ class PlaceToiletService
             'place_id' => $placeId,
             'contact_email' => $contactEmail,
             'status' => $status,
-            'source' => $isPublicBathroom ? 'auto_crawl_with_public_bathroom' : 'auto_crawl',
+            'source' => $source,
             'last_places_fetch' => now(),
             'last_crawled' => now(),
             'flagged' => true, // we flag the toilet for review if any of the main fields changed, so that a human can check if the crawl result is correct.
@@ -219,11 +224,52 @@ class PlaceToiletService
             $updated = true;
         }
 
+        $hasRestroom = ($details['hasRestroom'] ?? false) || ! empty($details['wheelchairAccessibleRestroom']);
+        $isPublicBathroom = is_array($details['types'] ?? null) && in_array('public_bathroom', $details['types'], true);
+
+        $placeToiletType = 'none';
+        if ($hasRestroom) {
+            $placeToiletType = 'forall';
+            if (! empty($details['wheelchairAccessibleRestroom'])) {
+                $placeToiletType .= 'd';
+            }
+        }
+        if ($isPublicBathroom) {
+            if ($placeToiletType === 'none') {
+                $placeToiletType = 'forall';
+            }
+            if ((! empty($details['wheelchairAccessibleEntrance']) || ! empty($details['wheelchairAccessibleRestroom'])) && ! str_contains($placeToiletType, 'd')) {
+                $placeToiletType .= 'd';
+            }
+        }
+
+        if ($placeToiletType !== 'none') {
+            $newStatus = 'active';
+            if (! $toilet->isUserOverridden('status') && $toilet->status !== $newStatus) {
+                $changes['status'] = ['old' => $toilet->status, 'new' => $newStatus];
+                $toilet->status = $newStatus;
+                $updated = true;
+
+                if (! $toilet->isUserOverridden('name') && $toilet->name === 'Toilette') {
+                    $newName = 'WC #'.$toilet->id;
+                    $changes['name'] = ['old' => $toilet->name, 'new' => $newName];
+                    $toilet->name = $newName;
+                }
+            }
+
+            if ($toilet->isDirty()) {
+                $toilet->save();
+                $updated = true;
+            }
+
+            $this->applyTypeFlagsWithOverrideCheck($toilet->id, $placeToiletType, $changes);
+        }
+
         $crawlResult = null;
         $needsCrawl = empty($toilet->last_crawled) || $toilet->last_crawled->lte(now()->subMonths(3));
 
-        // also toilets do not need a crawl if they have toilet type flags set, as those are derived from the crawl result.
-        if ($toilet->isFlagSet('is_unisex') || $toilet->isFlagSet('is_gender_separated') || $toilet->isFlagSet('has_wheelchair_access') || $toilet->isFlagSet('has_changing_table')) {
+        // also toilets do not need a crawl if they have toilet type flags set, as those are derived from the crawl result or place metadata.
+        if ($placeToiletType !== 'none' || $toilet->isFlagSet('is_unisex') || $toilet->isFlagSet('is_gender_separated') || $toilet->isFlagSet('has_wheelchair_access') || $toilet->isFlagSet('has_changing_table')) {
             $needsCrawl = false;
         }
 
@@ -334,7 +380,9 @@ class PlaceToiletService
             $website = $data['websiteUri'] ?? $data['website'] ?? null;
             $address = $data['formattedAddress'] ?? $data['formatted_address'] ?? null;
             $businessStatus = $data['business_status'] ?? $data['businessStatus'] ?? null;
-            $hasRestroom = $data['restroom'] ?? $data['restroom'] ?? false;
+            $hasRestroom = isset($data['restroom'])
+                ? (bool) $data['restroom']
+                : (isset($data['hasRestroom']) ? (bool) $data['hasRestroom'] : null);
 
             $lat = $data['location']['latitude'] ?? $data['location']['lat'] ?? $data['geometry']['location']['lat'] ?? null;
             $lng = $data['location']['longitude'] ?? $data['location']['lng'] ?? $data['geometry']['location']['lng'] ?? null;
@@ -355,13 +403,13 @@ class PlaceToiletService
                 ? (bool) $data['accessibilityOptions']['wheelchairAccessibleEntrance']
                 : (isset($data['accessibility_options']['wheelchair_accessible_entrance'])
                     ? (bool) $data['accessibility_options']['wheelchair_accessible_entrance']
-                    : (bool) ($data['wheelchairAccessibleEntrance'] ?? false));
+                    : (isset($data['wheelchairAccessibleEntrance']) ? (bool) $data['wheelchairAccessibleEntrance'] : null));
 
             $wheelchairAccessibleRestroom = isset($data['accessibilityOptions']['wheelchairAccessibleRestroom'])
                 ? (bool) $data['accessibilityOptions']['wheelchairAccessibleRestroom']
                 : (isset($data['accessibility_options']['wheelchair_accessible_restroom'])
                     ? (bool) $data['accessibility_options']['wheelchair_accessible_restroom']
-                    : (bool) ($data['wheelchairAccessibleRestroom'] ?? false));
+                    : (isset($data['wheelchairAccessibleRestroom']) ? (bool) $data['wheelchairAccessibleRestroom'] : null));
 
             return [
                 'place_id' => $placeId,
@@ -411,6 +459,10 @@ class PlaceToiletService
                 }
             }
         }
+
+        $details['wheelchairAccessibleEntrance'] = (bool) ($details['wheelchairAccessibleEntrance'] ?? false);
+        $details['wheelchairAccessibleRestroom'] = (bool) ($details['wheelchairAccessibleRestroom'] ?? false);
+        $details['hasRestroom'] = (bool) ($details['hasRestroom'] ?? false);
 
         return $details;
     }

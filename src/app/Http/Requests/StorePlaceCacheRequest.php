@@ -44,6 +44,8 @@ class StorePlaceCacheRequest extends FormRequest
             'accessibility_options' => ['nullable', 'array'],
             'accessibility_options.wheelchair_accessible_entrance' => ['nullable', 'boolean'],
             'accessibility_options.wheelchair_accessible_restroom' => ['nullable', 'boolean'],
+            'restroom' => ['nullable', 'boolean'],
+            'hasRestroom' => ['nullable', 'boolean'],
         ];
     }
 }
