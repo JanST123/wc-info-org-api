@@ -9,6 +9,7 @@ use App\Models\GoogleApiLog;
 use App\Models\GoogleNearbySearchCache;
 use App\Models\Place;
 use App\Models\Type;
+use App\Services\GooglePlacesService;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -206,7 +207,7 @@ class NearestPlacesTest extends TestCase
             $data = $request->data();
 
             return isset($data['excludedTypes'])
-                && $data['excludedTypes'] === ['lodging', 'post_office', 'shipping_service', 'atm', 'finance'];
+                && $data['excludedTypes'] === GooglePlacesService::EXCLUDED_NEARBY_TYPES;
         });
 
         // Check that result was stored in google_nearby_search_cache table

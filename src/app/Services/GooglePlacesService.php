@@ -17,7 +17,6 @@ class GooglePlacesService
         'post_office',
         'shipping_service',
         'atm',
-        'finance',
     ];
 
     private string $apiKey;

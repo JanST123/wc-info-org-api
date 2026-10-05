@@ -59,7 +59,7 @@ class GoogleNearbyCacheFeatureTest extends TestCase
             $data = $request->data();
 
             return isset($data['excludedTypes'])
-                && $data['excludedTypes'] === ['lodging', 'post_office', 'shipping_service', 'atm', 'finance'];
+                && $data['excludedTypes'] === GooglePlacesService::EXCLUDED_NEARBY_TYPES;
         });
         $this->assertEquals(1, GoogleNearbySearchCache::count());
         $this->assertEquals(1, GoogleApiLog::count());
