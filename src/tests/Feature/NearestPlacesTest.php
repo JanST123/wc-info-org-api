@@ -235,4 +235,65 @@ class NearestPlacesTest extends TestCase
         $this->getJson('/places/nearest/52.52/13.40?radius=-5')
             ->assertStatus(400);
     }
+
+    public function test_nearest_places_prioritizes_public_bathroom_over_other_prioritized_types(): void
+    {
+        $centerLat = 52.5200;
+        $centerLon = 13.4050;
+
+        $cafeType = Type::updateOrCreate(['type' => 'test_pb_cafe'], ['priorize' => 1]);
+        $insuranceType = Type::updateOrCreate(['type' => 'test_pb_insurance'], ['priorize' => 0]);
+        $this->createdTypeIds = array_merge($this->createdTypeIds, [$cafeType->id, $insuranceType->id]);
+
+        // Place 1: Insurance at ~5m (priorize = 0)
+        $placeInsurance = [
+            'id' => 'place_ins_5m',
+            'displayName' => ['text' => 'Insurance Agency'],
+            'location' => ['latitude' => 52.520045, 'longitude' => 13.4050],
+            'types' => ['test_pb_insurance'],
+        ];
+
+        // Place 2: Cafe at ~10m (priorize = 1)
+        $placeCafe = [
+            'id' => 'place_cafe_10m',
+            'displayName' => ['text' => 'Near Cafe'],
+            'location' => ['latitude' => 52.52009, 'longitude' => 13.4050],
+            'types' => ['test_pb_cafe'],
+        ];
+
+        // Place 3: Public Bathroom at ~25m (priorize = 2)
+        $placeBathroom = [
+            'id' => 'place_public_bathroom_25m',
+            'displayName' => ['text' => 'Farther Public Bathroom'],
+            'location' => ['latitude' => 52.520225, 'longitude' => 13.4050],
+            'types' => ['public_bathroom'],
+        ];
+
+        $cache = GoogleNearbySearchCache::create([
+            'lat' => $centerLat,
+            'lon' => $centerLon,
+            'radius_meters' => 100.0,
+            'query_params' => ['maxResultCount' => 20],
+            'response_places' => [$placeInsurance, $placeCafe, $placeBathroom],
+            'result_count' => 3,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->createdCacheIds[] = $cache->id;
+
+        $response = $this->getJson("/places/nearest/{$centerLat}/{$centerLon}?limit=3&radius=50");
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'okay')
+            ->assertJsonCount(3, 'places');
+
+        $places = $response->json('places');
+
+        // 1st: public_bathroom (priorize=2, ~25m)
+        // 2nd: cafe (priorize=1, ~10m)
+        // 3rd: insurance (priorize=0, ~5m)
+        $this->assertSame('place_public_bathroom_25m', $places[0]['id']);
+        $this->assertSame('place_cafe_10m', $places[1]['id']);
+        $this->assertSame('place_ins_5m', $places[2]['id']);
+    }
 }

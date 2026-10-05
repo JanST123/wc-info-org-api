@@ -21,6 +21,7 @@ class PrioritizePlaceTypesCommand extends Command
 
     public function handle(): int
     {
+        exit(); // do not run this command, it is only for reference and should not be executed in production
         $dryRun = (bool) $this->option('dry-run');
 
         if ($dryRun) {

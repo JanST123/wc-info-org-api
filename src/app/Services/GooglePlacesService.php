@@ -515,10 +515,14 @@ class GooglePlacesService
 
             $types = (array) ($place['types'] ?? []);
             $priorize = 0;
-            foreach ($types as $type) {
-                if (isset($prioritizedMap[$type])) {
-                    $priorize = 1;
-                    break;
+            if (in_array('public_bathroom', $types, true)) {
+                $priorize = 2;
+            } else {
+                foreach ($types as $type) {
+                    if (isset($prioritizedMap[$type])) {
+                        $priorize = 1;
+                        break;
+                    }
                 }
             }
 
