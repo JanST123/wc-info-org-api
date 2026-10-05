@@ -344,7 +344,7 @@
                         <option value="" data-lat="" data-lon="" {{ empty($toilet->place_id) ? 'selected' : '' }}>-- No Google Place Assigned (Unlink) --</option>
                         @foreach ($nearbyPlaces as $p)
                             @php
-                                $emoji = $p['emoji'] ?? \App\Models\Place::getEmojiForTypes($p['types'] ?? []);
+                                $emoji = $p['emoji'] ?? \App\Models\Place::getEmojiForPlaceData($p);
                                 $prefix = $emoji ? $emoji . ' ' : '';
                             @endphp
                             <option

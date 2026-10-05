@@ -1262,4 +1262,52 @@ class AdminToiletTest extends TestCase
         $this->assertNull($photo->deleted_ts);
         $this->assertSame(0, $photo->email_sent);
     }
+
+    public function test_nearby_places_and_show_dropdown_display_restroom_and_wheelchair_emojis(): void
+    {
+        $placeId = 'ChIJ_cafe_wc_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $toilet = Toilet::create([
+            'name' => 'Toilet with Place Emojis',
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $placesMock = $this->createMock(GooglePlacesService::class);
+        $placesMock->method('nearbySearchRaw')
+            ->willReturn([
+                [
+                    'id' => $placeId,
+                    'displayName' => ['text' => 'Cafe with Restroom and Wheelchair'],
+                    'formattedAddress' => 'Alexanderplatz 1',
+                    'types' => ['cafe'],
+                    'restroom' => true,
+                    'accessibilityOptions' => [
+                        'wheelchairAccessibleRestroom' => true,
+                    ],
+                    'location' => ['latitude' => 52.5201, 'longitude' => 13.4051],
+                ],
+            ]);
+        $this->app->instance(GooglePlacesService::class, $placesMock);
+
+        // 1. Check /admin/toilets/{id}/nearby-places JSON API returns ☕🚾♿️
+        $resJson = $this->withSession(['admin_logged_in' => true])
+            ->getJson("/admin/toilets/{$toilet->id}/nearby-places");
+
+        $resJson->assertStatus(200);
+        $resJson->assertJsonFragment([
+            'place_id' => $placeId,
+            'emoji' => '☕🚾♿️',
+        ]);
+
+        // 2. Check GET /admin/toilets/{id} Blade view renders option with ☕🚾♿️
+        $resView = $this->withSession(['admin_logged_in' => true])
+            ->get("/admin/toilets/{$toilet->id}");
+
+        $resView->assertStatus(200);
+        $resView->assertSee('☕🚾♿️ Cafe with Restroom and Wheelchair');
+    }
 }

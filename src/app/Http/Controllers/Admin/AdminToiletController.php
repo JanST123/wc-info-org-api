@@ -543,7 +543,7 @@ class AdminToiletController extends Controller
                 'name' => $currentPlaceName ?: $toilet->place_id,
                 'address' => $currentAddress,
                 'types' => $currentTypes,
-                'emoji' => Place::getEmojiForTypes($currentTypes),
+                'emoji' => $toilet->place?->getEmoji() ?? Place::getEmojiForTypes($currentTypes),
                 'is_public_bathroom' => $isPublicBathroom,
                 'distance_m' => 0.0,
                 'is_current' => true,
@@ -605,7 +605,7 @@ class AdminToiletController extends Controller
                     'name' => $name,
                     'address' => $address,
                     'types' => $types,
-                    'emoji' => Place::getEmojiForTypes($types),
+                    'emoji' => Place::getEmojiForPlaceData($item),
                     'is_public_bathroom' => $isPublicBathroom,
                     'distance_m' => $dist,
                     'is_current' => false,
@@ -798,7 +798,7 @@ class AdminToiletController extends Controller
             $placeName = $placeModel?->getName() ?? $toilet->place_id;
             $placeTypes = $placeModel?->data['types'] ?? [];
             $isPublicBathroom = is_array($placeTypes) && (in_array('public_bathroom', $placeTypes, true) || in_array('restroom', $placeTypes, true) || in_array('toilet', $placeTypes, true));
-            $placeEmoji = Place::getEmojiForTypes(is_array($placeTypes) ? $placeTypes : []);
+            $placeEmoji = $placeModel?->getEmoji() ?? Place::getEmojiForTypes(is_array($placeTypes) ? $placeTypes : []);
         }
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -908,7 +908,7 @@ class AdminToiletController extends Controller
         $placeName = $placeModel?->getName() ?? $toilet->place_id;
         $placeTypes = $placeModel?->data['types'] ?? [];
         $isPublicBathroom = is_array($placeTypes) && (in_array('public_bathroom', $placeTypes, true) || in_array('restroom', $placeTypes, true) || in_array('toilet', $placeTypes, true));
-        $placeEmoji = Place::getEmojiForTypes(is_array($placeTypes) ? $placeTypes : []);
+        $placeEmoji = $placeModel?->getEmoji() ?? Place::getEmojiForTypes(is_array($placeTypes) ? $placeTypes : []);
 
         return response()->json([
             'success' => true,
@@ -1243,7 +1243,7 @@ class AdminToiletController extends Controller
                 'name' => $currentPlaceName,
                 'address' => $currentPlaceAddress,
                 'types' => $currentPlaceTypes,
-                'emoji' => Place::getEmojiForTypes($currentPlaceTypes),
+                'emoji' => $toilet->place?->getEmoji() ?? Place::getEmojiForTypes($currentPlaceTypes),
                 'is_public_bathroom' => $isPublicBathroom,
                 'lat' => $currentPlaceLat !== null ? (float) $currentPlaceLat : null,
                 'lon' => $currentPlaceLon !== null ? (float) $currentPlaceLon : null,
@@ -1303,7 +1303,7 @@ class AdminToiletController extends Controller
                         'name' => $name,
                         'address' => $address,
                         'types' => $types,
-                        'emoji' => Place::getEmojiForTypes($types),
+                        'emoji' => Place::getEmojiForPlaceData($item),
                         'is_public_bathroom' => $isPublicBathroom,
                         'lat' => $pLat !== null ? (float) $pLat : null,
                         'lon' => $pLon !== null ? (float) $pLon : null,
