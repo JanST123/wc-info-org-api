@@ -228,17 +228,19 @@ class PlaceToiletService
         $isPublicBathroom = is_array($details['types'] ?? null) && in_array('public_bathroom', $details['types'], true);
 
         $placeToiletType = 'none';
-        if ($hasRestroom) {
-            $placeToiletType = 'forall';
-            if (! empty($details['wheelchairAccessibleRestroom'])) {
-                $placeToiletType .= 'd';
+        if ($hasRestroom || $isPublicBathroom) {
+            $baseGenderType = $toilet->isFlagSet('is_gender_separated') ? 'mw' : 'forall';
+            $placeToiletType = $baseGenderType;
+
+            if ($toilet->isFlagSet('has_changing_table')) {
+                $placeToiletType .= 'b';
             }
-        }
-        if ($isPublicBathroom) {
-            if ($placeToiletType === 'none') {
-                $placeToiletType = 'forall';
-            }
-            if ((! empty($details['wheelchairAccessibleEntrance']) || ! empty($details['wheelchairAccessibleRestroom'])) && ! str_contains($placeToiletType, 'd')) {
+
+            $hasWheelchair = $toilet->isFlagSet('has_wheelchair_access')
+                || ! empty($details['wheelchairAccessibleRestroom'])
+                || ($isPublicBathroom && ! empty($details['wheelchairAccessibleEntrance']));
+
+            if ($hasWheelchair) {
                 $placeToiletType .= 'd';
             }
         }

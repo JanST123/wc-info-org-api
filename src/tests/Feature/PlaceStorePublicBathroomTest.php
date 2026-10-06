@@ -262,4 +262,57 @@ class PlaceStorePublicBathroomTest extends TestCase
         $this->assertSame('1', $properties['is_unisex'] ?? null);
         $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
     }
+
+    public function test_update_toilet_with_existing_gender_separated_does_not_set_unisex_when_place_has_restroom(): void
+    {
+        $placeId = 'place_gender_sep_update_'.uniqid();
+        $this->createdPlaceIds[] = $placeId;
+
+        $toilet = Toilet::create([
+            'name' => 'Existing Gender Separated Toilet',
+            'place_id' => $placeId,
+            'status' => 'hidden',
+            'source' => 'auto_crawl',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        DB::table('toilet_properties')->insert([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'is_gender_separated',
+            'value' => '1',
+            'user_overridden' => 0,
+        ]);
+
+        $response = $this->withHeaders(['X-Api-Key' => 'wc_test_key_abc123'])->postJson("/places/{$placeId}", [
+            'id' => $placeId,
+            'displayName' => ['text' => 'Updated Cafe with Restroom'],
+            'location' => ['latitude' => 52.5200, 'longitude' => 13.4000],
+            'types' => ['cafe'],
+            'restroom' => true,
+            'accessibilityOptions' => [
+                'wheelchairAccessibleRestroom' => true,
+            ],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'okay',
+                'fetchedPlace' => true,
+                'newToiletId' => $toilet->id,
+            ]);
+
+        $updatedToilet = Toilet::find($toilet->id);
+        $this->assertSame('active', $updatedToilet->status);
+
+        $properties = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->pluck('value', 'type');
+
+        // is_gender_separated must be preserved
+        $this->assertSame('1', $properties['is_gender_separated'] ?? null);
+        // is_unisex must NOT be set
+        $this->assertArrayNotHasKey('is_unisex', $properties);
+        // wheelchair access should be set from wheelchairAccessibleRestroom
+        $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
+    }
 }
