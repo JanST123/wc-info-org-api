@@ -144,6 +144,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:extract-nearby-cache-places [--dry-run] [--force] [--update-toilets]`: Extracts places from `google_nearby_search_cache` and adds/updates them in the `places` table (enriching missing `regularOpeningHours`, `websiteUri`, etc.).
 - `php artisan app:create-initial-toilet-revisions [--dry-run] [--source=initial]`: Creates an initial snapshot revision for all toilets that currently do not have any revisions.
 - `php artisan app:prioritize-place-types [--dry-run]`: Sets `priorize = 1` for place types likely to contain an easily accessible toilet (e.g. `public_bathroom`, `bar`, `cafe`, `restaurant`, `train_station`, `shopping_mall`) and `0` for others. Alias: `app:priorize-place-types`.
+- `php artisan app:set-unisex-toilet-properties [--dry-run] [--chunk-size=500]`: Sets `is_unisex = '1'` for all toilets that do not have `is_gender_separated = '1'`.
 - `php artisan app:repair-toilet-coordinates`: Fixes legacy scaled coordinates.
 
 ---
