@@ -24,7 +24,7 @@ class GeminiPlaceMatchingService
         $this->placesService = $this->placesService ?? app(GooglePlacesService::class);
         $this->costService = $this->costService ?? app(GoogleCostService::class);
         $this->geminiApiKey = $geminiApiKey ?? (string) config('wcinfo.gemini.api_key');
-        $this->geminiModel = $geminiModel ?? (string) config('wcinfo.gemini.model', 'gemini-2.5-flash');
+        $this->geminiModel = $geminiModel ?? (string) config('wcinfo.gemini.model', 'gemini-3.8-flash');
     }
 
     /**
@@ -604,8 +604,10 @@ PROMPT;
                     ],
                 ],
                 'generationConfig' => [
-                    'temperature' => 0.1,
                     'responseMimeType' => 'application/json',
+                    'thinkingConfig' => [
+                        'thinkingLevel' => 'low',
+                    ],
                 ],
             ]);
 
