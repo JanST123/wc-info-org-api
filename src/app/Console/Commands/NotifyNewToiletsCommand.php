@@ -44,7 +44,7 @@ class NotifyNewToiletsCommand extends Command
             $body .= '<strong>Type:</strong> '.e($toilet->type).'<br>';
             $body .= '<strong>Properties:</strong> '.nl2br(e(json_encode($properties, JSON_PRETTY_PRINT))).'</p>';
             $body .= '<p>';
-            $body .= '<a href="https://wc-info.org/Toilets/xyz---'.$toilet->place_id.'/xyz-'.$toilet->id.'">Open Public</a> | ';
+            $body .= '<a href="https://wc-info.org/Toilets/xyz---'.$toilet->place_id.'/xyz---'.$toilet->id.'">Open Public</a> | ';
             $body .= '<a href="https://api.wc-info.org/admin/toilets/'.$toilet->id.'">Admin Edit</a>';
             $body .= '</p>';
         }
