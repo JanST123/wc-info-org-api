@@ -260,6 +260,8 @@ class AdminToiletTest extends TestCase
         $response->assertSee('Wheelchair Accessible');
         $response->assertSee('Open in Google Maps');
         $response->assertSee('https://www.google.com/maps/search/?api=1&amp;query=52.5215,13.4112', false);
+        $response->assertSee('Insert Open 24hrs');
+        $response->assertSee('setOpen24Hours()');
     }
 
     public function test_update_toilet_details_and_properties(): void

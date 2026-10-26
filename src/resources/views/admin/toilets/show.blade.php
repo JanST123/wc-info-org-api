@@ -543,7 +543,17 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="place_opening_hours">Place Opening Hours (JSON format)</label>
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.375rem;">
+                        <label class="form-label" for="place_opening_hours" style="margin-bottom: 0;">Place Opening Hours (JSON format)</label>
+                        <button
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            onclick="setOpen24Hours()"
+                            title="Insert 24/7 opening hours in Google Places periods format"
+                        >
+                            🕒 Insert Open 24hrs
+                        </button>
+                    </div>
                     <textarea
                         id="place_opening_hours"
                         name="place_opening_hours"
@@ -898,6 +908,13 @@
 
         if (pLat && pLon && !isNaN(Number(pLat)) && !isNaN(Number(pLon))) {
             setLatLon(pLat, pLon);
+        }
+    }
+
+    function setOpen24Hours() {
+        const textarea = document.getElementById('place_opening_hours');
+        if (textarea) {
+            textarea.value = '[{"open":{"day":0,"hour":0,"minute":0}}]';
         }
     }
 </script>
