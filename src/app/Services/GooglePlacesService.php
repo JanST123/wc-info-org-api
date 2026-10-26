@@ -21,6 +21,10 @@ class GooglePlacesService
 
     private string $apiKey;
 
+    private string $geminiApiKey;
+
+    private string $geminiModel;
+
     private GoogleCostService $costService;
 
     private GoogleNearbyCacheService $cacheService;
@@ -30,6 +34,8 @@ class GooglePlacesService
         ?GoogleNearbyCacheService $cacheService = null,
     ) {
         $this->apiKey = (string) config('wcinfo.google.api_key');
+        $this->geminiApiKey = (string) (config('wcinfo.gemini.api_key') ?: $this->apiKey);
+        $this->geminiModel = (string) config('wcinfo.gemini.model', 'gemini-3.8-flash');
         $this->costService = $costService ?? app(GoogleCostService::class);
         $this->cacheService = $cacheService ?? app(GoogleNearbyCacheService::class);
 
@@ -135,29 +141,61 @@ class GooglePlacesService
             ];
         }
 
-        Log::info('Starting website crawl', ['url' => $url, 'term' => $term]);
+        Log::info('Starting website crawl via Gemini Grounding & URL Context', ['url' => $url, 'term' => $term]);
 
-        if (! preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/', $url, $matches)) {
+        if (! preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.[a-z]{2,}/i', $url)) {
             Log::warning('Website crawl rejected: unsupported URL pattern', ['url' => $url]);
             throw new RuntimeException('Unsupported url pattern: '.$url);
         }
 
-        $tld = $matches[1];
-        $cx = $this->resolveSearchEngineId($tld);
+        $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$this->geminiModel}:generateContent";
+        $prompt = <<<PROMPT
+Analyze the website {$url} (including its subpages like Impressum/Kontakt if needed via Google Search on that domain) to check for any information regarding restroom / toilet / WC facilities on site and a general contact email address (e.g. from the Impressum or contact page).
+Search terms of interest: {$term}
 
-        Log::info('Fetching Google Custom Search results', [
-            'url' => $url,
-            'term' => $term,
-            'tld' => $tld,
-            'search_engine_id' => $cx,
-        ]);
+Determine the following:
+1. "has_toilet": true if the website mentions having a toilet, WC, restroom, or customer bathroom on site, otherwise false.
+2. "is_gender_separated": true if the website mentions separate women's/men's toilets (e.g. Damen/Herren, m/w, getrennt), otherwise false.
+3. "is_wheelchair_accessible": true if the website mentions wheelchair accessible / barrier-free toilets (e.g. barrierefrei, Behinderten-WC, Rollstuhl), otherwise false.
+4. "has_changing_table": true if the website mentions a baby changing table (e.g. Wickeltisch, Wickelraum, Mutter-Kind), otherwise false.
+5. "contact_email": a valid contact email address found on the website (or "" if none found).
+6. "result_count": number of relevant mentions or pages found on the website (integer >= 0).
+7. "snippets": array of short text snippets from the website where toilet or contact info was found.
 
-        $endpoint = 'https://customsearch.googleapis.com/customsearch/v1';
-        $response = Http::get($endpoint, [
-            'cx' => $cx,
-            'exactTerms' => $term,
-            'siteSearch' => $url,
-            'key' => $this->apiKey,
+Respond ONLY with a valid JSON object matching this exact structure:
+{
+  "has_toilet": false,
+  "is_gender_separated": false,
+  "is_wheelchair_accessible": false,
+  "has_changing_table": false,
+  "contact_email": "",
+  "result_count": 0,
+  "snippets": []
+}
+PROMPT;
+
+        $response = Http::withHeaders([
+            'x-goog-api-key' => $this->geminiApiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(30)->post($endpoint, [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [
+                        ['text' => $prompt],
+                    ],
+                ],
+            ],
+            'tools' => [
+                ['url_context' => (object) []],
+                ['google_search' => (object) []],
+            ],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
+                'thinkingConfig' => [
+                    'thinkingLevel' => 'low',
+                ],
+            ],
         ]);
 
         $this->costService->logApiCall(
@@ -169,82 +207,92 @@ class GooglePlacesService
         );
 
         if ($response->failed()) {
-            Log::warning('Google Custom Search request failed', [
+            Log::warning('Gemini website crawl request failed', [
                 'url' => $url,
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            throw new RuntimeException('Google Custom Search request failed');
+            throw new RuntimeException('Gemini website crawl request failed');
         }
 
         $json = $response->json();
-        $items = $json['items'] ?? [];
-        $resultCount = count($items);
+        $responseText = '';
+        foreach ($json['candidates'][0]['content']['parts'] ?? [] as $part) {
+            if (isset($part['text'])) {
+                $responseText .= $part['text'];
+            }
+        }
 
-        Log::info('Google Custom Search response received', [
-            'url' => $url,
-            'result_count' => $resultCount,
-            'search_status' => $json['status'] ?? 'unknown',
-        ]);
+        $cleanJson = trim($responseText);
+        if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $cleanJson, $jsonMatches)) {
+            $cleanJson = $jsonMatches[1];
+        }
+
+        $parsed = json_decode($cleanJson, true);
+        if (! is_array($parsed)) {
+            Log::warning('Failed to parse Gemini website crawl JSON response', [
+                'url' => $url,
+                'response' => $responseText,
+            ]);
+            $parsed = [];
+        }
+
+        $hasToilet = (bool) ($parsed['has_toilet'] ?? false);
+        $isGenderSeparated = (bool) ($parsed['is_gender_separated'] ?? false);
+        $isWheelchair = (bool) ($parsed['is_wheelchair_accessible'] ?? false);
+        $hasChangingTable = (bool) ($parsed['has_changing_table'] ?? false);
+        $contactEmail = trim((string) ($parsed['contact_email'] ?? ''));
+        $snippets = is_array($parsed['snippets'] ?? null) ? $parsed['snippets'] : [];
+        $resultCount = isset($parsed['result_count']) ? (int) $parsed['result_count'] : count($snippets);
+
+        // Also run regex fallback on any returned snippets to preserve exact legacy keyword detection
+        foreach ($snippets as $snippet) {
+            $snippetStr = (string) $snippet;
+            if (empty($contactEmail) && preg_match("/([a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/i", $snippetStr, $emailMatches)) {
+                $contactEmail = $emailMatches[1];
+            }
+            if (preg_match('/\b(toilet|wc|klo|restroom)/i', $snippetStr)) {
+                $hasToilet = true;
+            }
+            $lowerSnippet = strtolower($snippetStr);
+            if (preg_match('/\b(dame|herr|man|men|woman|women|getrennt)/i', $lowerSnippet)
+                || str_contains($lowerSnippet, 'm/w')
+                || str_contains($lowerSnippet, 'm|w')) {
+                $isGenderSeparated = true;
+            }
+            if (preg_match('/\b(barrieref|behindert|rollstuhl)/i', $lowerSnippet)) {
+                $isWheelchair = true;
+            }
+            if (preg_match('/\b(wickel|mutter|changing)/i', $lowerSnippet)) {
+                $hasChangingTable = true;
+            }
+        }
+
+        if (! empty($contactEmail) && ! preg_match("/^([a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/i", $contactEmail)) {
+            $contactEmail = '';
+        }
 
         $toiletType = 'none';
-        $contactEmail = '';
+        if ($hasToilet || $isGenderSeparated || $isWheelchair || $hasChangingTable) {
+            $toiletType = $isGenderSeparated ? 'mw' : 'forall';
 
-        foreach ($items as $index => $item) {
-            $snippet = $item['snippet'] ?? '';
-            $title = $item['title'] ?? '';
-            $link = $item['link'] ?? '';
-
-            Log::debug('Crawl result item', [
-                'url' => $url,
-                'index' => $index,
-                'title' => $title,
-                'link' => $link,
-                'snippet' => $snippet,
-            ]);
-
-            if (empty($contactEmail) && preg_match("/([a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/", $snippet, $emailMatches)) {
-                $contactEmail = $emailMatches[1];
-                Log::info('Contact email found in crawl', ['url' => $url, 'email' => $contactEmail]);
-            }
-
-            if (preg_match('/\b(toilet|wc|klo|restroom)/i', $snippet)) {
-                $toiletType = 'forall';
-            }
-        }
-
-        foreach ($items as $item) {
-            $snippet = strtolower($item['snippet'] ?? '');
-
-            if (preg_match('/\b(dame|herr|man|men|woman|women|getrennt)/i', $snippet)
-                || str_contains($snippet, 'm/w')
-                || str_contains($snippet, 'm|w')) {
-                $toiletType = 'mw';
-            }
-        }
-
-        foreach ($items as $item) {
-            $snippet = strtolower($item['snippet'] ?? '');
-
-            if (preg_match('/\b(barrieref|behindert|rollstuhl)/i', $snippet)) {
+            if ($isWheelchair) {
                 if ($toiletType === 'forall') {
                     $toiletType = 'mw';
                 }
                 $toiletType .= 'd';
-                break;
             }
-        }
 
-        foreach ($items as $item) {
-            $snippet = strtolower($item['snippet'] ?? '');
-
-            if (preg_match('/\b(wickel|mutter|changing)/i', $snippet)) {
+            if ($hasChangingTable) {
                 if ($toiletType === 'forall') {
                     $toiletType = 'mw';
                 }
                 $toiletType .= 'b';
-                break;
             }
+        }
+
+        if ($toiletType !== 'none' && $resultCount === 0) {
+            $resultCount = 1;
         }
 
         Log::info('Website crawl finished', [
@@ -673,18 +721,5 @@ class GooglePlacesService
         }
 
         return $created;
-    }
-
-    private function resolveSearchEngineId(string $tld): string
-    {
-        return match ($tld) {
-            'de' => 'df9d9fec1908a93cd',
-            'com' => 'eae500bbd2a5ac34d',
-            'eu' => 'ef950d876c8728a7e',
-            'net' => '773f01d092fb8effc',
-            'org' => 'd2a4949d5717ae294',
-            'info' => '51f2145633ba244cd',
-            default => throw new RuntimeException('No search engine configured for .'.$tld),
-        };
     }
 }

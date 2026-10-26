@@ -248,7 +248,7 @@ class GeminiPlaceMatchingService
         // 4. Fourth Attempt (Fallback): Search websites of candidate places for toilet information
         $allCandidatesWithWebsites = array_filter(
             array_merge($nearbyCandidates, $addressCandidates ?? [], $nameCandidates),
-            fn ($c) => ! empty($c['website']) && preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.(de|com|net|eu|org|info)/i', (string) $c['website'])
+            fn ($c) => ! empty($c['website']) && preg_match('/^https?:\/\/[a-z0-9öäüß_.-]+\.[a-z]{2,}/i', (string) $c['website'])
         );
 
         $uniqueWebsiteCandidates = [];

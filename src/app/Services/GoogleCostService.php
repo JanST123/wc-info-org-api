@@ -210,7 +210,7 @@ class GoogleCostService
                 'unit_cost' => self::COST_PLACES_DETAILS_USD,
             ],
             self::SERVICE_CUSTOM_SEARCH => [
-                'name' => 'Website Crawl (Custom Search)',
+                'name' => 'Website Crawl (Gemini Grounding)',
                 'count' => 0,
                 'api_calls' => 0,
                 'cache_hits' => 0,
