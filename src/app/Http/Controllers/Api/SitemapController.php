@@ -12,46 +12,52 @@ use Illuminate\Http\Response;
 class SitemapController extends Controller
 {
     /**
+     * Supported language codes.
+     */
+    public const array SUPPORTED_LANGUAGES = ['de', 'en', 'nl'];
+
+    /**
      * Generate the XML sitemap.
      *
      * Returns a sitemap.org compatible XML document containing fixed pages
-     * and all active qualified toilet detail pages.
+     * and all active qualified toilet detail pages across all supported languages (de, en, nl)
+     * with xhtml:link alternate annotations.
      */
     public function output(): Response
     {
-        $urls = [
+        $pages = [
             [
-                'loc' => '/',
+                'path' => '/',
                 'lastmod' => '2026-09-28',
                 'changefreq' => 'daily',
                 'priority' => '1.0',
             ],
             [
-                'loc' => '/Toilets/Current-Location---NEARBY',
+                'path' => '/Toilets/Current-Location---NEARBY',
                 'lastmod' => date('Y-m-d'),
                 'changefreq' => 'daily',
                 'priority' => '1.0',
             ],
             [
-                'loc' => '/Help',
+                'path' => '/Help',
                 'lastmod' => '2023-03-22',
                 'changefreq' => 'monthly',
                 'priority' => '0.7',
             ],
             [
-                'loc' => '/Law/Disclaimer',
+                'path' => '/Law/Disclaimer',
                 'lastmod' => '2023-03-22',
                 'changefreq' => 'yearly',
                 'priority' => '0.1',
             ],
             [
-                'loc' => '/Law/Imprint',
+                'path' => '/Law/Imprint',
                 'lastmod' => '2023-03-22',
                 'changefreq' => 'yearly',
                 'priority' => '0.1',
             ],
             [
-                'loc' => '/Law/Privacy',
+                'path' => '/Law/Privacy',
                 'lastmod' => '2023-03-22',
                 'changefreq' => 'yearly',
                 'priority' => '0.2',
@@ -93,7 +99,7 @@ class SitemapController extends Controller
 
             $toiletSegment = $toiletPrefix.'---'.$toilet->id;
 
-            $loc = '/Toilets/'.$placeSegment.'/'.$toiletSegment;
+            $path = '/Toilets/'.$placeSegment.'/'.$toiletSegment;
 
             $updatedDate = $toilet->updated
                 ? $toilet->updated
@@ -110,11 +116,27 @@ class SitemapController extends Controller
                 $priority = $isRecent ? '0.7' : '0.6';
             }
 
-            $urls[] = [
-                'loc' => $loc,
+            $pages[] = [
+                'path' => $path,
                 'lastmod' => $lastmod,
                 'changefreq' => 'daily',
                 'priority' => $priority,
+            ];
+        }
+
+        $urls = [];
+        foreach ($pages as $page) {
+            $alternates = [];
+            foreach (self::SUPPORTED_LANGUAGES as $lang) {
+                $alternates[$lang] = $this->buildLocalizedUrl($lang, $page['path']);
+            }
+
+            $urls[] = [
+                'loc' => $this->buildMainUrl($page['path']),
+                'alternates' => $alternates,
+                'lastmod' => $page['lastmod'],
+                'changefreq' => $page['changefreq'],
+                'priority' => $page['priority'],
             ];
         }
 
@@ -122,21 +144,54 @@ class SitemapController extends Controller
             return $b['priority'] <=> $a['priority'];
         });
 
-        $xml = simplexml_load_string('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+        $xml = simplexml_load_string(
+            '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml"></urlset>'
+        );
 
         foreach ($urls as $url) {
             $urlEl = $xml->addChild('url');
-            foreach ($url as $key => $val) {
-                if ($key === 'loc') {
-                    $val = str_starts_with((string) $val, 'http') ? (string) $val : 'https://wc-info.org'.$val;
-                    $val = $this->replaceUmlauts((string) $val);
-                }
-                $urlEl->addChild($key, htmlspecialchars((string) $val, ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('loc', htmlspecialchars($url['loc'], ENT_XML1, 'UTF-8'));
+
+            foreach ($url['alternates'] as $lang => $href) {
+                $link = $urlEl->addChild('xhtml:link', null, 'http://www.w3.org/1999/xhtml');
+                $link->addAttribute('rel', 'alternate');
+                $link->addAttribute('hreflang', $lang);
+                $link->addAttribute('href', htmlspecialchars($href, ENT_XML1, 'UTF-8'));
             }
+
+            $urlEl->addChild('lastmod', htmlspecialchars($url['lastmod'], ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('changefreq', htmlspecialchars($url['changefreq'], ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('priority', htmlspecialchars($url['priority'], ENT_XML1, 'UTF-8'));
         }
 
         return response($xml->asXML(), 200)
             ->header('Content-Type', 'application/xml; charset=UTF-8');
+    }
+
+    /**
+     * Build the main (unlocalized) URL for a path.
+     */
+    private function buildMainUrl(string $path): string
+    {
+        $path = $this->replaceUmlauts($path);
+        if (! str_starts_with($path, '/')) {
+            $path = '/'.$path;
+        }
+
+        return 'https://wc-info.org'.$path;
+    }
+
+    /**
+     * Build the localized URL for a language code and path.
+     */
+    private function buildLocalizedUrl(string $lang, string $path): string
+    {
+        $path = $this->replaceUmlauts($path);
+        if (! str_starts_with($path, '/')) {
+            $path = '/'.$path;
+        }
+
+        return 'https://wc-info.org/'.$lang.$path;
     }
 
     /**

@@ -44,43 +44,49 @@ class SitemapTest extends TestCase
 
         $urls = [];
         foreach ($xml->url as $url) {
-            $urls[(string) $url->loc] = [
+            $loc = (string) $url->loc;
+            $alternates = [];
+            $links = $url->children('xhtml', true)->link;
+            foreach ($links as $link) {
+                $attrs = $link->attributes();
+                $alternates[(string) $attrs['hreflang']] = (string) $attrs['href'];
+            }
+
+            $urls[$loc] = [
                 'lastmod' => (string) $url->lastmod,
                 'changefreq' => (string) $url->changefreq,
                 'priority' => (string) $url->priority,
+                'alternates' => $alternates,
             ];
         }
 
-        // Fixed links assertions
-        $this->assertArrayHasKey('https://wc-info.org/', $urls);
-        $this->assertSame('2026-09-28', $urls['https://wc-info.org/']['lastmod']);
-        $this->assertSame('daily', $urls['https://wc-info.org/']['changefreq']);
-        $this->assertSame('1.0', $urls['https://wc-info.org/']['priority']);
+        $expectedFixedPages = [
+            '/' => ['lastmod' => '2026-09-28', 'changefreq' => 'daily', 'priority' => '1.0'],
+            '/Toilets/Current-Location---NEARBY' => ['lastmod' => date('Y-m-d'), 'changefreq' => 'daily', 'priority' => '1.0'],
+            '/Help' => ['lastmod' => '2023-03-22', 'changefreq' => 'monthly', 'priority' => '0.7'],
+            '/Law/Disclaimer' => ['lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.1'],
+            '/Law/Imprint' => ['lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.1'],
+            '/Law/Privacy' => ['lastmod' => '2023-03-22', 'changefreq' => 'yearly', 'priority' => '0.2'],
+        ];
 
-        $this->assertArrayHasKey('https://wc-info.org/Toilets/Current-Location---NEARBY', $urls);
-        $this->assertSame(date('Y-m-d'), $urls['https://wc-info.org/Toilets/Current-Location---NEARBY']['lastmod']);
-        $this->assertSame('daily', $urls['https://wc-info.org/Toilets/Current-Location---NEARBY']['changefreq']);
-        $this->assertSame('1.0', $urls['https://wc-info.org/Toilets/Current-Location---NEARBY']['priority']);
+        $languages = ['de', 'en', 'nl'];
 
-        $this->assertArrayHasKey('https://wc-info.org/Help', $urls);
-        $this->assertSame('2023-03-22', $urls['https://wc-info.org/Help']['lastmod']);
-        $this->assertSame('monthly', $urls['https://wc-info.org/Help']['changefreq']);
-        $this->assertSame('0.7', $urls['https://wc-info.org/Help']['priority']);
+        foreach ($expectedFixedPages as $path => $meta) {
+            $expectedLoc = 'https://wc-info.org'.($path === '/' ? '/' : $path);
+            $this->assertArrayHasKey($expectedLoc, $urls);
+            $this->assertSame($meta['lastmod'], $urls[$expectedLoc]['lastmod']);
+            $this->assertSame($meta['changefreq'], $urls[$expectedLoc]['changefreq']);
+            $this->assertSame($meta['priority'], $urls[$expectedLoc]['priority']);
 
-        $this->assertArrayHasKey('https://wc-info.org/Law/Disclaimer', $urls);
-        $this->assertSame('2023-03-22', $urls['https://wc-info.org/Law/Disclaimer']['lastmod']);
-        $this->assertSame('yearly', $urls['https://wc-info.org/Law/Disclaimer']['changefreq']);
-        $this->assertSame('0.1', $urls['https://wc-info.org/Law/Disclaimer']['priority']);
-
-        $this->assertArrayHasKey('https://wc-info.org/Law/Imprint', $urls);
-        $this->assertSame('2023-03-22', $urls['https://wc-info.org/Law/Imprint']['lastmod']);
-        $this->assertSame('yearly', $urls['https://wc-info.org/Law/Imprint']['changefreq']);
-        $this->assertSame('0.1', $urls['https://wc-info.org/Law/Imprint']['priority']);
-
-        $this->assertArrayHasKey('https://wc-info.org/Law/Privacy', $urls);
-        $this->assertSame('2023-03-22', $urls['https://wc-info.org/Law/Privacy']['lastmod']);
-        $this->assertSame('yearly', $urls['https://wc-info.org/Law/Privacy']['changefreq']);
-        $this->assertSame('0.2', $urls['https://wc-info.org/Law/Privacy']['priority']);
+            // Verify alternates point to all 3 languages
+            $alternates = $urls[$expectedLoc]['alternates'];
+            $this->assertCount(3, $alternates);
+            foreach ($languages as $altLang) {
+                $expectedAltHref = 'https://wc-info.org/'.$altLang.($path === '/' ? '/' : $path);
+                $this->assertArrayHasKey($altLang, $alternates);
+                $this->assertSame($expectedAltHref, $alternates[$altLang]);
+            }
+        }
     }
 
     public function test_sitemap_includes_active_qualified_toilets_with_correct_url_schema_and_priorities(): void
@@ -180,39 +186,59 @@ class SitemapTest extends TestCase
         $xml = simplexml_load_string($response->getContent());
         $urls = [];
         $priorityList = [];
+        $languages = ['de', 'en', 'nl'];
+
         foreach ($xml->url as $url) {
             $loc = (string) $url->loc;
             $prio = (float) $url->priority;
+            $alternates = [];
+            $links = $url->children('xhtml', true)->link;
+            foreach ($links as $link) {
+                $attrs = $link->attributes();
+                $alternates[(string) $attrs['hreflang']] = (string) $attrs['href'];
+            }
+
             $urls[$loc] = [
                 'lastmod' => (string) $url->lastmod,
                 'changefreq' => (string) $url->changefreq,
                 'priority' => (string) $url->priority,
+                'alternates' => $alternates,
             ];
             $priorityList[] = $prio;
         }
 
-        // Expected URLs
-        $url1 = "https://wc-info.org/Toilets/Alexanderplatz-Station---ChIJplace123/Deutsche-Bahn---{$toilet1->id}";
-        $url2 = "https://wc-info.org/Toilets/Toilet---NEARBY/City-Council---{$toilet2->id}";
-        $url3 = "https://wc-info.org/Toilets/Toilet---ChIJplace456/Active-Private-Recent---{$toilet3->id}";
-        $url4 = "https://wc-info.org/Toilets/Toilet---NEARBY/Toilet---{$toilet4->id}";
+        // Expected paths and priorities
+        $expectedToilets = [
+            "/Toilets/Alexanderplatz-Station---ChIJplace123/Deutsche-Bahn---{$toilet1->id}" => '0.9',
+            "/Toilets/Toilet---NEARBY/City-Council---{$toilet2->id}" => '0.8',
+            "/Toilets/Toilet---ChIJplace456/Active-Private-Recent---{$toilet3->id}" => '0.7',
+            "/Toilets/Toilet---NEARBY/Toilet---{$toilet4->id}" => '0.6',
+        ];
 
-        $this->assertArrayHasKey($url1, $urls);
-        $this->assertSame('0.9', $urls[$url1]['priority']);
+        foreach ($expectedToilets as $path => $expectedPriority) {
+            $expectedLoc = 'https://wc-info.org'.$path;
+            $this->assertArrayHasKey($expectedLoc, $urls);
+            $this->assertSame($expectedPriority, $urls[$expectedLoc]['priority']);
 
-        $this->assertArrayHasKey($url2, $urls);
-        $this->assertSame('0.8', $urls[$url2]['priority']);
+            // Verify alternates
+            $alternates = $urls[$expectedLoc]['alternates'];
+            $this->assertCount(3, $alternates);
+            foreach ($languages as $altLang) {
+                $this->assertArrayHasKey($altLang, $alternates);
+                $this->assertSame('https://wc-info.org/'.$altLang.$path, $alternates[$altLang]);
+            }
+        }
 
-        $this->assertArrayHasKey($url3, $urls);
-        $this->assertSame('0.7', $urls[$url3]['priority']);
+        // Excluded URLs should not appear
+        $excludedPaths = [
+            "/Toilets/Toilet---ChIJhidden/Hidden-Qualified-Toilet---{$hiddenToilet->id}",
+            "/Toilets/Toilet---ChIJdeleted/Deleted-Qualified-Toilet---{$deletedToilet->id}",
+            "/Toilets/Toilet---ChIJunqualified/Active-Unqualified-Toilet---{$unqualifiedToilet->id}",
+        ];
 
-        $this->assertArrayHasKey($url4, $urls);
-        $this->assertSame('0.6', $urls[$url4]['priority']);
-
-        // Excluded URLs
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJhidden/Hidden-Qualified-Toilet---{$hiddenToilet->id}", $urls);
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJdeleted/Deleted-Qualified-Toilet---{$deletedToilet->id}", $urls);
-        $this->assertArrayNotHasKey("https://wc-info.org/Toilets/Toilet---ChIJunqualified/Active-Unqualified-Toilet---{$unqualifiedToilet->id}", $urls);
+        foreach ($excludedPaths as $excludedPath) {
+            $this->assertArrayNotHasKey('https://wc-info.org'.$excludedPath, $urls);
+        }
 
         // Verify sorted by priority desc
         $sortedPriorities = $priorityList;
@@ -244,11 +270,29 @@ class SitemapTest extends TestCase
 
         $xml = simplexml_load_string($response->getContent());
         $urls = [];
+        $toiletUrl = null;
         foreach ($xml->url as $url) {
-            $urls[] = (string) $url->loc;
+            $loc = (string) $url->loc;
+            $urls[] = $loc;
+            if (str_contains($loc, (string) $toilet->id)) {
+                $toiletUrl = $url;
+            }
         }
 
-        $expectedUrl = "https://wc-info.org/Toilets/Muenchen-Hauptbahnhof---ChIJ_muenchen_hbf/Staedtische-Betriebe-Muenchen---{$toilet->id}";
-        $this->assertContains($expectedUrl, $urls);
+        $expectedMainUrl = "https://wc-info.org/Toilets/Muenchen-Hauptbahnhof---ChIJ_muenchen_hbf/Staedtische-Betriebe-Muenchen---{$toilet->id}";
+        $this->assertContains($expectedMainUrl, $urls);
+        $this->assertNotNull($toiletUrl);
+
+        $links = $toiletUrl->children('xhtml', true)->link;
+        $alternates = [];
+        foreach ($links as $link) {
+            $attrs = $link->attributes();
+            $alternates[(string) $attrs['hreflang']] = (string) $attrs['href'];
+        }
+
+        foreach (['de', 'en', 'nl'] as $lang) {
+            $expectedAltUrl = "https://wc-info.org/{$lang}/Toilets/Muenchen-Hauptbahnhof---ChIJ_muenchen_hbf/Staedtische-Betriebe-Muenchen---{$toilet->id}";
+            $this->assertSame($expectedAltUrl, $alternates[$lang]);
+        }
     }
 }
