@@ -20,6 +20,19 @@ class UnflagPublicBathroomToiletsCommandUnitTest extends TestCase
         $this->command = new UnflagPublicBathroomToiletsCommand;
     }
 
+    public function test_open_24_hours_periods_constant(): void
+    {
+        $this->assertSame(
+            '[{"open":{"day":0,"hour":0,"minute":0}}]',
+            UnflagPublicBathroomToiletsCommand::OPEN_24_HOURS_PERIODS
+        );
+        $decoded = json_decode(UnflagPublicBathroomToiletsCommand::OPEN_24_HOURS_PERIODS, true);
+        $this->assertIsArray($decoded);
+        $this->assertSame(0, $decoded[0]['open']['day']);
+        $this->assertSame(0, $decoded[0]['open']['hour']);
+        $this->assertSame(0, $decoded[0]['open']['minute']);
+    }
+
     public function test_is_last_update_setting_opening_hours_to_null_detects_null(): void
     {
         $this->assertTrue($this->command->isLastUpdateSettingOpeningHoursToNull([

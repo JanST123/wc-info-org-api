@@ -138,7 +138,7 @@ class UnflagPublicBathroomToiletsCommandTest extends TestCase
         $this->artisan('app:unflag-public-bathrooms-without-opening-hours', ['--dry-run' => true])
             ->assertSuccessful()
             ->expectsOutputToContain('DRY-RUN mode')
-            ->expectsOutputToContain('1 toilet(s) would be unflagged');
+            ->expectsOutputToContain('1 toilet(s) would be unflagged and set to 24/7 opening hours');
 
         // Verify database is NOT modified in dry-run mode
         $toilet1Fresh = Toilet::find($toilet1->id);
@@ -147,11 +147,15 @@ class UnflagPublicBathroomToiletsCommandTest extends TestCase
         // --- Step B: Test actual execution ---
         $this->artisan('app:unflag-public-bathrooms-without-opening-hours')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 1 toilet(s) assigned to places of type "public_bathroom"');
+            ->expectsOutputToContain('Successfully unflagged and set 24/7 opening hours for 1 toilet(s) assigned to places of type "public_bathroom"');
 
-        // Verify toilet1 was unflagged
+        // Verify toilet1 was unflagged and received 24/7 opening hours with user_overridden = 1
         $toilet1Fresh = Toilet::find($toilet1->id);
         $this->assertFalse((bool) $toilet1Fresh->flagged);
+        $prop1 = DB::table('toilet_properties')->where('fk_toiletId', $toilet1->id)->where('type', 'place_opening_hours')->first();
+        $this->assertNotNull($prop1);
+        $this->assertSame('[{"open":{"day":0,"hour":0,"minute":0}}]', $prop1->value);
+        $this->assertEquals(1, $prop1->user_overridden);
 
         // Verify other toilets remain flagged
         $toilet2Fresh = Toilet::find($toilet2->id);
@@ -203,7 +207,7 @@ class UnflagPublicBathroomToiletsCommandTest extends TestCase
 
         $this->artisan('app:unflag-public-bathroom-toilets')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 1 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged and set 24/7 opening hours for 1 toilet(s)');
 
         $this->assertFalse((bool) Toilet::find($toilet->id)->flagged);
     }
@@ -254,7 +258,7 @@ class UnflagPublicBathroomToiletsCommandTest extends TestCase
         // Running without --only-hours should unflag it
         $this->artisan('app:unflag-public-bathrooms')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 1 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged and set 24/7 opening hours for 1 toilet(s)');
 
         $this->assertFalse((bool) Toilet::find($toilet->id)->flagged);
     }
@@ -296,7 +300,7 @@ class UnflagPublicBathroomToiletsCommandTest extends TestCase
         // With --include-restroom-types, it is unflagged
         $this->artisan('app:unflag-public-bathrooms', ['--include-restroom-types' => true])
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 1 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged and set 24/7 opening hours for 1 toilet(s)');
 
         $this->assertFalse((bool) Toilet::find($toilet->id)->flagged);
     }

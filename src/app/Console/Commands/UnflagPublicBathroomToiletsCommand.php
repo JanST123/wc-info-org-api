@@ -7,9 +7,12 @@ namespace App\Console\Commands;
 use App\Models\Place;
 use App\Models\Toilet;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class UnflagPublicBathroomToiletsCommand extends Command
 {
+    public const OPEN_24_HOURS_PERIODS = '[{"open":{"day":0,"hour":0,"minute":0}}]';
+
     protected $signature = 'app:unflag-public-bathrooms-without-opening-hours
                             {--dry-run : Preview changes without modifying the database}
                             {--only-hours : Only match toilets where setting place_opening_hours to null was the only substantive change}
@@ -20,7 +23,7 @@ class UnflagPublicBathroomToiletsCommand extends Command
         'app:unflag-public-bathrooms',
     ];
 
-    protected $description = 'Find flagged toilets where the last update set place_opening_hours to null, and unflag those assigned to a place with type "public_bathroom"';
+    protected $description = 'Find flagged toilets where the last update set place_opening_hours to null, unflag them and set 24/7 opening hours if assigned to a place with type "public_bathroom"';
 
     public function handle(): int
     {
@@ -98,7 +101,7 @@ class UnflagPublicBathroomToiletsCommand extends Command
                 $otherStr = ! empty($item['otherChanges']) ? implode(', ', $item['otherChanges']) : 'none';
 
                 if ($isPb) {
-                    $status = $dryRun ? '<comment>Would unflag</comment>' : '<info>Unflagged</info>';
+                    $status = $dryRun ? '<comment>Would unflag & set open 24hrs</comment>' : '<info>Unflagged & set open 24hrs</info>';
                 } else {
                     $status = '<fg=gray>Kept flagged (no public_bathroom type)</>';
                 }
@@ -127,7 +130,7 @@ class UnflagPublicBathroomToiletsCommand extends Command
             [
                 ['Total flagged toilets evaluated', $totalFlagged],
                 ['Flagged toilets with place_opening_hours set to null', count($matchingToilets)],
-                ['  └ With place type "public_bathroom" (to unflag)', count($toUnflag)],
+                ['  └ With place type "public_bathroom" (to unflag & set open 24hrs)', count($toUnflag)],
                 ['  └ Without place type "public_bathroom" (kept flagged)', count($toKeepFlagged)],
             ]
         );
@@ -145,7 +148,7 @@ class UnflagPublicBathroomToiletsCommand extends Command
         }
 
         if ($dryRun) {
-            $this->info('Dry-run complete. '.count($toUnflag).' toilet(s) would be unflagged.');
+            $this->info('Dry-run complete. '.count($toUnflag).' toilet(s) would be unflagged and set to 24/7 opening hours.');
 
             return self::SUCCESS;
         }
@@ -154,7 +157,17 @@ class UnflagPublicBathroomToiletsCommand extends Command
         $unflagIds = array_map(fn ($item) => $item['toilet']->id, $toUnflag);
         Toilet::whereIn('id', $unflagIds)->update(['flagged' => false]);
 
-        $this->info('Successfully unflagged '.count($toUnflag).' toilet(s) assigned to places of type "public_bathroom".');
+        // Set place_opening_hours to 24/7 opening hours
+        $openingHoursRows = array_map(fn ($id) => [
+            'fk_toiletId' => $id,
+            'type' => 'place_opening_hours',
+            'value' => self::OPEN_24_HOURS_PERIODS,
+            'user_overridden' => 1,
+        ], $unflagIds);
+
+        DB::table('toilet_properties')->upsert($openingHoursRows, ['fk_toiletId', 'type'], ['value', 'user_overridden']);
+
+        $this->info('Successfully unflagged and set 24/7 opening hours for '.count($toUnflag).' toilet(s) assigned to places of type "public_bathroom".');
 
         return self::SUCCESS;
     }
