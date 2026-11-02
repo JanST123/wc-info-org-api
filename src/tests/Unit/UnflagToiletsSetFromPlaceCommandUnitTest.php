@@ -287,7 +287,7 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
         $this->assertFalse($result);
     }
 
-    public function test_is_last_change_only_set_from_null_to_place_data_rejects_when_other_fields_old_not_null(): void
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_address_updated_to_place_address_from_non_null(): void
     {
         $place = new Place;
         $place->place_id = 'ChIJ123';
@@ -296,9 +296,80 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
             'formattedAddress' => 'Parkweg 5, Berlin',
         ];
 
-        // address old value was NOT null ('Old Street 1') -> MUST NOT UNFLAG
+        // address old value was NOT null ('Old Street 1'), but new matches place address -> MUST BE UNFLAGGED
         $diff = [
             'address' => ['old' => 'Old Street 1', 'new' => 'Parkweg 5, Berlin'],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['address'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_rejects_address_when_new_value_mismatches_place(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'New Cafe'],
+            'formattedAddress' => 'Parkweg 5, Berlin',
+        ];
+
+        // address new does not match place address -> MUST NOT UNFLAG
+        $diff = [
+            'address' => ['old' => 'Old Street 1', 'new' => 'Wrong Other Street 99'],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertFalse($result);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_any_website_change(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'Some Place'],
+        ];
+
+        // website changed from one URL to another URL -> website change is always allowed -> MUST BE UNFLAGGED
+        $diff = [
+            'website' => ['old' => 'https://previous-url.com', 'new' => 'https://updated-arbitrary-url.com'],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['website'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_rejects_when_other_fields_old_not_null(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'New Cafe'],
+            'regularOpeningHours' => [
+                'periods' => [
+                    ['open' => ['day' => 1, 'hour' => 8, 'minute' => 0]],
+                ],
+            ],
+        ];
+
+        // opening hours old was already non-null -> MUST NOT UNFLAG
+        $diff = [
+            'place_opening_hours' => [
+                'old' => '[{"open":{"day":0,"hour":8,"minute":0}}]',
+                'new' => '[{"open":{"day":1,"hour":8,"minute":0}}]',
+            ],
             'flagged' => ['old' => false, 'new' => true],
         ];
 

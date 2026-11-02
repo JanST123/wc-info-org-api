@@ -96,7 +96,7 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toiletC->id;
 
-        // Toilet D: Address was NOT null (was 'Old Street 1') -> SHOULD REMAIN FLAGGED
+        // Toilet D: Address was NOT null (was 'Old Street 1'), but new matches place address -> SHOULD BE UNFLAGGED
         $toiletD = Toilet::create([
             'name' => 'Toilet D',
             'status' => 'active',
@@ -162,11 +162,53 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toiletH->id;
 
+        // Toilet J: Website changed from old URL to another URL (website change is always allowed) -> SHOULD BE UNFLAGGED
+        $toiletJ = Toilet::create([
+            'name' => 'Toilet J',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'website' => ['old' => 'https://previous-url.com', 'new' => 'https://new-arbitrary-url.com'],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletJ->id;
+
+        // Toilet K: Address new does NOT match place address -> SHOULD REMAIN FLAGGED
+        $toiletK = Toilet::create([
+            'name' => 'Toilet K',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'address' => ['old' => 'Old Street 1', 'new' => 'Completely Different Street 99'],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletK->id;
+
+        // Toilet L: Opening hours changed from existing non-null hours -> SHOULD REMAIN FLAGGED
+        $toiletL = Toilet::create([
+            'name' => 'Toilet L',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'place_opening_hours' => [
+                    'old' => '[{"open":{"day":0,"hour":8,"minute":0}}]',
+                    'new' => '[{"open":{"day":1,"hour":8,"minute":0}}]',
+                ],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletL->id;
+
         // 1. Test DRY-RUN mode
         $this->artisan('app:unflag-toilets-set-from-place', ['--dry-run' => true])
             ->assertSuccessful()
             ->expectsOutputToContain('DRY-RUN mode')
-            ->expectsOutputToContain('4 toilet(s) would be unflagged');
+            ->expectsOutputToContain('6 toilet(s) would be unflagged');
 
         // Confirm still flagged after dry-run
         $this->assertTrue((bool) Toilet::find($toiletA->id)->flagged);
@@ -177,21 +219,27 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletG->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletH->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletJ->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletK->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletL->id)->flagged);
 
         // 2. Test LIVE execution
         $this->artisan('app:unflag-toilets-set-from-place')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 4 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged 6 toilet(s)');
 
-        // Confirm Toilets A, B, C, G are unflagged, and D, E, F, H remain flagged
+        // Confirm Toilets A, B, C, D, G, J are unflagged, and E, F, H, K, L remain flagged
         $this->assertFalse((bool) Toilet::find($toiletA->id)->flagged);
         $this->assertFalse((bool) Toilet::find($toiletB->id)->flagged);
         $this->assertFalse((bool) Toilet::find($toiletC->id)->flagged);
-        $this->assertTrue((bool) Toilet::find($toiletD->id)->flagged);
+        $this->assertFalse((bool) Toilet::find($toiletD->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletE->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
         $this->assertFalse((bool) Toilet::find($toiletG->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletH->id)->flagged);
+        $this->assertFalse((bool) Toilet::find($toiletJ->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletK->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletL->id)->flagged);
     }
 
     public function test_command_works_with_revision_diff(): void

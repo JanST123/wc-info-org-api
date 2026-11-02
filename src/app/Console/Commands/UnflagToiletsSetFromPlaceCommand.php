@@ -203,8 +203,8 @@ class UnflagToiletsSetFromPlaceCommand extends Command
 
     /**
      * Check if a substantive field change is allowed:
-     * 1. Owner set to current place name (allowed from null or non-null)
-     * 2. Website set to null (allowed from null or non-null)
+     * 1. Owner, name, or address set to current place data value (allowed from null or non-null)
+     * 2. Website change is always allowed (from null or non-null)
      * 3. Change of lat/lon to current place lat/lon if old lat/lon did not have a float value
      * 4. Any field set from null/unset to current place data value
      */
