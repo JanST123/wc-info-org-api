@@ -41,6 +41,10 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
                 'displayName' => ['text' => 'Grand Central Cafe'],
                 'formattedAddress' => 'Main Street 100, Berlin',
                 'websiteUri' => 'https://grandcentral.berlin',
+                'location' => [
+                    'latitude' => 52.520008,
+                    'longitude' => 13.404954,
+                ],
                 'types' => ['cafe', 'food'],
                 'restroom' => true,
             ],
@@ -131,11 +135,38 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toiletF->id;
 
+        // Toilet G: lat/lon old was whole number (52/13), new matches place coordinates -> SHOULD BE UNFLAGGED
+        $toiletG = Toilet::create([
+            'name' => 'Toilet G',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'lat' => ['old' => 52, 'new' => 52.520008],
+                'lon' => ['old' => 13, 'new' => 13.404954],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletG->id;
+
+        // Toilet H: lat old was already a float (52.519000) -> SHOULD REMAIN FLAGGED
+        $toiletH = Toilet::create([
+            'name' => 'Toilet H',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'lat' => ['old' => 52.519000, 'new' => 52.520008],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletH->id;
+
         // 1. Test DRY-RUN mode
         $this->artisan('app:unflag-toilets-set-from-place', ['--dry-run' => true])
             ->assertSuccessful()
             ->expectsOutputToContain('DRY-RUN mode')
-            ->expectsOutputToContain('3 toilet(s) would be unflagged');
+            ->expectsOutputToContain('4 toilet(s) would be unflagged');
 
         // Confirm still flagged after dry-run
         $this->assertTrue((bool) Toilet::find($toiletA->id)->flagged);
@@ -144,19 +175,23 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         $this->assertTrue((bool) Toilet::find($toiletD->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletE->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletG->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletH->id)->flagged);
 
         // 2. Test LIVE execution
         $this->artisan('app:unflag-toilets-set-from-place')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 3 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged 4 toilet(s)');
 
-        // Confirm Toilets A, B, C are unflagged, and D, E, F remain flagged
+        // Confirm Toilets A, B, C, G are unflagged, and D, E, F, H remain flagged
         $this->assertFalse((bool) Toilet::find($toiletA->id)->flagged);
         $this->assertFalse((bool) Toilet::find($toiletB->id)->flagged);
         $this->assertFalse((bool) Toilet::find($toiletC->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletD->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletE->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
+        $this->assertFalse((bool) Toilet::find($toiletG->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletH->id)->flagged);
     }
 
     public function test_command_works_with_revision_diff(): void

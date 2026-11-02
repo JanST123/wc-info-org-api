@@ -33,7 +33,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
         'app:unflag-place-populated-toilets',
     ];
 
-    protected $description = 'Find flagged toilets where the last update only set fields from null to current place data values, set website to null, or updated owner to current place name, and unflag them';
+    protected $description = 'Find flagged toilets where the last update only set fields from null to current place data values, set website to null, updated owner to current place name, or fixed non-float coordinates to place coordinates, and unflag them';
 
     public function handle(): int
     {
@@ -43,7 +43,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
         if ($dryRun) {
             $this->warn('DRY-RUN mode: Only reading data, no changes will be made.');
         } else {
-            $this->info('Searching for flagged toilets whose last revision only set fields from null to place data, website to null, or owner to place name...');
+            $this->info('Searching for flagged toilets whose last revision only set fields from null to place data, website to null, owner to place name, or fixed non-float coordinates...');
         }
 
         $flaggedToilets = Toilet::where('flagged', 1)
@@ -205,7 +205,8 @@ class UnflagToiletsSetFromPlaceCommand extends Command
      * Check if a substantive field change is allowed:
      * 1. Owner set to current place name (allowed from null or non-null)
      * 2. Website set to null (allowed from null or non-null)
-     * 3. Any field set from null/unset to current place data value
+     * 3. Change of lat/lon to current place lat/lon if old lat/lon did not have a float value
+     * 4. Any field set from null/unset to current place data value
      */
     public function isSubstantiveChangeAllowed(string $key, mixed $oldVal, mixed $newVal, Place $place): bool
     {
@@ -221,12 +222,39 @@ class UnflagToiletsSetFromPlaceCommand extends Command
             return true;
         }
 
-        // 3. Field set from null/unset to current place data value
+        // 3. Change of lat/lon to current place lat/lon if old lat/lon did not have a float value
+        if ($key === 'lat' || $key === 'lon') {
+            if ($this->isCoordinateNotAFloat($oldVal)) {
+                return $this->isFieldMatchingCurrentPlaceData($key, $newVal, $place);
+            }
+        }
+
+        // 4. Field set from null/unset to current place data value
         if ($this->isOldValueNullOrUnset($key, $oldVal)) {
             return $this->isFieldMatchingCurrentPlaceData($key, $newVal, $place);
         }
 
         return false;
+    }
+
+    /**
+     * Check if a coordinate value represents an unset / non-float value (null, empty, non-numeric, 0, or integer without decimal places).
+     */
+    public function isCoordinateNotAFloat(mixed $val): bool
+    {
+        if ($val === null || $val === '' || ! is_numeric($val)) {
+            return true;
+        }
+
+        $floatVal = (float) $val;
+
+        // 0.0 is not a valid coordinate float
+        if ($floatVal === 0.0) {
+            return true;
+        }
+
+        // An integer / whole number with no fractional digits (e.g. 52, 52.0) is not a proper coordinate float value
+        return round($floatVal, 0) == $floatVal;
     }
 
     /**

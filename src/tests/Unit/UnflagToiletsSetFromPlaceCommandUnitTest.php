@@ -49,6 +49,35 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
         $this->assertTrue($this->command->isOldValueNullOrUnset('temporary_closed', null));
     }
 
+    public function test_is_coordinate_not_a_float(): void
+    {
+        // Null / empty / non-numeric
+        $this->assertTrue($this->command->isCoordinateNotAFloat(null));
+        $this->assertTrue($this->command->isCoordinateNotAFloat(''));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('invalid'));
+
+        // Zero values
+        $this->assertTrue($this->command->isCoordinateNotAFloat(0));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('0'));
+        $this->assertTrue($this->command->isCoordinateNotAFloat(0.0));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('0.00000000'));
+
+        // Whole integers / numbers without decimal precision
+        $this->assertTrue($this->command->isCoordinateNotAFloat(52));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('52'));
+        $this->assertTrue($this->command->isCoordinateNotAFloat(52.0));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('52.00000000'));
+        $this->assertTrue($this->command->isCoordinateNotAFloat(13));
+        $this->assertTrue($this->command->isCoordinateNotAFloat('13.00000000'));
+
+        // Real coordinates with float decimal precision
+        $this->assertFalse($this->command->isCoordinateNotAFloat(52.520008));
+        $this->assertFalse($this->command->isCoordinateNotAFloat('52.520008'));
+        $this->assertFalse($this->command->isCoordinateNotAFloat(13.404954));
+        $this->assertFalse($this->command->isCoordinateNotAFloat('13.404954'));
+        $this->assertFalse($this->command->isCoordinateNotAFloat(52.1));
+    }
+
     public function test_is_field_matching_current_place_data(): void
     {
         $place = new Place;
@@ -207,6 +236,55 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
 
         $this->assertTrue($result);
         $this->assertSame(['owner', 'website', 'address'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_coordinates_when_old_not_a_float(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'location' => [
+                'latitude' => 52.520008,
+                'longitude' => 13.404954,
+            ],
+        ];
+
+        // Old lat/lon were integer whole numbers (not proper floats) -> MUST BE UNFLAGGED
+        $diff = [
+            'lat' => ['old' => 52, 'new' => 52.520008],
+            'lon' => ['old' => 13, 'new' => 13.404954],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['lat', 'lon'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_rejects_coordinates_when_old_was_already_a_float(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'location' => [
+                'latitude' => 52.520008,
+                'longitude' => 13.404954,
+            ],
+        ];
+
+        // Old lat/lon were already valid floats with decimals (meaning coordinates were intentionally moved) -> MUST NOT UNFLAG
+        $diff = [
+            'lat' => ['old' => 52.519000, 'new' => 52.520008],
+            'lon' => ['old' => 13.404000, 'new' => 13.404954],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertFalse($result);
     }
 
     public function test_is_last_change_only_set_from_null_to_place_data_rejects_when_other_fields_old_not_null(): void
