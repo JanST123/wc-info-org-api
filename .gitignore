@@ -32,3 +32,5 @@ Thumbs.db
 
 # Deployment artifacts
 deploy/
+
+_dev_db_server/*.sql
