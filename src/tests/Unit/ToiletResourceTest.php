@@ -79,6 +79,40 @@ class ToiletResourceTest extends TestCase
         $this->assertSame('https://station-wc.example.com', $array['website']);
         $this->assertSame('yes', $array['euro_key']);
         $this->assertSame('little', $array['storage_space']);
+        $this->assertFalse($array['is_summary']);
+        $this->assertSame(1, $array['summary_count']);
         $this->assertArrayNotHasKey('source', $array);
+    }
+
+    public function test_list_resource_includes_summary_attributes_when_set(): void
+    {
+        $toilet = new Toilet([
+            'name' => 'different',
+            'owner' => 'different',
+            'status' => 'active',
+            'is_qualified' => true,
+            'lat' => 52.5200,
+            'lon' => 13.4050,
+        ]);
+        $toilet->id = -12345;
+
+        $toilet->setRelation('properties', collect([
+            (object) ['type' => 'has_wheelchair_access', 'value' => '1'],
+            (object) ['type' => 'public_accessible', 'value' => '1'],
+        ]));
+        $toilet->setRelation('photos', collect());
+        $toilet->setAttribute('is_summary', true);
+        $toilet->setAttribute('summary_count', 42);
+        $toilet->setAttribute('is_open', true);
+
+        $resource = new ToiletListResource($toilet);
+        $array = $resource->toArray(Request::create('/'));
+
+        $this->assertSame(-12345, $array['id']);
+        $this->assertSame('different', $array['name']);
+        $this->assertTrue($array['is_summary']);
+        $this->assertSame(42, $array['summary_count']);
+        $this->assertTrue($array['has_wheelchair_access']);
+        $this->assertTrue($array['is_open']);
     }
 }

@@ -172,7 +172,7 @@ class ToiletAddValidationTest extends TestCase
         $this->assertEquals('https://example.com/wc', $detail['website']);
 
         // 3. GET /toilets/bounds/... (ToiletListResource)
-        $listResponse = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0');
+        $listResponse = $this->getJson('/toilets/bounds/52.50/13.38/52.54/13.42');
         $listResponse->assertStatus(200);
         $item = collect($listResponse->json())->firstWhere('id', $toiletId);
         $this->assertNotNull($item);
@@ -261,7 +261,7 @@ class ToiletAddValidationTest extends TestCase
         $this->assertStringNotContainsString('confidential_source_name', $detailRes->getContent());
 
         // 2. GET /toilets/bounds/... (List)
-        $boundsRes = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0');
+        $boundsRes = $this->getJson('/toilets/bounds/52.50/13.38/52.54/13.42');
         $boundsRes->assertStatus(200);
         $item = collect($boundsRes->json())->firstWhere('id', $toilet->id);
         $this->assertNotNull($item);

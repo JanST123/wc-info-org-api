@@ -52,6 +52,27 @@ return [
         'cache_days' => (int) env('DISCOVER_PLACES_CACHE_DAYS', 30),
     ],
 
+    // Threshold in square kilometers above which /toilets/bounds automatically switches to summarized cells
+    'bounds_summary_threshold_km2' => (float) env('BOUNDS_SUMMARY_THRESHOLD_KM2', 500.0),
+
+    // Dynamic grid cell area (km²) based on requested bounding box area (km²)
+    // Keeps visible cluster markers around ~40-120 regardless of zoom level
+    'bounds_summary_cell_tiers' => [
+        // [max_bounds_area_km2, cell_size_km2]
+        [500, 8.0],          // up to 500 km²: ~2.8 km x 2.8 km
+        [2500, 25.0],        // up to 2,500 km²: 5 km x 5 km
+        [15000, 100.0],      // up to 15,000 km²: 10 km x 10 km
+        [75000, 400.0],      // up to 75,000 km²: 20 km x 20 km
+        [300000, 1200.0],    // up to 300,000 km²: ~35 km x 35 km
+        [PHP_FLOAT_MAX, 2500.0], // > 300,000 km² (whole country / Europe): 50 km x 50 km
+    ],
+
+    // Fallback grid cell area in square kilometers for summarized datasets
+    'bounds_summary_cell_size_km2' => (float) env('BOUNDS_SUMMARY_CELL_SIZE_KM2', 8.0),
+
+    // Safety limit on max individual toilets returned in unsummarized bounds queries (<= 50 km²)
+    'bounds_max_unsummarized_limit' => (int) env('BOUNDS_MAX_UNSUMMARIZED_LIMIT', 500),
+
     'public_accessible_types' => [
         // Transit & Transport
         'train_station',

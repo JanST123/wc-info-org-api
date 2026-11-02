@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateToiletRequest;
 use App\Http\Resources\ToiletDetailResource;
 use App\Http\Resources\ToiletListResource;
 use App\Models\Toilet;
+use App\Models\ToiletProperty;
 use App\Models\Type;
 use App\Models\TypeXPlace;
 use App\Services\GooglePlacesService;
@@ -68,6 +69,13 @@ class ToiletController extends Controller
         $minLat = min($south, $north);
         $maxLat = max($south, $north);
 
+        $areaKm2 = $this->calculateBoundsAreaKm2($minLat, $minLon, $maxLat, $maxLon);
+        $thresholdKm2 = (float) config('wcinfo.bounds_summary_threshold_km2', 50.0);
+
+        if ($areaKm2 > $thresholdKm2) {
+            return $this->forBoundsSummary($minLat, $maxLat, $minLon, $maxLon, $filter, $areaKm2);
+        }
+
         $earthRadius = 6371.0;
         $dLat = rad2deg($distance / $earthRadius);
         $expandedMinLat = max(-90.0, $minLat - $dLat);
@@ -79,10 +87,13 @@ class ToiletController extends Controller
         $expandedMinLon = max(-180.0, $minLon - $dLon);
         $expandedMaxLon = min(180.0, $maxLon + $dLon);
 
+        $maxLimit = (int) config('wcinfo.bounds_max_unsummarized_limit', 500);
+
         $toilets = Toilet::visible()
             ->whereBetween('lon', [$expandedMinLon, $expandedMaxLon])
             ->whereBetween('lat', [$expandedMinLat, $expandedMaxLat])
             ->with(['properties', 'photos'])
+            ->limit($maxLimit)
             ->get();
 
         if ($toilets->isEmpty()) {
@@ -170,6 +181,118 @@ class ToiletController extends Controller
         }
 
         Toilet::whereIn('id', $ids)->update(['last_included' => now()]);
+    }
+
+    public function calculateBoundsAreaKm2(float $south, float $west, float $north, float $east): float
+    {
+        $minLat = min($south, $north);
+        $maxLat = max($south, $north);
+        $minLon = min($west, $east);
+        $maxLon = max($west, $east);
+
+        $heightKm = ($maxLat - $minLat) * 111.32;
+        $midLat = ($minLat + $maxLat) / 2.0;
+        $cosMid = max(0.0001, cos(deg2rad($midLat)));
+        $widthKm = ($maxLon - $minLon) * 111.32 * $cosMid;
+
+        return round($heightKm * $widthKm, 2);
+    }
+
+    public function getCellSizeKm2ForArea(float $areaKm2): float
+    {
+        $tiers = config('wcinfo.bounds_summary_cell_tiers');
+
+        if (is_array($tiers)) {
+            foreach ($tiers as $tier) {
+                if (isset($tier[0], $tier[1]) && $areaKm2 <= (float) $tier[0]) {
+                    return (float) $tier[1];
+                }
+            }
+        }
+
+        return (float) config('wcinfo.bounds_summary_cell_size_km2', 8.0);
+    }
+
+    private function forBoundsSummary(float $minLat, float $maxLat, float $minLon, float $maxLon, array $filter, float $areaKm2): JsonResponse
+    {
+        $cellAreaKm2 = $this->getCellSizeKm2ForArea($areaKm2);
+        $sideKm = sqrt(max(0.1, $cellAreaKm2));
+
+        $dLat = $sideKm / 111.32;
+        $midLat = ($minLat + $maxLat) / 2.0;
+        $cosMid = max(0.0001, cos(deg2rad($midLat)));
+        $dLon = $sideKm / (111.32 * $cosMid);
+
+        $query = DB::table('toilets')
+            ->leftJoin('toilet_properties', function ($join) {
+                $join->on('toilet_properties.fk_toiletId', '=', 'toilets.id')
+                    ->where('toilet_properties.type', '=', 'has_wheelchair_access')
+                    ->where('toilet_properties.value', '=', '1');
+            })
+            ->where('toilets.status', 'active')
+            ->whereBetween('toilets.lat', [$minLat, $maxLat])
+            ->whereBetween('toilets.lon', [$minLon, $maxLon]);
+
+        if (isset($filter['has_wheelchair_access'])) {
+            $isWheelchair = in_array($filter['has_wheelchair_access'], ['1', 'true', 'yes'], true);
+            if ($isWheelchair) {
+                $query->whereNotNull('toilet_properties.fk_toiletId');
+            } else {
+                $query->whereNull('toilet_properties.fk_toiletId');
+            }
+        }
+
+        $cells = $query->selectRaw("
+                FLOOR(toilets.lat / ?) AS lat_cell,
+                FLOOR(toilets.lon / ?) AS lon_cell,
+                COUNT(DISTINCT toilets.id) AS summary_count,
+                MAX(CASE WHEN toilet_properties.fk_toiletId IS NOT NULL THEN 1 ELSE 0 END) AS has_wheelchair_access
+            ", [$dLat, $dLon])
+            ->groupBy('lat_cell', 'lon_cell')
+            ->get();
+
+        $summaries = collect();
+
+        foreach ($cells as $cell) {
+            $latCell = (int) $cell->lat_cell;
+            $lonCell = (int) $cell->lon_cell;
+            $centerLat = round(($latCell + 0.5) * $dLat, 6);
+            $centerLon = round(($lonCell + 0.5) * $dLon, 6);
+
+            $normLat = $latCell + 10000;
+            $normLon = $lonCell + 20000;
+            $syntheticId = -abs(($normLat * 100000) + $normLon);
+
+            $syntheticToilet = new Toilet([
+                'name' => 'different',
+                'owner' => 'different',
+                'lat' => $centerLat,
+                'lon' => $centerLon,
+                'place_id' => null,
+                'status' => 'active',
+                'is_qualified' => true,
+            ]);
+            $syntheticToilet->id = $syntheticId;
+
+            $props = collect();
+            if ((int) $cell->has_wheelchair_access === 1) {
+                $props->push(new ToiletProperty(['type' => 'has_wheelchair_access', 'value' => '1']));
+            }
+            $props->push(new ToiletProperty(['type' => 'public_accessible', 'value' => '1']));
+
+            $syntheticToilet->setRelation('properties', $props);
+            $syntheticToilet->setRelation('photos', collect([]));
+
+            $syntheticToilet->setAttribute('is_summary', true);
+            $syntheticToilet->setAttribute('summary_count', (int) $cell->summary_count);
+            $syntheticToilet->setAttribute('is_open', true);
+            $syntheticToilet->setAttribute('open_timestamp', null);
+            $syntheticToilet->setAttribute('close_timestamp', null);
+
+            $summaries->push($syntheticToilet);
+        }
+
+        return response()->json(ToiletListResource::collection($summaries));
     }
 
     private function haversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float

@@ -69,6 +69,8 @@ class ToiletListResource extends JsonResource
             'close_timestamp' => $closeTimestamp,
             'updated' => $this->updated,
             'distance' => $this->when(isset($this->distance), $this->distance),
+            'is_summary' => (bool) ($this->resource->is_summary ?? false),
+            'summary_count' => (int) ($this->resource->summary_count ?? 1),
         ];
     }
 }

@@ -107,7 +107,7 @@ class ToiletFilterTest extends TestCase
         ]);
         $this->createdToiletIds[] = $noHoursToilet->id;
 
-        $response = $this->getJson('/toilets/bounds/52.0/13.0/53.0/14.0?filter=is_open:true');
+        $response = $this->getJson('/toilets/bounds/52.48/13.48/52.52/13.52?filter=is_open:true');
 
         $response->assertStatus(200);
         $ids = collect($response->json())->pluck('id')->all();
@@ -168,7 +168,7 @@ class ToiletFilterTest extends TestCase
 
         // Test combined filter on bounds
         $filterQuery = 'public_accessible:true,has_wheelchair_access:true,has_changing_table:true,is_gender_separated:true,euro_key:yes';
-        $response = $this->getJson("/toilets/bounds/52.0/13.0/53.0/14.0?filter={$filterQuery}");
+        $response = $this->getJson("/toilets/bounds/52.48/13.48/52.55/13.55?filter={$filterQuery}");
 
         $response->assertStatus(200);
         $ids = collect($response->json())->pluck('id')->all();
@@ -208,8 +208,8 @@ class ToiletFilterTest extends TestCase
 
         $this->app->instance(GooglePlacesService::class, $mockPlacesService);
 
-        // Query empty bounding box (10.0, 20.0 to 11.0, 21.0)
-        $response = $this->getJson('/toilets/bounds/10.0/20.0/11.0/21.0');
+        // Query empty bounding box (10.48, 20.48 to 10.52, 20.52)
+        $response = $this->getJson('/toilets/bounds/10.48/20.48/10.52/20.52');
 
         $response->assertStatus(200);
         $ids = collect($response->json())->pluck('id')->all();
@@ -218,20 +218,20 @@ class ToiletFilterTest extends TestCase
 
     public function test_bounds_includes_toilets_within_distance_buffer_outside_strict_box(): void
     {
-        // Strict box: lat 52.40..52.60, lon 13.40..13.60
+        // Strict box: lat 52.48..52.50, lon 13.48..13.52 (< 50 km²)
         // Toilet inside box:
         $insideToilet = Toilet::create([
             'name' => 'Inside Strict Box',
-            'lat' => 52.50,
+            'lat' => 52.49,
             'lon' => 13.50,
             'status' => 'active',
         ]);
         $this->createdToiletIds[] = $insideToilet->id;
 
-        // Toilet ~2 km outside north boundary (lat 52.618 is ~2 km north of 52.60):
+        // Toilet ~2 km outside north boundary (lat 52.518 is ~2 km north of 52.50):
         $bufferedToilet = Toilet::create([
             'name' => 'Buffered Outside Toilet',
-            'lat' => 52.618,
+            'lat' => 52.518,
             'lon' => 13.50,
             'status' => 'active',
         ]);
@@ -247,7 +247,7 @@ class ToiletFilterTest extends TestCase
         $this->createdToiletIds[] = $farToilet->id;
 
         // 1. With default distance (4 km), both inside and 2 km buffered toilet should be included
-        $defaultResponse = $this->getJson('/toilets/bounds/52.40/13.40/52.60/13.60');
+        $defaultResponse = $this->getJson('/toilets/bounds/52.48/13.48/52.50/13.52');
         $defaultResponse->assertStatus(200);
         $defaultIds = collect($defaultResponse->json())->pluck('id')->all();
         $this->assertContains($insideToilet->id, $defaultIds);
@@ -255,7 +255,7 @@ class ToiletFilterTest extends TestCase
         $this->assertNotContains($farToilet->id, $defaultIds);
 
         // 2. With distance=1 km, the 2 km buffered toilet should be excluded
-        $tightResponse = $this->getJson('/toilets/bounds/52.40/13.40/52.60/13.60?distance=1');
+        $tightResponse = $this->getJson('/toilets/bounds/52.48/13.48/52.50/13.52?distance=1');
         $tightResponse->assertStatus(200);
         $tightIds = collect($tightResponse->json())->pluck('id')->all();
         $this->assertContains($insideToilet->id, $tightIds);
