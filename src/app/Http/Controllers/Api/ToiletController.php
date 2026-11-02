@@ -360,6 +360,7 @@ class ToiletController extends Controller
             $syntheticToilet->setAttribute('is_summary', true);
             $syntheticToilet->setAttribute('summary_count', (int) $cell->summary_count);
             $syntheticToilet->setAttribute('summary_bounds', $summaryBounds);
+            $syntheticToilet->setAttribute('summary_location_name', $locationLabel);
             $syntheticToilet->setAttribute('is_open', true);
             $syntheticToilet->setAttribute('open_timestamp', null);
             $syntheticToilet->setAttribute('close_timestamp', null);

@@ -130,6 +130,8 @@ class ToiletBoundsSummaryTest extends TestCase
         $this->assertArrayHasKey('east', $cluster['summary_bounds']);
         $this->assertLessThan($cluster['summary_bounds']['north'], $cluster['summary_bounds']['south']);
         $this->assertLessThan($cluster['summary_bounds']['east'], $cluster['summary_bounds']['west']);
+        $this->assertNotNull($cluster['summary_location_name']);
+        $this->assertNotEmpty($cluster['summary_location_name']);
 
         // In summary mode, last_included MUST NOT be updated!
         $toilet1->refresh();

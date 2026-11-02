@@ -72,6 +72,7 @@ class ToiletListResource extends JsonResource
             'is_summary' => (bool) ($this->resource->is_summary ?? false),
             'summary_count' => (int) ($this->resource->summary_count ?? 1),
             'summary_bounds' => $this->resource->summary_bounds ?? null,
+            'summary_location_name' => $this->resource->summary_location_name ?? null,
         ];
     }
 }
