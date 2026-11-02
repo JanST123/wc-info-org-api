@@ -13,7 +13,7 @@ use RuntimeException;
 class GooglePlacesService
 {
     public const EXCLUDED_NEARBY_TYPES = [
-        'lodging',
+        // 'lodging',
         'post_office',
         'shipping_service',
         'atm',
