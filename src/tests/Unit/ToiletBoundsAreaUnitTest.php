@@ -103,4 +103,14 @@ class ToiletBoundsAreaUnitTest extends TestCase
         // Entire country / Germany (> 300,000 km²): 2500 km²
         $this->assertSame(2500.0, $this->controller->getCellSizeKm2ForArea(357000.0));
     }
+
+    public function test_extract_city_from_address(): void
+    {
+        $this->assertSame('Reichshof', $this->controller->extractCityFromAddress('Am Bromberg 6, 51580 Reichshof, Deutschland'));
+        $this->assertSame('Rostock', $this->controller->extractCityFromAddress('Waldweg 130, 18119 Rostock'));
+        $this->assertSame('Waren (Müritz)', $this->controller->extractCityFromAddress('Große Burgstraße 25, 17192 Waren (Müritz), Deutschland'));
+        $this->assertSame('Wien', $this->controller->extractCityFromAddress('Mariahilfer Straße 1, 1060 Wien, Österreich'));
+        $this->assertSame('Bad Füssing', $this->controller->extractCityFromAddress('Kurallee 18, 94072 Bad Füssing, Deutschland'));
+        $this->assertNull($this->controller->extractCityFromAddress(''));
+    }
 }

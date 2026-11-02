@@ -81,6 +81,7 @@ class ToiletResourceTest extends TestCase
         $this->assertSame('little', $array['storage_space']);
         $this->assertFalse($array['is_summary']);
         $this->assertSame(1, $array['summary_count']);
+        $this->assertNull($array['summary_bounds']);
         $this->assertArrayNotHasKey('source', $array);
     }
 
@@ -103,6 +104,13 @@ class ToiletResourceTest extends TestCase
         $toilet->setRelation('photos', collect());
         $toilet->setAttribute('is_summary', true);
         $toilet->setAttribute('summary_count', 42);
+        $bounds = [
+            'south' => 52.510000,
+            'west' => 13.390000,
+            'north' => 52.530000,
+            'east' => 13.410000,
+        ];
+        $toilet->setAttribute('summary_bounds', $bounds);
         $toilet->setAttribute('is_open', true);
 
         $resource = new ToiletListResource($toilet);
@@ -112,6 +120,7 @@ class ToiletResourceTest extends TestCase
         $this->assertSame('different', $array['name']);
         $this->assertTrue($array['is_summary']);
         $this->assertSame(42, $array['summary_count']);
+        $this->assertSame($bounds, $array['summary_bounds']);
         $this->assertTrue($array['has_wheelchair_access']);
         $this->assertTrue($array['is_open']);
     }

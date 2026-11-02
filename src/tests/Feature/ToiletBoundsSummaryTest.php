@@ -106,20 +106,30 @@ class ToiletBoundsSummaryTest extends TestCase
         foreach ($data as $item) {
             $this->assertTrue($item['is_summary']);
             $this->assertLessThan(0, $item['id']);
-            $this->assertSame('different', $item['name']);
-            $this->assertSame('different', $item['owner']);
+            $this->assertMatchesRegularExpression('/\d+ Toilets? around .+/i', $item['name']);
+            $this->assertMatchesRegularExpression('/\d+ Toilets? around .+/i', $item['owner']);
             $this->assertTrue($item['is_open']);
             $this->assertTrue($item['public_accessible']);
         }
 
         // Find the summary item for our cell
         $cluster = collect($data)->first(function ($item) {
-            return abs($item['lat'] - 52.5050) < 0.05 && abs($item['lon'] - 13.4050) < 0.05;
+            $b = $item['summary_bounds'];
+
+            return $b['south'] <= 52.5050 && $b['north'] >= 52.5050
+                && $b['west'] <= 13.4050 && $b['east'] >= 13.4050;
         });
 
         $this->assertNotNull($cluster, 'Grid cluster for the test toilets was not found');
         $this->assertGreaterThanOrEqual(2, $cluster['summary_count']);
         $this->assertTrue($cluster['has_wheelchair_access'], 'Wheelchair access must be true if at least one toilet in cell has it');
+        $this->assertIsArray($cluster['summary_bounds']);
+        $this->assertArrayHasKey('south', $cluster['summary_bounds']);
+        $this->assertArrayHasKey('west', $cluster['summary_bounds']);
+        $this->assertArrayHasKey('north', $cluster['summary_bounds']);
+        $this->assertArrayHasKey('east', $cluster['summary_bounds']);
+        $this->assertLessThan($cluster['summary_bounds']['north'], $cluster['summary_bounds']['south']);
+        $this->assertLessThan($cluster['summary_bounds']['east'], $cluster['summary_bounds']['west']);
 
         // In summary mode, last_included MUST NOT be updated!
         $toilet1->refresh();

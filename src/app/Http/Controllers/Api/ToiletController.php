@@ -198,6 +198,29 @@ class ToiletController extends Controller
         return round($heightKm * $widthKm, 2);
     }
 
+    public function extractCityFromAddress(string $address): ?string
+    {
+        $cleaned = preg_replace('/,\s*(Deutschland|Germany|Österreich|Austria|Schweiz|Switzerland|Belgien|Belgium|Niederlande|Netherlands|France|Frankreich)\s*$/iu', '', trim($address));
+
+        if (preg_match('/(?:^|[,\s])(?:\b[A-Z]{1,2}-)?\d{4,5}\s+([A-Za-zÄÖÜäöüß\s\-\.\/]+?)(?:,|$)/u', $cleaned, $matches)) {
+            $city = trim(preg_split('/[,]/', $matches[1])[0]);
+            if ($city !== '') {
+                return $city;
+            }
+        }
+
+        $parts = array_map('trim', explode(',', $cleaned));
+        if (count($parts) > 1) {
+            $last = end($parts);
+            $lastClean = trim(preg_replace('/^\d+\s*/', '', $last));
+            if ($lastClean !== '') {
+                return $lastClean;
+            }
+        }
+
+        return null;
+    }
+
     public function getCellSizeKm2ForArea(float $areaKm2): float
     {
         $tiers = config('wcinfo.bounds_summary_cell_tiers');
@@ -224,10 +247,16 @@ class ToiletController extends Controller
         $dLon = $sideKm / (111.32 * $cosMid);
 
         $query = DB::table('toilets')
-            ->leftJoin('toilet_properties', function ($join) {
-                $join->on('toilet_properties.fk_toiletId', '=', 'toilets.id')
-                    ->where('toilet_properties.type', '=', 'has_wheelchair_access')
-                    ->where('toilet_properties.value', '=', '1');
+            ->leftJoin('toilet_properties AS tp_wheelchair', function ($join) {
+                $join->on('tp_wheelchair.fk_toiletId', '=', 'toilets.id')
+                    ->where('tp_wheelchair.type', '=', 'has_wheelchair_access')
+                    ->where('tp_wheelchair.value', '=', '1');
+            })
+            ->leftJoin('toilet_properties AS tp_address', function ($join) {
+                $join->on('tp_address.fk_toiletId', '=', 'toilets.id')
+                    ->where('tp_address.type', '=', 'address')
+                    ->whereNotNull('tp_address.value')
+                    ->where('tp_address.value', '!=', '');
             })
             ->where('toilets.status', 'active')
             ->whereBetween('toilets.lat', [$minLat, $maxLat])
@@ -236,9 +265,9 @@ class ToiletController extends Controller
         if (isset($filter['has_wheelchair_access'])) {
             $isWheelchair = in_array($filter['has_wheelchair_access'], ['1', 'true', 'yes'], true);
             if ($isWheelchair) {
-                $query->whereNotNull('toilet_properties.fk_toiletId');
+                $query->whereNotNull('tp_wheelchair.fk_toiletId');
             } else {
-                $query->whereNull('toilet_properties.fk_toiletId');
+                $query->whereNull('tp_wheelchair.fk_toiletId');
             }
         }
 
@@ -246,7 +275,8 @@ class ToiletController extends Controller
                 FLOOR(toilets.lat / ?) AS lat_cell,
                 FLOOR(toilets.lon / ?) AS lon_cell,
                 COUNT(DISTINCT toilets.id) AS summary_count,
-                MAX(CASE WHEN toilet_properties.fk_toiletId IS NOT NULL THEN 1 ELSE 0 END) AS has_wheelchair_access
+                MAX(CASE WHEN tp_wheelchair.fk_toiletId IS NOT NULL THEN 1 ELSE 0 END) AS has_wheelchair_access,
+                MAX(tp_address.value) AS sample_address
             ", [$dLat, $dLon])
             ->groupBy('lat_cell', 'lon_cell')
             ->get();
@@ -256,6 +286,12 @@ class ToiletController extends Controller
         foreach ($cells as $cell) {
             $latCell = (int) $cell->lat_cell;
             $lonCell = (int) $cell->lon_cell;
+
+            $cellSouth = round($latCell * $dLat, 6);
+            $cellNorth = round(($latCell + 1) * $dLat, 6);
+            $cellWest = round($lonCell * $dLon, 6);
+            $cellEast = round(($lonCell + 1) * $dLon, 6);
+
             $centerLat = round(($latCell + 0.5) * $dLat, 6);
             $centerLon = round(($lonCell + 0.5) * $dLon, 6);
 
@@ -263,9 +299,40 @@ class ToiletController extends Controller
             $normLon = $lonCell + 20000;
             $syntheticId = -abs(($normLat * 100000) + $normLon);
 
+            $city = ! empty($cell->sample_address) ? $this->extractCityFromAddress((string) $cell->sample_address) : null;
+
+            if ($city === null) {
+                $cached = DB::table('google_nearby_search_cache')
+                    ->whereBetween('lat', [$cellSouth, $cellNorth])
+                    ->whereBetween('lon', [$cellWest, $cellEast])
+                    ->first();
+
+                if ($cached !== null && ! empty($cached->response_places)) {
+                    $places = is_array($cached->response_places)
+                        ? $cached->response_places
+                        : json_decode((string) $cached->response_places, true);
+
+                    if (is_array($places)) {
+                        foreach ($places as $place) {
+                            if (! empty($place['formattedAddress'])) {
+                                $city = $this->extractCityFromAddress((string) $place['formattedAddress']);
+                                if ($city !== null) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            $locationLabel = $city ?? (round($centerLat, 2).', '.round($centerLon, 2));
+            $count = (int) $cell->summary_count;
+            $toiletWord = $count === 1 ? 'Toilet' : 'Toilets';
+            $summaryName = "{$count} {$toiletWord} around {$locationLabel}";
+
             $syntheticToilet = new Toilet([
-                'name' => 'different',
-                'owner' => 'different',
+                'name' => $summaryName,
+                'owner' => $summaryName,
                 'lat' => $centerLat,
                 'lon' => $centerLon,
                 'place_id' => null,
@@ -283,8 +350,16 @@ class ToiletController extends Controller
             $syntheticToilet->setRelation('properties', $props);
             $syntheticToilet->setRelation('photos', collect([]));
 
+            $summaryBounds = [
+                'south' => $cellSouth,
+                'west' => $cellWest,
+                'north' => $cellNorth,
+                'east' => $cellEast,
+            ];
+
             $syntheticToilet->setAttribute('is_summary', true);
             $syntheticToilet->setAttribute('summary_count', (int) $cell->summary_count);
+            $syntheticToilet->setAttribute('summary_bounds', $summaryBounds);
             $syntheticToilet->setAttribute('is_open', true);
             $syntheticToilet->setAttribute('open_timestamp', null);
             $syntheticToilet->setAttribute('close_timestamp', null);
