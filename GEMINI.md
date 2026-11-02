@@ -146,6 +146,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:prioritize-place-types [--dry-run]`: Sets `priorize = 1` for place types likely to contain an easily accessible toilet (e.g. `public_bathroom`, `bar`, `cafe`, `restaurant`, `train_station`, `shopping_mall`) and `0` for others. Alias: `app:priorize-place-types`.
 - `php artisan app:set-unisex-toilet-properties [--dry-run] [--chunk-size=500]`: Sets `is_unisex = '1'` for all toilets that do not have `is_gender_separated = '1'`.
 - `php artisan app:unflag-public-bathrooms-without-opening-hours [--dry-run] [--only-hours] [--include-restroom-types]`: Finds flagged toilets where the last update set `place_opening_hours` to null, unflags them and sets 24/7 opening hours if assigned to a place with type "public_bathroom" (aliases: `app:unflag-public-bathroom-toilets`, `app:unflag-public-bathrooms`).
+- `php artisan app:unflag-toilets-set-from-place [--dry-run] [--chunk-size=500]`: Finds flagged toilets where the last revision only set previously null/unset fields to current place data values, and unflags them (aliases: `app:unflag-toilets-from-place-data`, `app:unflag-place-populated-toilets`).
 - `php artisan app:repair-toilet-coordinates`: Fixes legacy scaled coordinates.
 
 ---
