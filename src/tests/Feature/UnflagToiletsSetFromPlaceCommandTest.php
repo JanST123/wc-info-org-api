@@ -64,7 +64,7 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toiletA->id;
 
-        // Toilet B: Owner was NOT null (was 'Old Cafe') -> SHOULD REMAIN FLAGGED
+        // Toilet B: Owner was NOT null (was 'Old Cafe'), but set to current place name -> SHOULD BE UNFLAGGED
         $toiletB = Toilet::create([
             'name' => 'Toilet B',
             'status' => 'active',
@@ -79,22 +79,48 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
         ]);
         $this->createdToiletIds[] = $toiletB->id;
 
-        // Toilet C: Website does NOT match place data -> SHOULD REMAIN FLAGGED
+        // Toilet C: Website set to null from an old website -> SHOULD BE UNFLAGGED
         $toiletC = Toilet::create([
             'name' => 'Toilet C',
             'status' => 'active',
             'place_id' => $placeId,
             'flagged' => true,
             'last_diff' => [
-                'website' => ['old' => null, 'new' => 'https://mismatched-website.com'],
+                'website' => ['old' => 'https://old-site.com', 'new' => null],
                 'flagged' => ['old' => false, 'new' => true],
             ],
         ]);
         $this->createdToiletIds[] = $toiletC->id;
 
-        // Toilet D: No place assigned -> SHOULD REMAIN FLAGGED
+        // Toilet D: Address was NOT null (was 'Old Street 1') -> SHOULD REMAIN FLAGGED
         $toiletD = Toilet::create([
             'name' => 'Toilet D',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'address' => ['old' => 'Old Street 1', 'new' => 'Main Street 100, Berlin'],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletD->id;
+
+        // Toilet E: Owner set to wrong name (mismatch with place) -> SHOULD REMAIN FLAGGED
+        $toiletE = Toilet::create([
+            'name' => 'Toilet E',
+            'status' => 'active',
+            'place_id' => $placeId,
+            'flagged' => true,
+            'last_diff' => [
+                'owner' => ['old' => 'Old Cafe', 'new' => 'Arbitrary Wrong Cafe'],
+                'flagged' => ['old' => false, 'new' => true],
+            ],
+        ]);
+        $this->createdToiletIds[] = $toiletE->id;
+
+        // Toilet F: No place assigned -> SHOULD REMAIN FLAGGED
+        $toiletF = Toilet::create([
+            'name' => 'Toilet F',
             'status' => 'active',
             'place_id' => null,
             'flagged' => true,
@@ -103,30 +129,34 @@ class UnflagToiletsSetFromPlaceCommandTest extends TestCase
                 'flagged' => ['old' => false, 'new' => true],
             ],
         ]);
-        $this->createdToiletIds[] = $toiletD->id;
+        $this->createdToiletIds[] = $toiletF->id;
 
         // 1. Test DRY-RUN mode
         $this->artisan('app:unflag-toilets-set-from-place', ['--dry-run' => true])
             ->assertSuccessful()
             ->expectsOutputToContain('DRY-RUN mode')
-            ->expectsOutputToContain('1 toilet(s) would be unflagged');
+            ->expectsOutputToContain('3 toilet(s) would be unflagged');
 
         // Confirm still flagged after dry-run
         $this->assertTrue((bool) Toilet::find($toiletA->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletB->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletC->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletD->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletE->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
 
         // 2. Test LIVE execution
         $this->artisan('app:unflag-toilets-set-from-place')
             ->assertSuccessful()
-            ->expectsOutputToContain('Successfully unflagged 1 toilet(s)');
+            ->expectsOutputToContain('Successfully unflagged 3 toilet(s)');
 
-        // Confirm Toilet A is unflagged, and others remain flagged
+        // Confirm Toilets A, B, C are unflagged, and D, E, F remain flagged
         $this->assertFalse((bool) Toilet::find($toiletA->id)->flagged);
-        $this->assertTrue((bool) Toilet::find($toiletB->id)->flagged);
-        $this->assertTrue((bool) Toilet::find($toiletC->id)->flagged);
+        $this->assertFalse((bool) Toilet::find($toiletB->id)->flagged);
+        $this->assertFalse((bool) Toilet::find($toiletC->id)->flagged);
         $this->assertTrue((bool) Toilet::find($toiletD->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletE->id)->flagged);
+        $this->assertTrue((bool) Toilet::find($toiletF->id)->flagged);
     }
 
     public function test_command_works_with_revision_diff(): void

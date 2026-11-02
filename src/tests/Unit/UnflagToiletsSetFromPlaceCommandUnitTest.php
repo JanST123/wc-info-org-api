@@ -144,7 +144,72 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
         $this->assertSame(['owner', 'address', 'website', 'is_unisex'], $matchedFields);
     }
 
-    public function test_is_last_change_only_set_from_null_to_place_data_rejects_when_old_not_null(): void
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_owner_updated_to_place_name_from_non_null(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'Updated Place Name'],
+        ];
+
+        // owner old value was NOT null ('Old Previous Owner'), but new is the current place name -> MUST BE UNFLAGGED
+        $diff = [
+            'owner' => ['old' => 'Old Previous Owner', 'new' => 'Updated Place Name'],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['owner'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_website_set_to_null(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'Some Place'],
+        ];
+
+        // website old was an existing URL, new was set to null -> MUST BE UNFLAGGED
+        $diff = [
+            'website' => ['old' => 'https://broken-or-stale-website.com', 'new' => null],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['website'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_accepts_combined_owner_and_website_null_and_null_to_place_fields(): void
+    {
+        $place = new Place;
+        $place->place_id = 'ChIJ123';
+        $place->data = [
+            'displayName' => ['text' => 'Grand Place'],
+            'formattedAddress' => 'Grand Street 1, Berlin',
+        ];
+
+        $diff = [
+            'owner' => ['old' => 'Old Name', 'new' => 'Grand Place'],
+            'website' => ['old' => 'https://old-site.com', 'new' => null],
+            'address' => ['old' => null, 'new' => 'Grand Street 1, Berlin'],
+            'flagged' => ['old' => false, 'new' => true],
+        ];
+
+        $matchedFields = [];
+        $result = $this->command->isLastChangeOnlySetFromNullToPlaceData($diff, $place, $matchedFields);
+
+        $this->assertTrue($result);
+        $this->assertSame(['owner', 'website', 'address'], $matchedFields);
+    }
+
+    public function test_is_last_change_only_set_from_null_to_place_data_rejects_when_other_fields_old_not_null(): void
     {
         $place = new Place;
         $place->place_id = 'ChIJ123';
@@ -153,10 +218,9 @@ class UnflagToiletsSetFromPlaceCommandUnitTest extends TestCase
             'formattedAddress' => 'Parkweg 5, Berlin',
         ];
 
-        // owner old value was NOT null -> modified existing data -> MUST NOT UNFLAG
+        // address old value was NOT null ('Old Street 1') -> MUST NOT UNFLAG
         $diff = [
-            'owner' => ['old' => 'Old Cafe', 'new' => 'New Cafe'],
-            'address' => ['old' => null, 'new' => 'Parkweg 5, Berlin'],
+            'address' => ['old' => 'Old Street 1', 'new' => 'Parkweg 5, Berlin'],
             'flagged' => ['old' => false, 'new' => true],
         ];
 

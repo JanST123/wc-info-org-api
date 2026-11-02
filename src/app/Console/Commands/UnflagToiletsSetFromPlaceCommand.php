@@ -33,7 +33,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
         'app:unflag-place-populated-toilets',
     ];
 
-    protected $description = 'Find flagged toilets where the last update only set fields from null to current place data values, and unflag them';
+    protected $description = 'Find flagged toilets where the last update only set fields from null to current place data values, set website to null, or updated owner to current place name, and unflag them';
 
     public function handle(): int
     {
@@ -43,7 +43,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
         if ($dryRun) {
             $this->warn('DRY-RUN mode: Only reading data, no changes will be made.');
         } else {
-            $this->info('Searching for flagged toilets whose last revision only set fields from null to place data...');
+            $this->info('Searching for flagged toilets whose last revision only set fields from null to place data, website to null, or owner to place name...');
         }
 
         $flaggedToilets = Toilet::where('flagged', 1)
@@ -120,7 +120,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
                 Toilet::whereIn('id', $chunkIds)->update(['flagged' => false]);
             }
 
-            $this->info('Successfully unflagged '.count($idsToUnflag).' toilet(s) whose last change only set fields from null to current place data.');
+            $this->info('Successfully unflagged '.count($idsToUnflag).' toilet(s) whose last change only set fields from null to place data, website to null, or owner to place name.');
         } else {
             $this->info('No matching flagged toilets found to unflag.');
         }
@@ -151,7 +151,10 @@ class UnflagToiletsSetFromPlaceCommand extends Command
     }
 
     /**
-     * Check if the last change diff ONLY contains fields that were set from null/unset to current place data values.
+     * Check if the last change diff ONLY contains fields that were:
+     * - set from null/unset to current place data values, OR
+     * - had website set to null, OR
+     * - had owner set to the current place name.
      *
      * @param  array<string, mixed>  $diff
      * @param  array<int, string>  $matchedFields  Populated with the list of matched field names
@@ -188,13 +191,7 @@ class UnflagToiletsSetFromPlaceCommand extends Command
 
             $substantiveChangesCount++;
 
-            // 1. Was the field set from null/unset?
-            if (! $this->isOldValueNullOrUnset($keyStr, $oldVal)) {
-                return false;
-            }
-
-            // 2. Does the new value match current place data?
-            if (! $this->isFieldMatchingCurrentPlaceData($keyStr, $newVal, $place)) {
+            if (! $this->isSubstantiveChangeAllowed($keyStr, $oldVal, $newVal, $place)) {
                 return false;
             }
 
@@ -202,6 +199,34 @@ class UnflagToiletsSetFromPlaceCommand extends Command
         }
 
         return $substantiveChangesCount > 0 && count($matchedFields) === $substantiveChangesCount;
+    }
+
+    /**
+     * Check if a substantive field change is allowed:
+     * 1. Owner set to current place name (allowed from null or non-null)
+     * 2. Website set to null (allowed from null or non-null)
+     * 3. Any field set from null/unset to current place data value
+     */
+    public function isSubstantiveChangeAllowed(string $key, mixed $oldVal, mixed $newVal, Place $place): bool
+    {
+        // 1. Owner set to current place name (allowed from null or non-null)
+        if ($key === 'owner' || $key === 'name') {
+            if ($this->isFieldMatchingCurrentPlaceData($key, $newVal, $place)) {
+                return true;
+            }
+        }
+
+        // 2. Website set to null (allowed from null or non-null)
+        if ($key === 'website' && ($newVal === null || $newVal === '')) {
+            return true;
+        }
+
+        // 3. Field set from null/unset to current place data value
+        if ($this->isOldValueNullOrUnset($key, $oldVal)) {
+            return $this->isFieldMatchingCurrentPlaceData($key, $newVal, $place);
+        }
+
+        return false;
     }
 
     /**
