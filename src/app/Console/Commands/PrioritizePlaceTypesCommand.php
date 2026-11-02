@@ -41,7 +41,7 @@ class PrioritizePlaceTypesCommand extends Command
                 $this->warn('Column "priorize" does not exist in table "types" yet (would be created on migration).');
             } else {
                 $this->info('Adding "priorize" column to "types" table...');
-                DB::statement('ALTER TABLE `types` ADD COLUMN `priorize` TINYINT(1) NOT NULL DEFAULT 0');
+                DB::statement('ALTER TABLE `types` ADD COLUMN `priorize` INT NOT NULL DEFAULT 0');
             }
         }
 

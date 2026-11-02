@@ -428,7 +428,7 @@ PROMPT;
     /**
      * Find nearest Google places to a coordinate within a radius (in meters), preferring cached data
      * from google_nearby_search_cache (freshness <= 30 days) or fetching from Google Places API (New),
-     * and ordering results by type priorize flag (1 = preferred) and distance ascending.
+     * and ordering results by type priorize score (descending) and distance ascending.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -553,12 +553,13 @@ PROMPT;
             }
         }
 
-        // 3. Order results by distance and priorize flag (1 = prefer)
-        $prioritizedTypeNames = DB::table('types')
-            ->where('priorize', 1)
-            ->pluck('type')
+        // 3. Order results by priorize score (descending) and distance (ascending)
+        // Load all types with non-zero priority: 2 = super prioritized, 1 = prioritized, -1 = degraded, etc.
+        $typeScores = DB::table('types')
+            ->where('priorize', '!=', 0)
+            ->pluck('priorize', 'type')
+            ->map(fn ($val): int => (int) $val)
             ->all();
-        $prioritizedMap = array_fill_keys($prioritizedTypeNames, true);
 
         $placesWithScore = [];
         foreach ($places as $place) {
@@ -577,15 +578,30 @@ PROMPT;
                 continue;
             }
 
-            $priorize = 0;
+            $scores = [];
             if (in_array('public_bathroom', $types, true)) {
-                $priorize = 2;
-            } else {
-                foreach ($types as $type) {
-                    if (isset($prioritizedMap[$type])) {
-                        $priorize = 1;
-                        break;
-                    }
+                $scores[] = 2;
+            }
+
+            foreach ($types as $type) {
+                if (isset($typeScores[$type])) {
+                    $scores[] = $typeScores[$type];
+                }
+            }
+
+            $priorize = 0;
+            if (! empty($scores)) {
+                $minScore = min($scores);
+                $maxScore = max($scores);
+
+                // If public_bathroom is present, it is always at least super-prioritized (>= 2)
+                if (in_array('public_bathroom', $types, true)) {
+                    $priorize = max(2, $maxScore);
+                } elseif ($minScore < 0) {
+                    // Any degraded type (< 0) degrades the place using the lowest negative score
+                    $priorize = $minScore;
+                } else {
+                    $priorize = $maxScore;
                 }
             }
 
@@ -596,7 +612,7 @@ PROMPT;
             ];
         }
 
-        // Sort by priorize DESC (1 before 0), then distance ASC (closer first)
+        // Sort by priorize DESC (higher score first, e.g. 2 > 1 > 0 > -1), then distance ASC (closer first)
         usort($placesWithScore, function (array $a, array $b): int {
             if ($a['priorize'] !== $b['priorize']) {
                 return $b['priorize'] <=> $a['priorize'];

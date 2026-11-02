@@ -60,7 +60,7 @@ wc-info-org-api/
 - **`Place`** (`app/Models/Place.php`): Authoritative store for Google Places API (New) cached place metadata.
 - **`ToiletPhoto`** (`app/Models/ToiletPhoto.php`): S3-stored photo metadata supporting soft and permanent deletions.
 - **`ToiletProperty`** (`app/Models/ToiletProperty.php`): Key-value properties associated with toilets.
-- **`Type`** (`app/Models/Type.php`): Google Places types cache with `priorize` flag (1 = likely contains accessible toilet, 0 = unlikely).
+- **`Type`** (`app/Models/Type.php`): Google Places types cache with `priorize` score (signed integer: 2 = super prioritized, 1 = prioritized, 0 = neutral, -1 = degraded).
 - **`ApiKey`** (`app/Models/ApiKey.php`): Client application API keys with configurable per-IP rate limits, block/penalty periods, and global request limits.
 
 ---

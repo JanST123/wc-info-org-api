@@ -366,4 +366,110 @@ class NearestPlacesTest extends TestCase
         $places = $response->json('places');
         $this->assertSame('place_cafe_25m', $places[0]['id']);
     }
+
+    public function test_nearest_places_orders_by_flexible_scoring_including_super_prioritized_and_degraded_types(): void
+    {
+        $centerLat = 52.5200;
+        $centerLon = 13.4050;
+
+        $superType = Type::updateOrCreate(['type' => 'test_flex_super'], ['priorize' => 2]);
+        $prioType = Type::updateOrCreate(['type' => 'test_flex_prio'], ['priorize' => 1]);
+        $neutralType = Type::updateOrCreate(['type' => 'test_flex_neutral'], ['priorize' => 0]);
+        $degradedType = Type::updateOrCreate(['type' => 'test_flex_degraded'], ['priorize' => -1]);
+        $superDegradedType = Type::updateOrCreate(['type' => 'test_flex_super_degraded'], ['priorize' => -2]);
+
+        $this->createdTypeIds = array_merge(
+            $this->createdTypeIds,
+            [$superType->id, $prioType->id, $neutralType->id, $degradedType->id, $superDegradedType->id]
+        );
+
+        // Place 1: Super Degraded at ~5m (score -2)
+        $placeSuperDegraded = [
+            'id' => 'place_super_degraded_5m',
+            'displayName' => ['text' => 'Super Degraded 5m'],
+            'location' => ['latitude' => 52.520045, 'longitude' => 13.4050],
+            'types' => ['test_flex_super_degraded'],
+        ];
+
+        // Place 2: Degraded at ~10m (score -1, combined with neutral point_of_interest)
+        $placeDegradedNear = [
+            'id' => 'place_degraded_10m',
+            'displayName' => ['text' => 'Degraded 10m'],
+            'location' => ['latitude' => 52.520090, 'longitude' => 13.4050],
+            'types' => ['test_flex_degraded', 'point_of_interest'],
+        ];
+
+        // Place 3: Degraded at ~15m (score -1)
+        $placeDegradedFar = [
+            'id' => 'place_degraded_15m',
+            'displayName' => ['text' => 'Degraded 15m'],
+            'location' => ['latitude' => 52.520135, 'longitude' => 13.4050],
+            'types' => ['test_flex_degraded'],
+        ];
+
+        // Place 4: Neutral at ~20m (score 0)
+        $placeNeutral = [
+            'id' => 'place_neutral_20m',
+            'displayName' => ['text' => 'Neutral 20m'],
+            'location' => ['latitude' => 52.520180, 'longitude' => 13.4050],
+            'types' => ['test_flex_neutral', 'establishment'],
+        ];
+
+        // Place 5: Prioritized at ~25m (score 1)
+        $placePrio = [
+            'id' => 'place_prio_25m',
+            'displayName' => ['text' => 'Prioritized 25m'],
+            'location' => ['latitude' => 52.520225, 'longitude' => 13.4050],
+            'types' => ['test_flex_prio'],
+        ];
+
+        // Place 6: Super Prioritized at ~30m (score 2)
+        $placeSuper = [
+            'id' => 'place_super_30m',
+            'displayName' => ['text' => 'Super Prioritized 30m'],
+            'location' => ['latitude' => 52.520270, 'longitude' => 13.4050],
+            'types' => ['test_flex_super'],
+        ];
+
+        $cache = GoogleNearbySearchCache::create([
+            'lat' => $centerLat,
+            'lon' => $centerLon,
+            'radius_meters' => 100.0,
+            'query_params' => ['maxResultCount' => 20],
+            'response_places' => [
+                $placeSuperDegraded,
+                $placeDegradedNear,
+                $placeDegradedFar,
+                $placeNeutral,
+                $placePrio,
+                $placeSuper,
+            ],
+            'result_count' => 6,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->createdCacheIds[] = $cache->id;
+
+        $response = $this->getJson("/places/nearest/{$centerLat}/{$centerLon}?limit=6&radius=50");
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'okay')
+            ->assertJsonCount(6, 'places');
+
+        $places = $response->json('places');
+
+        // Ordering must be:
+        // 1st: Super Prioritized (score 2, ~30m)
+        // 2nd: Prioritized (score 1, ~25m)
+        // 3rd: Neutral (score 0, ~20m)
+        // 4th: Degraded Near (score -1, ~10m)
+        // 5th: Degraded Far (score -1, ~15m)
+        // 6th: Super Degraded (score -2, ~5m)
+        $this->assertSame('place_super_30m', $places[0]['id']);
+        $this->assertSame('place_prio_25m', $places[1]['id']);
+        $this->assertSame('place_neutral_20m', $places[2]['id']);
+        $this->assertSame('place_degraded_10m', $places[3]['id']);
+        $this->assertSame('place_degraded_15m', $places[4]['id']);
+        $this->assertSame('place_super_degraded_5m', $places[5]['id']);
+    }
 }

@@ -65,7 +65,7 @@ class MigrateV2SchemaCommand extends Command
         $this->line('  - ALTER TABLE toilets: DROP COLUMN is_quailified, type, nr');
         $this->line('  - ALTER TABLE toilet_properties: ADD user_overridden, MODIFY type enum with new flags and place_opening_hours');
         $this->line('  - ALTER TABLE unknown_places: MODIFY lat/lon DECIMAL');
-        $this->line('  - ALTER TABLE types: ADD priorize');
+        $this->line('  - ALTER TABLE types: ADD or MODIFY priorize to INT');
         $this->newLine();
 
         $hasTypeColumn = $this->columnExists('toilets', 'type');
@@ -761,10 +761,16 @@ class MigrateV2SchemaCommand extends Command
         }
 
         if (! $this->columnExists('types', 'priorize')) {
-            $this->runStatement('ALTER TABLE `types` ADD COLUMN `priorize` TINYINT(1) NOT NULL DEFAULT 0');
-            $this->info('Added column priorize to types table.');
+            $this->runStatement('ALTER TABLE `types` ADD COLUMN `priorize` INT NOT NULL DEFAULT 0');
+            $this->info('Added column priorize to types table as INT.');
         } else {
-            $this->info('Column priorize already exists on types table, skipping.');
+            $colType = $this->columnType('types', 'priorize');
+            if (str_contains($colType, 'tinyint')) {
+                $this->runStatement('ALTER TABLE `types` MODIFY COLUMN `priorize` INT NOT NULL DEFAULT 0');
+                $this->info('Modified column priorize on types table to INT.');
+            } else {
+                $this->info('Column priorize already exists as signed INT on types table, skipping.');
+            }
         }
     }
 
