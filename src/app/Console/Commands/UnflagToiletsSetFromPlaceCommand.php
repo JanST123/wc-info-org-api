@@ -210,14 +210,14 @@ class UnflagToiletsSetFromPlaceCommand extends Command
     public function isSubstantiveChangeAllowed(string $key, mixed $oldVal, mixed $newVal, Place $place): bool
     {
         // 1. Owner set to current place name (allowed from null or non-null)
-        if ($key === 'owner' || $key === 'name') {
+        if ($key === 'owner' || $key === 'name' || $key === 'address') {
             if ($this->isFieldMatchingCurrentPlaceData($key, $newVal, $place)) {
                 return true;
             }
         }
 
         // 2. Website set to null (allowed from null or non-null)
-        if ($key === 'website' && ($newVal === null || $newVal === '')) {
+        if ($key === 'website') {
             return true;
         }
 
