@@ -148,6 +148,7 @@ Configured in `src/routes/console.php`:
 - `php artisan app:unflag-public-bathrooms-without-opening-hours [--dry-run] [--only-hours] [--include-restroom-types]`: Finds flagged toilets where the last update set `place_opening_hours` to null, unflags them and sets 24/7 opening hours if assigned to a place with type "public_bathroom" (aliases: `app:unflag-public-bathroom-toilets`, `app:unflag-public-bathrooms`).
 - `php artisan app:unflag-toilets-set-from-place [--dry-run] [--chunk-size=500]`: Finds flagged toilets where the last revision only set previously null/unset fields to current place data values, set website to null, updated owner to current place name, or fixed non-float coordinates to place coordinates, and unflags them (aliases: `app:unflag-toilets-from-place-data`, `app:unflag-place-populated-toilets`).
 - `php artisan app:repair-toilet-coordinates`: Fixes legacy scaled coordinates.
+- `php artisan app:repair-duplicate-coordinate-toilets [--dry-run] [--skip-api] [--force] [--unflag] [--coords=lat,lon] [--limit=N]`: Finds toilets sharing identical coordinates, restores missing `place_id` from earlier revisions (creating a new revision), retrieves correct coordinates from the place (cached or Google Places API), and updates the toilet (alias: `app:fix-duplicate-coordinate-toilets`).
 
 ---
 
