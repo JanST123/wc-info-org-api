@@ -32,6 +32,8 @@ class RepairDuplicateCoordinateToiletsCommand extends Command
 
     protected bool $budgetWarned = false;
 
+    protected ?bool $hasNearbyCacheTable = null;
+
     public function __construct(
         protected ToiletRevisionService $revisionService,
         protected GooglePlacesService $placesService,
@@ -375,7 +377,15 @@ class RepairDuplicateCoordinateToiletsCommand extends Command
             }
         }
 
-        // 2. Fetch from Google Places API if not skipped
+        // 2. Check google_nearby_search_cache table via LIKE query
+        $nearbyResult = $this->resolveFromNearbySearchCache($placeId, $dryRun);
+        if ($nearbyResult !== null) {
+            $placeCache[$placeId] = $nearbyResult;
+
+            return $nearbyResult;
+        }
+
+        // 3. Fetch from Google Places API if not skipped
         if (! $skipApi) {
             if (! $this->costService->hasBudget()) {
                 if (! $this->budgetWarned) {
@@ -420,5 +430,82 @@ class RepairDuplicateCoordinateToiletsCommand extends Command
         $placeCache[$placeId] = null;
 
         return null;
+    }
+
+    /**
+     * Search for place details in google_nearby_search_cache via LIKE query.
+     *
+     * @return array{lat: float, lon: float, source: string}|null
+     */
+    protected function resolveFromNearbySearchCache(string $placeId, bool $dryRun): ?array
+    {
+        if (! $this->hasNearbyCacheTable()) {
+            return null;
+        }
+
+        try {
+            $row = DB::table('google_nearby_search_cache')
+                ->where('response_places', 'like', '%' . $placeId . '%')
+                ->first(['response_places']);
+
+            if (! $row || empty($row->response_places)) {
+                return null;
+            }
+
+            $places = is_array($row->response_places)
+                ? $row->response_places
+                : json_decode((string) $row->response_places, true);
+
+            if (! is_array($places)) {
+                return null;
+            }
+
+            foreach ($places as $rawPlace) {
+                if (! is_array($rawPlace)) {
+                    continue;
+                }
+
+                $id = $rawPlace['id'] ?? $rawPlace['place_id'] ?? null;
+                if (is_string($id) && str_starts_with($id, 'places/')) {
+                    $id = substr($id, strlen('places/'));
+                }
+
+                if ($id === $placeId) {
+                    $lat = $rawPlace['location']['latitude'] ?? $rawPlace['location']['lat'] ?? $rawPlace['geometry']['location']['lat'] ?? $rawPlace['lat'] ?? null;
+                    $lon = $rawPlace['location']['longitude'] ?? $rawPlace['location']['lng'] ?? $rawPlace['geometry']['location']['lng'] ?? $rawPlace['lon'] ?? null;
+
+                    if ($lat !== null && $lon !== null) {
+                        if (! $dryRun) {
+                            Place::updateOrCreate(
+                                ['place_id' => $placeId],
+                                ['data' => $rawPlace, 'updated' => now()]
+                            );
+                        }
+
+                        return [
+                            'lat' => round((float) $lat, 7),
+                            'lon' => round((float) $lon, 7),
+                            'source' => 'nearby_cache',
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("RepairDuplicateCoordinateToilets: Failed to search nearby cache for {$placeId}: " . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Check whether google_nearby_search_cache table exists.
+     */
+    protected function hasNearbyCacheTable(): bool
+    {
+        if ($this->hasNearbyCacheTable === null) {
+            $this->hasNearbyCacheTable = DB::getSchemaBuilder()->hasTable('google_nearby_search_cache');
+        }
+
+        return $this->hasNearbyCacheTable;
     }
 }

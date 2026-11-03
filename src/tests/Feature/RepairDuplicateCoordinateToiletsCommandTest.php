@@ -23,8 +23,17 @@ class RepairDuplicateCoordinateToiletsCommandTest extends TestCase
      */
     private array $createdPlaceIds = [];
 
+    /**
+     * @var array<int, int>
+     */
+    private array $createdNearbyCacheIds = [];
+
     protected function tearDown(): void
     {
+        if (! empty($this->createdNearbyCacheIds)) {
+            DB::table('google_nearby_search_cache')->whereIn('id', $this->createdNearbyCacheIds)->delete();
+        }
+
         if (! empty($this->createdToiletIds)) {
             ToiletRevision::whereIn('toilet_id', $this->createdToiletIds)->delete();
             DB::table('toilet_properties')->whereIn('fk_toiletId', $this->createdToiletIds)->delete();
@@ -360,5 +369,74 @@ class RepairDuplicateCoordinateToiletsCommandTest extends TestCase
         $this->assertNotNull($cachedPlace);
         $this->assertEquals(48.137154, $cachedPlace->getLat());
         $this->assertEquals(11.576124, $cachedPlace->getLon());
+    }
+
+    public function test_resolves_coordinates_from_google_nearby_search_cache(): void
+    {
+        $testLat = 86.1111111;
+        $testLon = 86.2222222;
+
+        $placeId = 'ChIJnearby_'.uniqid();
+        $this->createdPlaceIds = [$placeId];
+
+        // Store place in google_nearby_search_cache, but NOT in places table
+        $cacheId = DB::table('google_nearby_search_cache')->insertGetId([
+            'lat' => $testLat,
+            'lon' => $testLon,
+            'radius_meters' => 1000,
+            'query_params' => json_encode(['languageCode' => 'de']),
+            'response_places' => json_encode([
+                [
+                    'id' => $placeId,
+                    'displayName' => ['text' => 'Nearby Cafe'],
+                    'location' => [
+                        'latitude' => 51.5074,
+                        'longitude' => -0.1278,
+                    ],
+                ],
+            ]),
+            'result_count' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->createdNearbyCacheIds[] = $cacheId;
+
+        $toilet1 = Toilet::create([
+            'name' => 'Toilet With Nearby Cached Place',
+            'lat' => $testLat,
+            'lon' => $testLon,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+        ]);
+        $toilet2 = Toilet::create([
+            'name' => 'Partner Toilet',
+            'lat' => $testLat,
+            'lon' => $testLon,
+            'status' => 'active',
+            'version' => 1,
+        ]);
+        $this->createdToiletIds = [$toilet1->id, $toilet2->id];
+
+        // Ensure places table does not have this place before run
+        $this->assertNull(Place::find($placeId));
+
+        // Run with --skip-api so it CANNOT call Google API
+        $this->artisan('app:repair-duplicate-coordinate-toilets', [
+            '--skip-api' => true,
+            '--coords' => "{$testLat},{$testLon}",
+        ])
+            ->expectsOutputToContain('Updated coords via nearby_cache')
+            ->assertSuccessful();
+
+        $toilet1->refresh();
+        $this->assertEquals(51.5074, (float) $toilet1->lat);
+        $this->assertEquals(-0.1278, (float) $toilet1->lon);
+
+        // Place should also be cached in places table automatically
+        $cachedPlace = Place::find($placeId);
+        $this->assertNotNull($cachedPlace);
+        $this->assertEquals(51.5074, $cachedPlace->getLat());
+        $this->assertEquals(-0.1278, $cachedPlace->getLon());
     }
 }
