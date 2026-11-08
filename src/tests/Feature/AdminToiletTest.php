@@ -147,6 +147,11 @@ class AdminToiletTest extends TestCase
             'type' => 'is_gender_separated',
             'value' => '1',
         ]);
+        ToiletProperty::create([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'comment',
+            'value' => 'Next to platform 3 in waiting area',
+        ]);
 
         $response = $this->withSession(['admin_logged_in' => true])
             ->get('/admin');
@@ -161,6 +166,9 @@ class AdminToiletTest extends TestCase
         // Place emoji & name
         $response->assertSee('🚽');
         $response->assertSee('Central Station Restroom');
+        // Comment in italics
+        $response->assertSee('Next to platform 3 in waiting area');
+        $response->assertSee('font-style: italic', false);
     }
 
     public function test_update_status_sets_toilet_to_deleted(): void

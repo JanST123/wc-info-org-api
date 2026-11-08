@@ -437,6 +437,11 @@
                                         <span>{{ $toilet->owner }}</span>
                                     </div>
                                 @endif
+                                @if ($toiletComment = trim((string) $toilet->propertyValue('comment')))
+                                    <div style="font-size: 0.75rem; color: var(--gray-600); font-style: italic; margin-top: 0.25rem; word-break: break-word; white-space: pre-line;">
+                                        {{ $toiletComment }}
+                                    </div>
+                                @endif
                             </td>
                             <td style="white-space: nowrap;">
                                 <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
