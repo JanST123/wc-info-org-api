@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
 
 class PlaceToiletService
 {
+    public const OPEN_24_HOURS_PERIODS = '[{"open":{"day":0,"hour":0,"minute":0}}]';
+
     private ToiletRevisionService $revisionService;
 
     public function __construct(
@@ -338,13 +340,34 @@ class PlaceToiletService
         $this->setPropertyWithOverrideCheck($toilet->id, 'website', $details['website'] ?? null, $changes);
         $this->setPropertyWithOverrideCheck($toilet->id, 'address', $details['formattedAddress'] ?? null, $changes);
 
-        if (is_array($details['openingHours']) && isset($details['openingHours']['periods'])) {
-            $this->setPropertyWithOverrideCheck($toilet->id, 'place_opening_hours', json_encode($details['openingHours']['periods']), $changes);
-        } else {
-            $this->setPropertyWithOverrideCheck($toilet->id, 'place_opening_hours', null, $changes);
+        $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
+        $isPublicBathroom = $isPublicBathroom
+            || in_array('public_bathroom', $placeTypes, true)
+            || ($placeData['primaryType'] ?? $placeData['primary_type'] ?? null) === 'public_bathroom';
+
+        if (! $isPublicBathroom) {
+            $place = $toilet->place ?? Place::where('place_id', $placeId)->first();
+            if ($place && is_array($place->data)) {
+                $rawTypes = $place->data['types'] ?? [];
+                if (is_array($rawTypes) && in_array('public_bathroom', $rawTypes, true)) {
+                    $isPublicBathroom = true;
+                }
+                if (($place->data['primaryType'] ?? null) === 'public_bathroom') {
+                    $isPublicBathroom = true;
+                }
+            }
         }
 
-        $placeTypes = $this->checkAndUpdatePlaceType($placeId, $details['types'] ?? null);
+        $hasPlaceOpeningHours = is_array($details['openingHours'])
+            && isset($details['openingHours']['periods'])
+            && is_array($details['openingHours']['periods'])
+            && ! empty($details['openingHours']['periods']);
+
+        if ($hasPlaceOpeningHours) {
+            $this->setPropertyWithOverrideCheck($toilet->id, 'place_opening_hours', json_encode($details['openingHours']['periods']), $changes);
+        } elseif ($isPublicBathroom && ! $toilet->isUserOverridden('place_opening_hours') && ! $this->hasToiletOpeningHours($toilet->id)) {
+            $this->setPropertyWithOverrideCheck($toilet->id, 'place_opening_hours', self::OPEN_24_HOURS_PERIODS, $changes);
+        }
 
         if (! $toilet->isUserOverridden('public_accessible') && self::isPublicAccessibleType($placeTypes)) {
             $this->setPropertyWithOverrideCheck($toilet->id, 'public_accessible', '1', $changes);
@@ -663,6 +686,33 @@ class PlaceToiletService
             ['fk_toiletId' => $toiletId, 'type' => $type],
             ['value' => $value]
         );
+    }
+
+    /**
+     * Check if the toilet has opening times set in toilet_properties.
+     */
+    public function hasToiletOpeningHours(int $toiletId): bool
+    {
+        $existing = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toiletId)
+            ->where('type', 'place_opening_hours')
+            ->value('value');
+
+        if ($existing === null) {
+            return false;
+        }
+
+        $trimmed = trim((string) $existing);
+        if ($trimmed === '' || $trimmed === 'null' || $trimmed === '[]') {
+            return false;
+        }
+
+        $decoded = json_decode($trimmed, true);
+        if (is_array($decoded) && empty($decoded)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function insertProperty(int $toiletId, string $type, string $value): void

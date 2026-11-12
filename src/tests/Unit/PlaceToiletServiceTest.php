@@ -677,4 +677,246 @@ class PlaceToiletServiceTest extends TestCase
         $this->assertSame('1', $properties['is_unisex'] ?? null);
         $this->assertSame('1', $properties['has_wheelchair_access'] ?? null);
     }
+
+    public function test_update_toilet_from_public_bathroom_sets_24hrs_opening_hours_and_records_revision(): void
+    {
+        $placeId = 'place_pb_24h_'.uniqid();
+
+        $toilet = Toilet::create([
+            'name' => 'WC #99',
+            'owner' => 'Public Restroom City',
+            'lat' => 52.52,
+            'lon' => 13.40,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        /** @var ToiletRevisionService $revisionService */
+        $revisionService = app(ToiletRevisionService::class);
+        $revisionService->recordRevision($toilet, 'initial');
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Public Restroom City',
+            'location' => ['lat' => 52.52, 'lng' => 13.40],
+            'types' => ['public_bathroom'],
+            'opening_hours' => null,
+        ], null, $changes);
+
+        $this->assertTrue($result);
+        $this->assertArrayHasKey('place_opening_hours', $changes);
+        $this->assertSame([
+            'old' => null,
+            'new' => PlaceToiletService::OPEN_24_HOURS_PERIODS,
+        ], $changes['place_opening_hours']);
+
+        // Check property was stored
+        $prop = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'place_opening_hours')
+            ->first();
+        $this->assertNotNull($prop);
+        $this->assertSame(PlaceToiletService::OPEN_24_HOURS_PERIODS, $prop->value);
+
+        // Check revision was created and includes place_opening_hours
+        $revisions = ToiletRevision::where('toilet_id', $toilet->id)->orderBy('version')->get();
+        $this->assertCount(2, $revisions);
+
+        $updateRevision = $revisions[1];
+        $this->assertSame('update-from-place', $updateRevision->source);
+        $this->assertSame(2, $updateRevision->version);
+        $this->assertArrayHasKey('place_opening_hours', $updateRevision->diff);
+        $this->assertSame([
+            'old' => null,
+            'new' => PlaceToiletService::OPEN_24_HOURS_PERIODS,
+        ], $updateRevision->diff['place_opening_hours']);
+        $this->assertSame(
+            PlaceToiletService::OPEN_24_HOURS_PERIODS,
+            $updateRevision->properties_data['place_opening_hours'] ?? null
+        );
+
+        // Toilet should be flagged and updated
+        $toilet->refresh();
+        $this->assertTrue((bool) $toilet->flagged);
+        $this->assertSame(2, $toilet->version);
+    }
+
+    public function test_update_toilet_from_public_bathroom_does_not_overwrite_existing_opening_hours(): void
+    {
+        $placeId = 'place_pb_keep_hours_'.uniqid();
+        $existingHours = '[{"open":{"day":1,"hour":8,"minute":0},"close":{"day":1,"hour":18,"minute":0}}]';
+
+        $toilet = Toilet::create([
+            'name' => 'WC #100',
+            'owner' => 'Public Toilet with Schedule',
+            'lat' => 52.52,
+            'lon' => 13.40,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        DB::table('toilet_properties')->insert([
+            ['fk_toiletId' => $toilet->id, 'type' => 'place_opening_hours', 'value' => $existingHours, 'user_overridden' => 0],
+            ['fk_toiletId' => $toilet->id, 'type' => 'is_unisex', 'value' => '1', 'user_overridden' => 0],
+            ['fk_toiletId' => $toilet->id, 'type' => 'public_accessible', 'value' => '1', 'user_overridden' => 0],
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Public Toilet with Schedule',
+            'location' => ['lat' => 52.52, 'lng' => 13.40],
+            'types' => ['public_bathroom'],
+            'opening_hours' => null,
+        ], null, $changes);
+
+        $this->assertArrayNotHasKey('place_opening_hours', $changes);
+
+        // Verify existing hours are preserved
+        $prop = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'place_opening_hours')
+            ->first();
+        $this->assertNotNull($prop);
+        $this->assertSame($existingHours, $prop->value);
+    }
+
+    public function test_update_toilet_from_public_bathroom_with_place_opening_hours_sets_place_hours(): void
+    {
+        $placeId = 'place_pb_place_hours_'.uniqid();
+        $placePeriods = [['open' => ['day' => 1, 'hour' => 9, 'minute' => 0], 'close' => ['day' => 1, 'hour' => 17, 'minute' => 0]]];
+
+        $toilet = Toilet::create([
+            'name' => 'WC #101',
+            'owner' => 'Public Toilet with Google Hours',
+            'lat' => 52.52,
+            'lon' => 13.40,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $result = $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Public Toilet with Google Hours',
+            'location' => ['lat' => 52.52, 'lng' => 13.40],
+            'types' => ['public_bathroom'],
+            'opening_hours' => ['periods' => $placePeriods],
+        ], null, $changes);
+
+        $this->assertTrue($result);
+        $this->assertArrayHasKey('place_opening_hours', $changes);
+        $this->assertNotSame(PlaceToiletService::OPEN_24_HOURS_PERIODS, $changes['place_opening_hours']['new']);
+        $this->assertSame(json_encode($placePeriods), $changes['place_opening_hours']['new']);
+
+        $prop = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'place_opening_hours')
+            ->first();
+        $this->assertSame(json_encode($placePeriods), $prop->value);
+    }
+
+    public function test_update_toilet_from_non_public_bathroom_without_hours_does_not_override_existing_hours_with_null(): void
+    {
+        $placeId = 'place_restaurant_no_hours_'.uniqid();
+        $existingHours = '[{"open":{"day":1,"hour":10,"minute":0}}]';
+
+        $toilet = Toilet::create([
+            'name' => 'Restaurant WC',
+            'owner' => 'Restaurant Owner',
+            'lat' => 52.52,
+            'lon' => 13.40,
+            'place_id' => $placeId,
+            'status' => 'active',
+            'version' => 1,
+            'flagged' => 0,
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        DB::table('toilet_properties')->insert([
+            ['fk_toiletId' => $toilet->id, 'type' => 'place_opening_hours', 'value' => $existingHours, 'user_overridden' => 0],
+            ['fk_toiletId' => $toilet->id, 'type' => 'is_unisex', 'value' => '1', 'user_overridden' => 0],
+            ['fk_toiletId' => $toilet->id, 'type' => 'public_accessible', 'value' => '1', 'user_overridden' => 0],
+        ]);
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        $changes = [];
+        $service->updateToiletFromPlace($toilet, [
+            'place_id' => $placeId,
+            'name' => 'Restaurant Owner',
+            'location' => ['lat' => 52.52, 'lng' => 13.40],
+            'types' => ['restaurant'],
+            'opening_hours' => null,
+        ], null, $changes);
+
+        // Opening hours should never be overridden with null from places data
+        $this->assertArrayNotHasKey('place_opening_hours', $changes);
+
+        $prop = DB::table('toilet_properties')
+            ->where('fk_toiletId', $toilet->id)
+            ->where('type', 'place_opening_hours')
+            ->first();
+        $this->assertNotNull($prop);
+        $this->assertSame($existingHours, $prop->value);
+    }
+
+    public function test_has_toilet_opening_hours_helper(): void
+    {
+        $toilet = Toilet::create([
+            'name' => 'Helper Test WC',
+            'status' => 'active',
+        ]);
+        $this->createdToiletIds[] = $toilet->id;
+
+        $placesService = $this->createMock(GooglePlacesService::class);
+        $service = new PlaceToiletService($placesService);
+
+        // 1. No property row
+        $this->assertFalse($service->hasToiletOpeningHours($toilet->id));
+
+        // 2. Empty string
+        DB::table('toilet_properties')->insert([
+            'fk_toiletId' => $toilet->id,
+            'type' => 'place_opening_hours',
+            'value' => '',
+        ]);
+        $this->assertFalse($service->hasToiletOpeningHours($toilet->id));
+
+        // 3. 'null' string
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->where('type', 'place_opening_hours')->update(['value' => 'null']);
+        $this->assertFalse($service->hasToiletOpeningHours($toilet->id));
+
+        // 4. '[]' empty array
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->where('type', 'place_opening_hours')->update(['value' => '[]']);
+        $this->assertFalse($service->hasToiletOpeningHours($toilet->id));
+
+        // 5. Valid 24/7 period
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->where('type', 'place_opening_hours')->update(['value' => PlaceToiletService::OPEN_24_HOURS_PERIODS]);
+        $this->assertTrue($service->hasToiletOpeningHours($toilet->id));
+
+        // 6. Valid custom schedule
+        DB::table('toilet_properties')->where('fk_toiletId', $toilet->id)->where('type', 'place_opening_hours')->update(['value' => '[{"open":{"day":1,"hour":8,"minute":0}}]']);
+        $this->assertTrue($service->hasToiletOpeningHours($toilet->id));
+    }
 }
