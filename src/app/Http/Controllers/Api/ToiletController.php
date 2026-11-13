@@ -131,33 +131,39 @@ class ToiletController extends Controller
      * Google Places Nearby Search and returns any newly discovered toilets.
      *
      * @queryParam distance float Search radius in kilometers (default: 4, min: 0.1, max: 10). Example: 4
+     * @queryParam limit int Maximum number of toilets to return (default: 100, min: 1, max: 100). Example: 50
      * @queryParam filter string Comma-separated key:value attribute filters (e.g. is_open:true,euro_key:yes). Example: is_open:true
      */
     public function nearby(Request $request, float $lat, float $lon): JsonResponse
     {
+        $maxLimit = (int) config('wcinfo.nearby_max_limit', 100);
+
         $validated = $request->validate([
             'distance' => ['sometimes', 'numeric', 'min:0.1', 'max:10'],
+            'limit' => ['sometimes', 'integer', 'min:1', "max:{$maxLimit}"],
             'filter' => ['sometimes', 'string'],
         ]);
 
         $distance = (float) ($validated['distance'] ?? 4);
+        $limit = isset($validated['limit']) ? (int) $validated['limit'] : $maxLimit;
         $filter = $this->parseFilter($validated['filter'] ?? null);
 
         $toilets = Toilet::visible()
             ->selectRaw('*, (6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(lon) - radians(?)) + sin(radians(?)) * sin(radians(lat)))) AS distance', [$lat, $lon, $lat])
             ->having('distance', '<', $distance)
             ->orderBy('distance')
+            ->limit($limit)
             ->with(['properties', 'photos'])
             ->get();
 
         if ($toilets->isEmpty()) {
-            $discovered = $this->placesService->discoverToiletsNearby($lat, $lon, $distance);
+            $discovered = $this->placesService->discoverToiletsNearby($lat, $lon, $distance, $limit);
 
             foreach ($discovered as $toilet) {
                 $toilet->setAttribute('distance', $this->haversineDistance($lat, $lon, $toilet->lat, $toilet->lon));
             }
 
-            $discovered = $discovered->sortBy('distance')->values();
+            $discovered = $discovered->sortBy('distance')->values()->take($limit);
             $discovered = $this->applyFilters($discovered, $filter);
             $this->markIncluded($discovered);
 
@@ -174,13 +180,24 @@ class ToiletController extends Controller
 
     private function markIncluded(Collection $toilets): void
     {
-        $ids = $toilets->pluck('id')->filter()->unique()->all();
+        $ids = $toilets->pluck('id')
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->unique()
+            ->all();
 
         if (count($ids) === 0) {
             return;
         }
 
-        Toilet::whereIn('id', $ids)->update(['last_included' => now()]);
+        $throttleDays = (int) config('wcinfo.last_included_throttle_days', 30);
+        $cutoff = now()->subDays($throttleDays);
+
+        Toilet::whereIn('id', $ids)
+            ->where(function ($query) use ($cutoff) {
+                $query->whereNull('last_included')
+                    ->orWhere('last_included', '<', $cutoff);
+            })
+            ->update(['last_included' => now()]);
     }
 
     public function calculateBoundsAreaKm2(float $south, float $west, float $north, float $east): float
@@ -509,7 +526,10 @@ class ToiletController extends Controller
             return response()->json(['status' => 'not_found'], 404);
         }
 
-        $toilet->update(['last_included' => now()]);
+        $throttleDays = (int) config('wcinfo.last_included_throttle_days', 30);
+        if ($toilet->last_included === null || $toilet->last_included < now()->subDays($throttleDays)) {
+            $toilet->update(['last_included' => now()]);
+        }
 
         return response()->json(new ToiletDetailResource($toilet));
     }

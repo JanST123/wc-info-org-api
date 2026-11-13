@@ -298,4 +298,70 @@ class ToiletFilterTest extends TestCase
         $response4 = $this->getJson('/toilets/nearby/52.0/13.0?distance=10');
         $response4->assertStatus(200);
     }
+
+    public function test_nearby_validates_limit_query_param(): void
+    {
+        // Limit < 1
+        $response = $this->getJson('/toilets/nearby/52.0/13.0?limit=0');
+        $response->assertStatus(400);
+
+        // Limit > max (100)
+        $response2 = $this->getJson('/toilets/nearby/52.0/13.0?limit=101');
+        $response2->assertStatus(400);
+
+        // Limit valid
+        $response3 = $this->getJson('/toilets/nearby/52.0/13.0?limit=50');
+        $response3->assertStatus(200);
+    }
+
+    public function test_mark_included_throttles_recent_last_included_timestamps(): void
+    {
+        $thirtyFiveDaysAgo = now()->subDays(35)->startOfSecond();
+        $fiveDaysAgo = now()->subDays(5)->startOfSecond();
+
+        $toiletNull = Toilet::create([
+            'name' => 'Toilet Null Included',
+            'lat' => 52.5100,
+            'lon' => 13.4000,
+            'status' => 'active',
+            'last_included' => null,
+        ]);
+        $this->createdToiletIds[] = $toiletNull->id;
+
+        $toiletOld = Toilet::create([
+            'name' => 'Toilet Old Included',
+            'lat' => 52.5101,
+            'lon' => 13.4001,
+            'status' => 'active',
+            'last_included' => $thirtyFiveDaysAgo,
+        ]);
+        $this->createdToiletIds[] = $toiletOld->id;
+
+        $toiletRecent = Toilet::create([
+            'name' => 'Toilet Recent Included',
+            'lat' => 52.5102,
+            'lon' => 13.4002,
+            'status' => 'active',
+            'last_included' => $fiveDaysAgo,
+        ]);
+        $this->createdToiletIds[] = $toiletRecent->id;
+
+        // Query bounds around these coordinates (~3 km²)
+        $response = $this->getJson('/toilets/bounds/52.50/13.39/52.52/13.41');
+        $response->assertStatus(200);
+
+        $toiletNull->refresh();
+        $toiletOld->refresh();
+        $toiletRecent->refresh();
+
+        // Null and >30 days old should be updated to now
+        $this->assertNotNull($toiletNull->last_included);
+        $this->assertTrue($toiletNull->last_included->isToday());
+
+        $this->assertNotNull($toiletOld->last_included);
+        $this->assertTrue($toiletOld->last_included->isToday());
+
+        // Recent (<30 days old) MUST NOT be updated
+        $this->assertEquals($fiveDaysAgo->timestamp, $toiletRecent->last_included?->timestamp);
+    }
 }

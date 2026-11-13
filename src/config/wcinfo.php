@@ -73,6 +73,12 @@ return [
     // Safety limit on max individual toilets returned in unsummarized bounds queries (<= 50 km²)
     'bounds_max_unsummarized_limit' => (int) env('BOUNDS_MAX_UNSUMMARIZED_LIMIT', 500),
 
+    // Safety limit on max individual toilets returned in nearby queries
+    'nearby_max_limit' => (int) env('NEARBY_MAX_LIMIT', 100),
+
+    // Minimum days before a toilet's last_included timestamp can be updated again
+    'last_included_throttle_days' => (int) env('LAST_INCLUDED_THROTTLE_DAYS', 30),
+
     'public_accessible_types' => [
         // Transit & Transport
         'train_station',
