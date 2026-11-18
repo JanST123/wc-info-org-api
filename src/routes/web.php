@@ -35,6 +35,9 @@ Route::middleware('api.key')->group(function () {
 
 // Utility routes (exempt from API key)
 Route::get('sitemap', [SitemapController::class, 'output']);
+Route::get('sitemap.xml', [SitemapController::class, 'output']);
+Route::get('sitemap.xml.gz', [SitemapController::class, 'outputGz']);
+Route::get('sitemap.gz', [SitemapController::class, 'outputGz']);
 Route::get('health', [HealthController::class, 'health']);
 Route::view('docs/api/swagger', 'docs.swagger');
 

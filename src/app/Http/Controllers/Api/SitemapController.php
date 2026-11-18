@@ -7,6 +7,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Toilet;
 use Carbon\Carbon;
+use DOMDocument;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class SitemapController extends Controller
@@ -17,13 +19,53 @@ class SitemapController extends Controller
     public const array SUPPORTED_LANGUAGES = ['de', 'en', 'nl'];
 
     /**
-     * Generate the XML sitemap.
+     * Serve the XML sitemap with automatic gzip content negotiation.
+     */
+    public function output(Request $request): Response
+    {
+        $xmlContent = $this->generateXml();
+
+        if (str_contains((string) $request->header('Accept-Encoding'), 'gzip') && function_exists('gzencode')) {
+            $gzipped = gzencode($xmlContent, 9);
+            if ($gzipped !== false) {
+                return response($gzipped, 200)
+                    ->header('Content-Type', 'application/xml; charset=UTF-8')
+                    ->header('Content-Encoding', 'gzip')
+                    ->header('Vary', 'Accept-Encoding');
+            }
+        }
+
+        return response($xmlContent, 200)
+            ->header('Content-Type', 'application/xml; charset=UTF-8')
+            ->header('Vary', 'Accept-Encoding');
+    }
+
+    /**
+     * Serve gzipped XML sitemap directly (.xml.gz).
+     */
+    public function outputGz(): Response
+    {
+        $xmlContent = $this->generateXml();
+        $gzipped = function_exists('gzencode') ? gzencode($xmlContent, 9) : false;
+
+        if ($gzipped !== false) {
+            return response($gzipped, 200)
+                ->header('Content-Type', 'application/x-gzip')
+                ->header('Content-Disposition', 'inline; filename="sitemap.xml.gz"');
+        }
+
+        return response($xmlContent, 200)
+            ->header('Content-Type', 'application/xml; charset=UTF-8');
+    }
+
+    /**
+     * Generate the XML sitemap content.
      *
      * Returns a sitemap.org compatible XML document containing fixed pages
      * and all active qualified toilet detail pages across all supported languages (de, en, nl)
      * with xhtml:link alternate annotations.
      */
-    public function output(): Response
+    public function generateXml(): string
     {
         $pages = [
             [
@@ -151,6 +193,9 @@ class SitemapController extends Controller
         foreach ($urls as $url) {
             $urlEl = $xml->addChild('url');
             $urlEl->addChild('loc', htmlspecialchars($url['loc'], ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('lastmod', htmlspecialchars($url['lastmod'], ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('changefreq', htmlspecialchars($url['changefreq'], ENT_XML1, 'UTF-8'));
+            $urlEl->addChild('priority', htmlspecialchars($url['priority'], ENT_XML1, 'UTF-8'));
 
             foreach ($url['alternates'] as $lang => $href) {
                 $link = $urlEl->addChild('xhtml:link', null, 'http://www.w3.org/1999/xhtml');
@@ -158,14 +203,17 @@ class SitemapController extends Controller
                 $link->addAttribute('hreflang', $lang);
                 $link->addAttribute('href', htmlspecialchars($href, ENT_XML1, 'UTF-8'));
             }
-
-            $urlEl->addChild('lastmod', htmlspecialchars($url['lastmod'], ENT_XML1, 'UTF-8'));
-            $urlEl->addChild('changefreq', htmlspecialchars($url['changefreq'], ENT_XML1, 'UTF-8'));
-            $urlEl->addChild('priority', htmlspecialchars($url['priority'], ENT_XML1, 'UTF-8'));
         }
 
-        return response($xml->asXML(), 200)
-            ->header('Content-Type', 'application/xml; charset=UTF-8');
+        $domNode = dom_import_simplexml($xml);
+        $dom = $domNode->ownerDocument;
+        if ($dom instanceof DOMDocument) {
+            $dom->formatOutput = true;
+
+            return (string) $dom->saveXML();
+        }
+
+        return (string) $xml->asXML();
     }
 
     /**

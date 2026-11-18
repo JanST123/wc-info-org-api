@@ -295,4 +295,91 @@ class SitemapTest extends TestCase
             $this->assertSame($expectedAltUrl, $alternates[$lang]);
         }
     }
+
+    public function test_sitemap_xml_elements_follow_schema_sequence_and_are_formatted_with_newlines(): void
+    {
+        $response = $this->get('/sitemap');
+        $response->assertStatus(200);
+
+        $content = $response->getContent();
+
+        // Verify XML is formatted with newlines rather than a single unbroken line
+        $this->assertStringContainsString("\n", $content);
+        $lines = explode("\n", $content);
+        $this->assertGreaterThan(10, count($lines));
+
+        // Verify child element order within each <url> follows sitemap.xsd specification:
+        // loc -> lastmod -> changefreq -> priority -> xhtml:link
+        $dom = new \DOMDocument();
+        $dom->loadXML($content);
+        $urlNodes = $dom->getElementsByTagName('url');
+        $this->assertGreaterThan(0, $urlNodes->length);
+
+        $standardOrder = ['loc', 'lastmod', 'changefreq', 'priority'];
+
+        foreach ($urlNodes as $urlNode) {
+            $childElementNames = [];
+            foreach ($urlNode->childNodes as $child) {
+                if ($child->nodeType === XML_ELEMENT_NODE) {
+                    $childElementNames[] = $child->nodeName;
+                }
+            }
+
+            // Assert that non-link standard elements precede xhtml:link elements
+            $firstLinkIndex = null;
+            foreach ($childElementNames as $idx => $name) {
+                if ($name === 'xhtml:link' || $name === 'link') {
+                    if ($firstLinkIndex === null) {
+                        $firstLinkIndex = $idx;
+                    }
+                } elseif ($firstLinkIndex !== null) {
+                    $this->fail("Element <{$name}> appeared after <xhtml:link>, violating sitemap.xsd sequence");
+                }
+            }
+
+            // Verify order of present standard elements
+            $foundStandards = array_values(array_filter(
+                $childElementNames,
+                fn (string $n): bool => in_array($n, $standardOrder, true)
+            ));
+
+            $expectedSequence = array_values(array_intersect($standardOrder, $foundStandards));
+            $this->assertSame($expectedSequence, $foundStandards);
+        }
+    }
+
+    public function test_sitemap_returns_gzipped_content_when_accept_encoding_includes_gzip(): void
+    {
+        $response = $this->withHeaders(['Accept-Encoding' => 'gzip, deflate, br'])->get('/sitemap');
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/xml; charset=UTF-8');
+        $response->assertHeader('Content-Encoding', 'gzip');
+        $response->assertHeader('Vary', 'Accept-Encoding');
+
+        $gzippedContent = $response->getContent();
+        $this->assertNotFalse($gzippedContent);
+
+        $decodedXml = gzdecode($gzippedContent);
+        $this->assertNotFalse($decodedXml, 'Gzipped sitemap content should decode cleanly');
+        $this->assertStringContainsString('<?xml version="1.0" encoding="UTF-8"?>', $decodedXml);
+        $this->assertStringContainsString('<urlset', $decodedXml);
+
+        $xml = simplexml_load_string($decodedXml);
+        $this->assertNotFalse($xml, 'Decoded XML should be valid');
+        $this->assertSame('urlset', $xml->getName());
+    }
+
+    public function test_sitemap_xml_gz_route_returns_gzipped_archive_directly(): void
+    {
+        $response = $this->get('/sitemap.xml.gz');
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/x-gzip');
+        $response->assertHeader('Content-Disposition', 'inline; filename="sitemap.xml.gz"');
+
+        $decodedXml = gzdecode($response->getContent());
+        $this->assertNotFalse($decodedXml);
+        $this->assertStringContainsString('<urlset', $decodedXml);
+    }
 }
